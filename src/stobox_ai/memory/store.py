@@ -76,19 +76,23 @@ class PgMemoryStore(MemoryStore):
     async def create(cls, database_url: str, window: int) -> PgMemoryStore:
         from psycopg_pool import AsyncConnectionPool
 
-        pool = AsyncConnectionPool(database_url, min_size=1, max_size=4, open=False)
+        pool = AsyncConnectionPool(database_url, min_size=1, max_size=4, open=False, timeout=10)
         await pool.open()
-        store = cls(pool, window)
-        async with pool.connection() as conn:
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS user_profiles (
-                    user_key TEXT PRIMARY KEY,
-                    data     JSONB NOT NULL,
-                    updated  TIMESTAMPTZ DEFAULT now()
+        try:
+            store = cls(pool, window)
+            async with pool.connection() as conn:
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_profiles (
+                        user_key TEXT PRIMARY KEY,
+                        data     JSONB NOT NULL,
+                        updated  TIMESTAMPTZ DEFAULT now()
+                    )
+                    """
                 )
-                """
-            )
+        except Exception:
+            await pool.close()  # stop background reconnect spam after fallback
+            raise
         return store
 
     async def get_profile(self, user_key: str, display_name: str | None = None) -> UserProfile:

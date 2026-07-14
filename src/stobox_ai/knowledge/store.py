@@ -125,10 +125,17 @@ class PgVectorStore(VectorStore):
     async def create(cls, database_url: str, dimensions: int) -> PgVectorStore:
         from psycopg_pool import AsyncConnectionPool
 
-        pool = AsyncConnectionPool(database_url, min_size=1, max_size=8, open=False)
+        # timeout=10: fail fast on an unreachable DB instead of 30s hangs.
+        pool = AsyncConnectionPool(database_url, min_size=1, max_size=8, open=False, timeout=10)
         await pool.open()
-        store = cls(pool, dimensions)
-        await store._init_schema()
+        try:
+            store = cls(pool, dimensions)
+            await store._init_schema()
+        except Exception:
+            # Close the pool or its background workers retry forever, spamming
+            # "connection refused" long after we've fallen back to in-memory.
+            await pool.close()
+            raise
         return store
 
     async def _init_schema(self) -> None:
