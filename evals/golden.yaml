@@ -42,6 +42,14 @@ questions:
     expect_contains: ["Intelligence", "Raisable", "Compass"]
     forbid_contains: ["I don't know based on the current documentation"]
 
+  - id: community-qa-arbitrum
+    needs_model: true
+    category: canonical
+    question: "If Stobox moves to Base, will the Arbitrum grants end?"
+    expect_contains: ["Arbitrum"]
+    expect_any: ["No", "not leaving", "remains a supported", "expansion"]
+    forbid_contains: ["I don't know based on the current documentation"]
+
   - id: compass-chain
     needs_model: true
     category: canonical
