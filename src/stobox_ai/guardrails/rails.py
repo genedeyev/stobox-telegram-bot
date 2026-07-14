@@ -61,8 +61,10 @@ _WALLET_TOPIC = re.compile(
     re.I,
 )
 _INVESTMENT_TOPIC = re.compile(
-    r"\b(buy|sell|hold|invest|price|worth|profit|return|yield|dividend|"
-    r"valuation|token\s*price|market\s*cap|roi|apy)\b",
+    # "hold" alone is too broad ("hold assets on-chain") — only trading-context hold.
+    r"\b(buy|sell|invest|investment|price|worth\s+(buying|investing)|profit|"
+    r"return|yield|dividend|valuation|token\s*price|market\s*cap|roi|apy|"
+    r"(should|to)\s+hold|hodl)\b",
     re.I,
 )
 

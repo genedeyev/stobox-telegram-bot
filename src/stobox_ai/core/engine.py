@@ -416,8 +416,11 @@ class AgentEngine:
                 bucket=profile.user_key,
             )
 
+        # Small talk gets a hard token cap — a paragraph back to "hi" is a bug.
+        reply_cap = None if routing.needs_docs else 220
         result = await self.reasoner.complete(
-            [ChatMessage("system", system), ChatMessage("user", user_prompt)]
+            [ChatMessage("system", system), ChatMessage("user", user_prompt)],
+            max_tokens=reply_cap,
         )
         self.rate_limiter.record_spend(result.output_tokens)
         clean, self_conf, used_sources = self.confidence.parse(result.text)
