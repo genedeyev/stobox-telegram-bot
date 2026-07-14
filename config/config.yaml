@@ -34,6 +34,7 @@ knowledge:
   docs_path: ${DOCS_PATH:-docs}
   watch: true                      # hot re-index on file changes
   sync_on_boot: false              # crawl remote sources at startup (heavy; prefer /sync or cron)
+  daily_resync: true               # 04:00 UTC daily reconciliation sync (self-update loop)
   sources:
     # Curated AI reference published by Stobox (llms.txt / llms-full.txt) — the
     # canonical, highest-confidence source. docs.stobox.io now redirects here.
@@ -166,6 +167,8 @@ channels:
 # --- Rate limiting / abuse ---------------------------------------------------
 limits:
   per_user_messages_per_minute: 20
+  per_user_messages_per_day: 100
+  global_daily_output_tokens: 2000000   # hard cap on LLM output tokens/day (spend guard)
   max_reply_chars: 3500
 
 # --- Observability -----------------------------------------------------------

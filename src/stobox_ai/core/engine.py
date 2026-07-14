@@ -77,6 +77,16 @@ class AgentEngine:
             require_citations=bool(config.get("confidence.require_citations", True)),
         )
         self.max_reply = int(config.get("limits.max_reply_chars", 3500))
+        # Operational safety: rate limiting + spend cap + kill switch (§7).
+        from ..ops import RateLimiter
+
+        self.rate_limiter = RateLimiter(
+            per_minute=int(config.get("limits.per_user_messages_per_minute", 20)),
+            per_day=int(config.get("limits.per_user_messages_per_day", 100)),
+            global_daily_output_tokens=config.get("limits.global_daily_output_tokens", 2_000_000),
+        )
+        self.paused = False
+        self.pause_reason = ""
         # Compliance guardrails (three-block prompt + deterministic rails).
         from ..guardrails import ComplianceRails, PromptAssembler
 
@@ -139,6 +149,38 @@ class AgentEngine:
         return WeeklyFAQ(
             self.decisions, self.retriever, self.reasoner, self.prompts,
             confidence_threshold=self.confidence.threshold,
+        )
+
+    # ------------------------------------------------------------------ #
+    def pause(self, reason: str = "") -> None:
+        self.paused = True
+        self.pause_reason = reason
+        log.warning("engine.paused", reason=reason)
+
+    def resume(self) -> None:
+        self.paused = False
+        self.pause_reason = ""
+        log.info("engine.resumed")
+
+    def _static_faq(self) -> str:
+        """Answer used while paused / over the global cap — no LLM."""
+        canon = self.assembler.canonicals if self.assembler else None
+        support = canon.get("official_links.support_email", "support@stobox.io") if canon else "support@stobox.io"
+        site = canon.get("official_links.website", "https://stobox.io") if canon else "https://stobox.io"
+        return (
+            "I'm temporarily limited to essential info right now. For the latest, see "
+            f"{site}. Holder/support questions: {support}. "
+            "Stobox staff never DM you first — verify links with /sources."
+        )
+
+    def _static_response(self, msg: IncomingMessage, text: str, meta_key: str) -> AgentResponse:
+        return AgentResponse(
+            text=text[: self.max_reply],
+            confidence=Confidence.LOW,
+            mode=Mode.COMMUNITY_MANAGER,
+            language="en",
+            reply_to_message_id=msg.message_id,
+            meta={meta_key: True},
         )
 
     async def sync_knowledge(self) -> dict[str, int]:
@@ -223,6 +265,23 @@ class AgentEngine:
             await self._log(msg, routing, [], response, user_key, started)
             return response
 
+        # 4c) Kill switch — incident mode: static FAQ only, no LLM.
+        if self.paused:
+            response = self._static_response(msg, self._static_faq(), "paused")
+            await self.memory.save_profile(profile)
+            await self._log(msg, routing, [], response, user_key, started)
+            return response
+
+        # 4d) Rate limiting + global spend cap — cheap static reply, no LLM.
+        if not msg.author.is_admin:
+            decision = self.rate_limiter.check(user_key)
+            if not decision.allowed:
+                response = self._static_response(msg, decision.retry_hint, "rate_limited")
+                response.meta["rate_status"] = decision.status.value
+                await self.memory.save_profile(profile)
+                await self._log(msg, routing, [], response, user_key, started)
+                return response
+
         # 5) Retrieve.
         retrieved: list[RetrievedChunk] = []
         if routing.needs_docs:
@@ -297,6 +356,7 @@ class AgentEngine:
         result = await self.reasoner.complete(
             [ChatMessage("system", system), ChatMessage("user", user_prompt)]
         )
+        self.rate_limiter.record_spend(result.output_tokens)
         clean, self_conf, _used = self.confidence.parse(result.text)
         cited = bool(citations)
         score = self.confidence.score(retrieved, self_conf, cited)

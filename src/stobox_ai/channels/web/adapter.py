@@ -176,6 +176,22 @@ def create_app_from_config():
 
         return JSONResponse({"faq": WeeklyFAQ.to_dict(entries)})
 
+    async def reingest_endpoint(request: Request):
+        """HMAC-signed webhook: re-ingest stobox.io + GitHub (self-update loop).
+        Signature required — see ops/webhook.py."""
+        import os
+
+        from ...ops.webhook import verify_signature
+
+        secret = os.environ.get("WEBHOOK_SECRET")
+        if not secret:
+            return JSONResponse({"error": "reingest webhook disabled (no WEBHOOK_SECRET)"}, status_code=503)
+        body = await request.body()
+        if not verify_signature(secret, body, request.headers.get("X-Hub-Signature-256")):
+            return JSONResponse({"error": "invalid signature"}, status_code=401)
+        results = await request.app.state.engine.sync_knowledge()
+        return JSONResponse({"synced": results, "total": sum(results.values())})
+
     return Starlette(
         lifespan=lifespan,
         routes=[
@@ -183,6 +199,7 @@ def create_app_from_config():
             Route("/health", health_endpoint, methods=["GET"]),
             Route("/insights/digest", digest_endpoint, methods=["GET"]),
             Route("/insights/faq", faq_endpoint, methods=["GET"]),
+            Route("/api/reingest", reingest_endpoint, methods=["POST"]),
         ],
     )
 

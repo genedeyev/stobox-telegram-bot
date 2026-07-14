@@ -47,7 +47,26 @@ class ProactiveScheduler:
             jq.run_repeating(self._revival_job, interval=1800, first=1800)  # check every 30m
         if cfg.get("observability.daily_digest", True):
             jq.run_repeating(self._digest_job, interval=24 * 3600, first=24 * 3600)
+        # Daily knowledge reconciliation (ARCHITECTURE.md §2.2) at 04:00 UTC.
+        if cfg.get("knowledge.daily_resync", True):
+            from datetime import time as _time
+
+            jq.run_daily(self._resync_job, time=_time(4, 0, tzinfo=UTC))
         log.info("proactive.scheduled")
+
+    async def _resync_job(self, context) -> None:
+        try:
+            results = await self.engine.sync_knowledge()
+        except Exception as exc:  # noqa: BLE001
+            log.error("proactive.resync_failed", error=str(exc))
+            return
+        total = sum(results.values())
+        log.info("proactive.resync", results=results, total=total)
+        for admin_id in getattr(self.app.bot_data.get("adapter"), "admins", set()):
+            try:
+                await context.bot.send_message(admin_id, f"🔄 Daily knowledge resync: {total} chunks ({results}).")
+            except Exception:  # noqa: BLE001
+                pass
 
     def _known_chats(self) -> set[str]:
         return getattr(self.app.bot_data.get("adapter"), "known_chats", set())

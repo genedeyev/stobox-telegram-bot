@@ -31,3 +31,33 @@ async def test_web_asgi_chat_and_health():
 
             bad = await c.post("/chat", json={"text": "no user id"})
             assert bad.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_reingest_webhook_requires_valid_signature(monkeypatch):
+    import httpx
+
+    from stobox_ai.channels.web.adapter import create_app_from_config
+    from stobox_ai.ops.webhook import sign
+
+    monkeypatch.setenv("WEBHOOK_SECRET", "topsecret")
+
+    # Keep the test offline: stub the remote sync the webhook triggers.
+    async def _fake_sync(indexer, config, fetcher=None):
+        return {"web": 0, "github": 0}
+
+    monkeypatch.setattr("stobox_ai.knowledge.sync.sync_sources", _fake_sync)
+    app = create_app_from_config()
+    transport = httpx.ASGITransport(app=app)
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+            body = b'{"source":"test"}'
+            # Missing/invalid signature → 401.
+            bad = await c.post("/api/reingest", content=body,
+                               headers={"X-Hub-Signature-256": "sha256=nope"})
+            assert bad.status_code == 401
+            # Valid signature → 200 and a sync runs (offline: 0+ chunks).
+            ok = await c.post("/api/reingest", content=body,
+                              headers={"X-Hub-Signature-256": sign("topsecret", body)})
+            assert ok.status_code == 200
+            assert "synced" in ok.json()
