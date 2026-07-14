@@ -55,6 +55,7 @@ class TelegramChannel(Channel):
         from telegram.ext import (
             ApplicationBuilder,
             CommandHandler,
+            InlineQueryHandler,
             MessageHandler,
             filters,
         )
@@ -73,6 +74,9 @@ class TelegramChannel(Channel):
         self.app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
         )
+        # Inline mode — @bot <query> callable in ANY chat (enable via BotFather
+        # /setinline). Answers go through the same compliance pipeline.
+        self.app.add_handler(InlineQueryHandler(self._on_inline_query))
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
@@ -111,6 +115,48 @@ class TelegramChannel(Channel):
         if response is None:
             return
         await self._render(update, context, response)
+
+    async def _on_inline_query(self, update, context) -> None:
+        """Answer @bot <query> from any chat, via the full compliance pipeline."""
+        inline = update.inline_query
+        query = (inline.query or "").strip()
+        if len(query) < 3:
+            await inline.answer([], cache_time=5)
+            return
+        user = inline.from_user
+        incoming = IncomingMessage(
+            author=Author(
+                external_id=str(user.id), channel="telegram", username=user.username,
+                display_name=user.full_name, is_admin=user.id in self.admins,
+            ),
+            text=query, chat_id=f"inline:{user.id}", chat_type=ChatType.PRIVATE,
+            message_id=str(inline.id), channel="telegram",
+            raw={"addressed": True, "inline": True},
+        )
+        try:
+            response = await self.engine.handle(incoming)
+        except Exception as exc:  # noqa: BLE001
+            log.error("telegram.inline_failed", error=str(exc))
+            await inline.answer([], cache_time=5)
+            return
+        if response is None or not response.should_reply:
+            await inline.answer([], cache_time=5)
+            return
+
+        from telegram import InlineQueryResultArticle, InputTextMessageContent
+
+        body = (response.text + self.render_citations(response))[:4000]
+        title = "Stobox answer" + ("" if response.confidence.value != "low" else " (limited)")
+        result = InlineQueryResultArticle(
+            id=str(inline.id),
+            title=title,
+            description=response.text[:120],
+            input_message_content=InputTextMessageContent(
+                body, disable_web_page_preview=True
+            ),
+        )
+        # is_personal so per-user rate limits / rails aren't cached across users.
+        await inline.answer([result], cache_time=30, is_personal=True)
 
     async def process_query(self, update, context, query: str) -> None:
         """Run arbitrary text (e.g. from a slash command) through the full

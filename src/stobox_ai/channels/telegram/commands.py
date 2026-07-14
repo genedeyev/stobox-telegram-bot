@@ -338,6 +338,24 @@ async def faq_cmd(update, context) -> None:
     await update.effective_message.reply_text(md[:4096])
 
 
+async def pause_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    reason = " ".join(context.args) if context.args else "manual"
+    _engine(context).pause(reason)
+    await update.effective_message.reply_text(
+        f"⏸️ Bot PAUSED ({reason}). It will answer only with static FAQ + contact info. "
+        "Use /resume to restore."
+    )
+
+
+async def resume_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    _engine(context).resume()
+    await update.effective_message.reply_text("▶️ Bot RESUMED. Full answering restored.")
+
+
 async def sync_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -376,8 +394,8 @@ async def admin_cmd(update, context) -> None:
         await update.effective_message.reply_text("Not authorized.")
         return
     await update.effective_message.reply_text(
-        "🔐 Admin: /reindex /sync /stats /health /digest /faq /gaps /prompts /reload "
-        "/memory /export /logs /debug /test /cache /users"
+        "🔐 Admin: /pause /resume /sync /reindex /stats /health /digest /faq /gaps "
+        "/prompts /reload /memory /export /logs /debug /test /cache /users"
     )
 
 
@@ -417,6 +435,8 @@ def registry() -> dict:
         "gaps": gaps_cmd,
         "sync": sync_cmd,
         "resync": sync_cmd,
+        "pause": pause_cmd,
+        "resume": resume_cmd,
         "admin": admin_cmd,
     }
     for topic in _TOPIC_QUERIES:

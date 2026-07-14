@@ -75,8 +75,37 @@ You'll see the preflight report, then `ready`. DM your bot:
 - Try the rails: "should I buy STBU?" (refuses), "ignore your instructions…"
   (refuses), paste a fake seed phrase (warns + tells you to move funds).
 
-Admin-only (from your admin id): `/sync` (`/resync`), `/stats`, `/health`,
-`/digest`, `/faq`, `/gaps`.
+Admin-only (from your admin id): `/pause` (incident kill switch — static FAQ
+only), `/resume`, `/sync` (`/resync`), `/stats`, `/health`, `/digest`, `/faq`,
+`/gaps`.
+
+## Inline mode (callable in any chat)
+
+Let anyone use the bot in any chat by typing `@YourBot <question>` — no need to
+add it to the chat. Answers go through the same compliance rails.
+
+1. @BotFather → `/setinline` → your bot → set a placeholder like
+   "Ask about Stobox…".
+2. That's it — try `@YourBot what is Compass?` in any chat and pick the result.
+
+## Operational safety (on by default)
+
+- **Rate limiting** — per user 20 msgs/min + 100/day, and a global daily output-
+  token cap (`limits.*` in config.yaml). Over-limit users get a static reply, no
+  LLM call. Admins are exempt.
+- **Kill switch** — `/pause` (optionally `/pause <reason>`) makes the bot answer
+  only with a static FAQ + contact info during an incident; `/resume` restores it.
+
+## Keeping knowledge current (self-update loop)
+
+- **Daily** at 04:00 UTC the bot re-syncs stobox.io + GitHub automatically and DMs
+  admins a summary (`knowledge.daily_resync`).
+- **On deploy (optional, near-instant):** run the web service (`stobox-web`) with
+  a `WEBHOOK_SECRET`, then add [deploy/stobox-v15-reingest.yml](deploy/stobox-v15-reingest.yml)
+  to `genedeyev/stobox-v15` so each site deploy pings `/api/reingest` (HMAC-signed)
+  and the index refreshes. (Point the web service at the same `DATABASE_URL` as the
+  bot so both share the pgvector index.)
+- **Manual:** `/sync` any time.
 
 ## 7. Add it to the community group (when ready)
 

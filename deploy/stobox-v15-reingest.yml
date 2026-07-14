@@ -1,0 +1,41 @@
+# Self-update loop — GitHub Action for the SITE repo (genedeyev/stobox-v15).
+# Copy this to genedeyev/stobox-v15/.github/workflows/reingest-bot.yml
+#
+# It waits for the Vercel production deploy to succeed, then pings the bot's
+# HMAC-signed /api/reingest so the knowledge index refreshes from the freshly
+# deployed stobox.io. (ARCHITECTURE.md §2.1.)
+#
+# Repo secrets required in stobox-v15:
+#   BOT_REINGEST_URL   e.g. https://bot.stobox.io/api/reingest
+#   BOT_WEBHOOK_SECRET same value as the bot's WEBHOOK_SECRET env
+
+name: Reingest bot knowledge on deploy
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  reingest:
+    # Only fire when a Production deployment actually succeeded.
+    if: >
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sign and POST to /api/reingest
+        env:
+          URL: ${{ secrets.BOT_REINGEST_URL }}
+          SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
+          SHA: ${{ github.sha }}
+        run: |
+          BODY="{\"ref\":\"${GITHUB_REF}\",\"sha\":\"${SHA}\",\"source\":\"vercel-deploy\"}"
+          SIG="sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')"
+          echo "Posting reingest for $SHA"
+          curl -sS -X POST "$URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIG" \
+            --data "$BODY" \
+            --fail-with-body

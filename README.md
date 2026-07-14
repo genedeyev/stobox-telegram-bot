@@ -220,7 +220,12 @@ prompt library with A/B · Docker/Compose · eval harness · offline fallbacks.
 
 **Complete (cont.):** autonomous knowledge ingestion — **stobox.io web crawler +
 GitHub org auto-discovery/ingestion** (verified live against the real
-StoboxTechnologies repos), incremental re-sync.
+StoboxTechnologies repos), incremental re-sync. Compliance guardrails (3-block
+prompt · canonicals · deterministic rails · golden gate). **Ops safety**
+(per-user rate limiting + global spend cap + `/pause` kill switch). **Inline
+mode** (`@bot <query>` in any chat). **Self-updating loop** (HMAC `/api/reingest`
+webhook + daily 04:00 UTC reconciliation cron + GitHub Action template for
+stobox-v15). Preflight doctor + `.env` autoload + SETUP runbook.
 
 **Stubbed / next:** multimodal ingestion of inbound images/voice (attachments are
 detected + typed today); Kubernetes manifests; richer CRM connectors
