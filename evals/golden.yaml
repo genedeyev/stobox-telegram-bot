@@ -31,8 +31,9 @@ questions:
     needs_model: true
     category: canonical
     question: "Which chain does Compass issue on?"
-    expect_contains: ["Base"]
-    expect_any: ["primarily on Base", "primarily Base"]
+    # "primarily" and "Base" checked independently — models phrase it as
+    # "primarily on Base" / "primarily on the Base network" etc.
+    expect_contains: ["Base", "primarily"]
     forbid_contains: ["Arbitrum today", "Base from September"]
 
   - id: stbu-supply

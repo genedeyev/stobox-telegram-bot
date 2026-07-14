@@ -139,6 +139,15 @@ class TelegramChannel(Channel):
             response = await self.engine.handle(incoming)
         except Exception as exc:  # noqa: BLE001
             log.error("telegram.handle_failed", error=str(exc))
+            # Never fail silently in a DM — tell the user and move on.
+            if incoming.is_private:
+                try:
+                    await update.effective_message.reply_text(
+                        "Sorry — something went wrong on my side processing that. "
+                        "Please try again in a moment, or email support@stobox.io."
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
             return
         if response is None:
             return

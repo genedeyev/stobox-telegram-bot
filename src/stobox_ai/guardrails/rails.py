@@ -66,13 +66,24 @@ _INVESTMENT_TOPIC = re.compile(
     re.I,
 )
 
-# Hard-forbidden output substrings → answer is blocked/scrubbed if present.
-# (from canonicals must_never_claim + never_say)
+# Hard-forbidden output substrings → answer is blocked/scrubbed if present,
+# UNLESS a "mitigator" shows the phrase is being correctly denied/framed
+# (e.g. the model quoting `"will reach" 250M` while explaining the maximum-
+# supply framing must NOT be blocked). (from canonicals must_never_claim)
+_SUPPLY_MITIGATORS = re.compile(
+    r"maximum|at\s+most|ceiling|not\s+necessarily|whatever\s+(amount\s+)?(actually\s+)?migrates"
+    r"|can'?t\s+(promise|predict)|cannot\s+(promise|predict)",
+    re.I,
+)
 _FORBIDDEN = [
-    (re.compile(r"class[\s-]?a\b", re.I), "Class-A share class"),
-    (re.compile(r"stobox\s+holdings", re.I), "wrong issuer entity"),
-    (re.compile(r"\$\s?500\s?m(illion)?\b|\b500m\+", re.I), "unpublished tokenized volume"),
-    (re.compile(r"will\s+reach\s+250m|expected\s+supply", re.I), "supply speculation"),
+    (re.compile(r"class[\s-]?a\b", re.I), "Class-A share class", None),
+    (re.compile(r"stobox\s+holdings", re.I), "wrong issuer entity", None),
+    (re.compile(r"\$\s?500\s?m(illion)?\b|\b500m\+", re.I), "unpublished tokenized volume", None),
+    (
+        re.compile(r"will\s+reach\s+[\"']?250\s?m|expected\s+supply", re.I),
+        "supply speculation",
+        _SUPPLY_MITIGATORS,
+    ),
 ]
 # Securities-exemption attribution to a Stobox token → block.
 _EXEMPTION_ATTR = re.compile(
@@ -141,8 +152,10 @@ class ComplianceRails:
 
         # 1) Block forbidden claims (compliance-critical): if the model asserted
         #    something it must never say, replace with a safe deflection.
-        for pat, label in _FORBIDDEN:
+        for pat, label, mitigators in _FORBIDDEN:
             if pat.search(result.text):
+                if mitigators and mitigators.search(result.text):
+                    continue  # forbidden phrase is being correctly denied/framed
                 result.violations.append(label)
         if _EXEMPTION_ATTR.search(result.text):
             result.violations.append("securities-exemption attribution")

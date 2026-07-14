@@ -115,6 +115,20 @@ def test_rails_append_disclaimer_and_impersonation():
     assert res2.impersonation_added and "scam warning" in res2.text.lower()
 
 
+def test_rails_supply_mitigation_not_blocked():
+    """The CORRECT maximum-supply framing quoting 'will reach' must pass."""
+    r = ComplianceRails()
+    good = (
+        'STBU has a fixed maximum supply of 250M. The final supply will be whatever '
+        'amount actually migrates — at most 250M. I can\'t promise it "will reach" 250M.'
+    )
+    res = r.post_process(good, "Will STBU supply reach 250M?")
+    assert not res.blocked, f"false positive: {res.violations}"
+    # But an assertive claim IS still blocked.
+    bad = r.post_process("STBU supply will reach 250M next year.", "supply?")
+    assert bad.blocked and "supply speculation" in bad.violations
+
+
 def test_rails_clean_answer_untouched():
     r = ComplianceRails()
     res = r.post_process("Stobox Compass is a tokenization readiness platform.",
