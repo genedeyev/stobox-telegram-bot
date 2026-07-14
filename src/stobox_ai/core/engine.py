@@ -254,6 +254,8 @@ class AgentEngine:
         profile.language = routing.language
         if routing.persona != "unknown":
             profile.persona = routing.persona
+        if routing.technical_level != "unknown":
+            profile.technical_level = routing.technical_level
         for t in routing.topics:
             profile.add_interest(t)
         if routing.is_question:
@@ -340,6 +342,7 @@ class AgentEngine:
     ) -> AgentResponse:
         history = self._format_history(thread_key)
         context, citations = self._format_context(retrieved)
+        user_context = self._user_summary(profile)
         # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt;
         # fall back to the legacy persona prompt if guardrail files are absent.
         system = self.system_prompt() or self.prompts.render(
@@ -349,7 +352,7 @@ class AgentEngine:
         if routing.mode == Mode.SALES_ASSISTANT and self.leads.enabled:
             user_prompt = self.prompts.render(
                 "lead_qualification",
-                user_summary=self._user_summary(profile),
+                user_summary=user_context,
                 language=routing.language,
                 question=msg.text,
                 context=context or "(no documentation retrieved)",
@@ -361,6 +364,7 @@ class AgentEngine:
                 question=msg.text,
                 history=history,
                 language=routing.language,
+                user_context=user_context,
             )
         else:
             user_prompt = self.prompts.render(
@@ -369,6 +373,7 @@ class AgentEngine:
                 history=history,
                 language=routing.language,
                 context=context or "(no documentation retrieved)",
+                user_context=user_context,
                 bucket=profile.user_key,
             )
 
@@ -469,8 +474,11 @@ class AgentEngine:
     def _format_history(self, thread_key: str) -> str:
         turns = self.memory.history(thread_key)[:-1]  # exclude the current user turn
         if not turns:
-            return "(new conversation)"
-        return "\n".join(f"{t.role}: {t.text[:300]}" for t in turns[-6:])
+            return "(new conversation — this is their first message)"
+        labels = {"user": "User", "assistant": "You"}
+        return "\n".join(
+            f"{labels.get(t.role, t.role)}: {t.text[:400]}" for t in turns[-8:]
+        )
 
     def _format_context(self, retrieved: list[RetrievedChunk]) -> tuple[str, list[Citation]]:
         if not retrieved:
@@ -499,11 +507,18 @@ class AgentEngine:
 
     @staticmethod
     def _user_summary(p: UserProfile) -> str:
-        return (
-            f"persona={p.persona}, stage={p.customer_stage}, level={p.technical_level}, "
-            f"interests={', '.join(p.interests[:5]) or 'n/a'}, "
-            f"products={', '.join(p.products_discussed[:5]) or 'n/a'}, lead_score={p.lead_score}"
-        )
+        parts = [f"name: {p.display_name}" if p.display_name else "name: unknown"]
+        if p.persona not in ("auto", "unknown"):
+            parts.append(f"likely a {p.persona}")
+        if p.technical_level != "unknown":
+            parts.append(f"technical level: {p.technical_level}")
+        if p.interests:
+            parts.append(f"has asked about: {', '.join(p.interests[:5])}")
+        if p.customer_stage not in ("member",):
+            parts.append(f"journey stage: {p.customer_stage}")
+        if len(p.recent_questions) > 1:
+            parts.append(f"previous question: {p.recent_questions[-2][:100]}")
+        return "; ".join(parts)
 
     async def _log(
         self, msg, routing, retrieved, response, user_key, started, answered=True

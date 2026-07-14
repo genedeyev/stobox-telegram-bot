@@ -85,6 +85,12 @@ _FORBIDDEN = [
         _SUPPLY_MITIGATORS,
     ),
 ]
+# Known impostor handles → deterministically scrubbed from output (never shown,
+# even in warnings — an official bot must not give fake accounts name recognition).
+_SCRUB = [
+    (re.compile(r"@?stobox_io\b|@?stobox_official\b", re.I), "an unofficial account"),
+]
+
 # Securities-exemption attribution to a Stobox token → block.
 _EXEMPTION_ATTR = re.compile(
     r"(offered|issued|sold|available)\s+under\s+(reg(ulation)?\s*[dscfa+]|the\s+eu\s+prospectus)"
@@ -149,6 +155,10 @@ class ComplianceRails:
     # ---- post-generation processing ------------------------------------ #
     def post_process(self, answer: str, user_text: str) -> RailResult:
         result = RailResult(text=answer or "")
+
+        # 0) Deterministic scrubs — impostor handles etc. never reach the chat.
+        for pat, repl in _SCRUB:
+            result.text = pat.sub(repl, result.text)
 
         # 1) Block forbidden claims (compliance-critical): if the model asserted
         #    something it must never say, replace with a safe deflection.
