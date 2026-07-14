@@ -1,0 +1,47 @@
+# Render blueprint (optional alternative to Railway).
+# Two services over the same Supabase pgvector DB: the Telegram bot worker and
+# the web service (chat widget + /api/reingest webhook). Set secret env vars in
+# the Render dashboard (marked sync:false) — never commit them.
+services:
+  - type: worker
+    name: stobox-bot
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m stobox_ai
+    envVars:
+      - key: STOBOX_ENV
+        value: production
+      - key: STOBOX_SYNC_ON_BOOT
+        value: "1"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ADMIN_USER_IDS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+
+  - type: web
+    name: stobox-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: stobox-web
+    healthCheckPath: /health
+    envVars:
+      - key: STOBOX_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false

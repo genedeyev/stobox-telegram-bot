@@ -46,6 +46,12 @@ See **[SETUP.md](SETUP.md)** for the 10-minute runbook (BotFather → `.env` →
 `stobox-doctor` → `stobox-sync` → `python -m stobox_ai`). `stobox-doctor` tells
 you exactly what's configured and what's missing before you launch.
 
+## 🚀 Deploy it (always-on)
+
+See **[DEPLOY.md](DEPLOY.md)** — Railway (24/7 worker) + Supabase (pgvector),
+with `railway.json` / `render.yaml` / `Procfile` included. Deploy from the GitHub
+repo, set env vars, done.
+
 ## Quick start (local, no infra)
 
 ```bash

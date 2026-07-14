@@ -210,9 +210,11 @@ def main() -> None:  # pragma: no cover - launches a server
 
     import uvicorn
 
+    # Honor the platform-injected $PORT (Railway/Render/Heroku/Fly) first.
+    port = int(os.environ.get("WEB_PORT") or os.environ.get("PORT") or "8080")
     uvicorn.run(
         "stobox_ai.channels.web.adapter:create_app_from_config",
         factory=True,
         host=os.environ.get("WEB_HOST", "0.0.0.0"),
-        port=int(os.environ.get("WEB_PORT", "8080")),
+        port=port,
     )
