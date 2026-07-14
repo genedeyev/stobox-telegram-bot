@@ -30,10 +30,14 @@ class Channel(abc.ABC):
 
     @staticmethod
     def render_citations(response: AgentResponse) -> str:
-        """Shared rendering of the citation footer (Markdown-safe plain text)."""
+        """Compact citation footer: one line per source document (deduped by
+        title, max 3) — chat readers don't need per-section variants."""
         if not response.citations:
             return ""
-        lines = [f"• {c.render()}" for c in _dedupe(response.citations)]
+        lines = []
+        for c in _dedupe(response.citations):
+            label = c.title + (f" — {c.source_url}" if c.source_url else "")
+            lines.append(f"• {label}")
         return "\n\n📚 Sources:\n" + "\n".join(lines)
 
 
@@ -41,8 +45,9 @@ def _dedupe(citations: list[Citation]) -> list[Citation]:
     seen: set[str] = set()
     out: list[Citation] = []
     for c in citations:
-        key = f"{c.title}|{c.section}"
-        if key not in seen:
-            seen.add(key)
+        if c.title not in seen:
+            seen.add(c.title)
             out.append(c)
-    return out[:5]
+        if len(out) >= 3:
+            break
+    return out

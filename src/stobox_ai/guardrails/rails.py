@@ -171,8 +171,13 @@ class ComplianceRails:
             result.escalate = True
             result.category = "blocked_claim"
 
-        # 2) Anti-impersonation warning on wallet-adjacent topics.
-        if _WALLET_TOPIC.search(user_text) and "scam warning" not in result.text.lower():
+        # 2) Anti-impersonation warning on wallet-adjacent topics — unless the
+        #    answer already carries one (models often write their own; don't
+        #    stack two warnings in one message).
+        already_warned = re.search(
+            r"never\s+dm|scam|impersonat|staff\s+never", result.text, re.I
+        )
+        if _WALLET_TOPIC.search(user_text) and not already_warned:
             result.text = result.text.rstrip() + "\n\n" + IMPERSONATION_WARNING
             result.impersonation_added = True
 

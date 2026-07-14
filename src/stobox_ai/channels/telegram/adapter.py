@@ -29,6 +29,12 @@ from .proactive import ProactiveScheduler
 
 log = get_logger(__name__)
 _URL = re.compile(r"https?://\S+")
+_HTML_TAGS = re.compile(r"</?(b|strong|i|em|u|s|code|pre|a|tg-spoiler)(\s[^>]*)?>", re.I)
+
+
+def strip_html(text: str) -> str:
+    """Plain-text fallback when Telegram rejects the HTML parse."""
+    return _HTML_TAGS.sub("", text)
 
 _CHAT_TYPES = {
     "private": ChatType.PRIVATE,
@@ -181,19 +187,35 @@ class TelegramChannel(Channel):
             return
 
         from telegram import InlineQueryResultArticle, InputTextMessageContent
+        from telegram.constants import ParseMode
 
         body = (response.text + self.render_citations(response))[:4000]
         title = "Stobox answer" + ("" if response.confidence.value != "low" else " (limited)")
         result = InlineQueryResultArticle(
             id=str(inline.id),
             title=title,
-            description=response.text[:120],
+            description=strip_html(response.text)[:120],
             input_message_content=InputTextMessageContent(
-                body, disable_web_page_preview=True
+                body, parse_mode=ParseMode.HTML, disable_web_page_preview=True
             ),
         )
         # is_personal so per-user rate limits / rails aren't cached across users.
         await inline.answer([result], cache_time=30, is_personal=True)
+
+    async def reply_html(self, message, text: str) -> None:
+        """Send with Telegram HTML parse mode; fall back to stripped plain text
+        if the model produced HTML Telegram won't accept (one bad tag would
+        otherwise kill the whole message)."""
+        from telegram.constants import ParseMode
+        from telegram.error import BadRequest
+
+        try:
+            await message.reply_text(
+                text[:4096], parse_mode=ParseMode.HTML, disable_web_page_preview=True
+            )
+        except BadRequest as exc:
+            log.warning("telegram.html_fallback", error=str(exc))
+            await message.reply_text(strip_html(text)[:4096], disable_web_page_preview=True)
 
     async def process_query(self, update, context, query: str) -> None:
         """Run arbitrary text (e.g. from a slash command) through the full
@@ -205,9 +227,7 @@ class TelegramChannel(Channel):
         response = await self.engine.handle(incoming)
         if response and response.should_reply:
             footer = self.render_citations(response)
-            await update.effective_message.reply_text(
-                (response.text + footer)[:4096], disable_web_page_preview=True
-            )
+            await self.reply_html(update.effective_message, response.text + footer)
 
     async def _render(self, update, context, response) -> None:
         # Moderation actions first.
@@ -217,10 +237,7 @@ class TelegramChannel(Channel):
             await self._escalate(update, context, response)
         if response.should_reply:
             footer = self.render_citations(response)
-            await update.effective_message.reply_text(
-                (response.text + footer)[:4096],
-                disable_web_page_preview=True,
-            )
+            await self.reply_html(update.effective_message, response.text + footer)
 
     async def _apply_moderation(self, update, context, response) -> None:
         chat = update.effective_chat
