@@ -63,7 +63,18 @@ class TelegramChannel(Channel):
         if not self.secrets.telegram_token:
             raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 
-        self.app = ApplicationBuilder().token(self.secrets.telegram_token).build()
+        # Generous timeouts: PTB's 5s defaults die on slow Wi-Fi / flaky IPv6
+        # paths to api.telegram.org. Polling read timeout is higher by design.
+        self.app = (
+            ApplicationBuilder()
+            .token(self.secrets.telegram_token)
+            .connect_timeout(20)
+            .read_timeout(20)
+            .write_timeout(20)
+            .pool_timeout(20)
+            .get_updates_read_timeout(40)
+            .build()
+        )
         self.app.bot_data["engine"] = self.engine
         self.app.bot_data["adapter"] = self
 
@@ -80,7 +91,7 @@ class TelegramChannel(Channel):
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
-        me = await self.app.bot.get_me()
+        me = await self._get_me_with_retry()
         self.bot_username = me.username
         log.info("telegram.start", username=me.username)
 
@@ -90,6 +101,23 @@ class TelegramChannel(Channel):
 
         await self.app.start()
         await self.app.updater.start_polling(drop_pending_updates=True)
+
+    async def _get_me_with_retry(self, attempts: int = 4):
+        """Retry startup handshake — transient TimedOut must not kill the boot."""
+        import asyncio
+
+        from telegram.error import NetworkError, TimedOut
+
+        last_exc: Exception | None = None
+        for i in range(1, attempts + 1):
+            try:
+                return await self.app.bot.get_me()
+            except (TimedOut, NetworkError) as exc:
+                last_exc = exc
+                wait = 3 * i
+                log.warning("telegram.get_me_retry", attempt=i, wait_s=wait, error=str(exc))
+                await asyncio.sleep(wait)
+        raise last_exc  # exhausted — a real network problem, surface it
 
     async def stop(self) -> None:
         if self.app:
