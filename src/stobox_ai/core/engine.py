@@ -335,6 +335,21 @@ class AgentEngine:
         # 6) Synthesize + 7) confidence gate.
         response = await self._answer(msg, routing, retrieved, profile, thread_key)
 
+        # 7b) Share-with-a-friend cadence: after every 4th genuinely helpful
+        #     answer (confident, not gated/blocked/escalated, in a DM), flag a
+        #     share nudge for the channel to render. Never on refusals.
+        if (
+            msg.is_private
+            and response.should_reply
+            and response.confidence != Confidence.LOW
+            and not response.escalate
+            and not response.meta.get("gated")
+            and not response.meta.get("rails", {}).get("blocked")
+        ):
+            profile.helpful_answers += 1
+            if profile.helpful_answers % 4 == 0:
+                response.meta["share_nudge"] = True
+
         # 8) Leads.
         await self._handle_leads(msg, routing, profile, response)
 

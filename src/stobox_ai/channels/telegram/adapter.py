@@ -269,6 +269,11 @@ class TelegramChannel(Channel):
             return
         footer = self.render_citations(response)
         text = response.text + footer
+        if response.meta.get("share_nudge") and self.bot_username:
+            text += (
+                "\n\n🙌 Finding this useful? Share Stobox with a friend — "
+                f"https://stobox.io — or just send them my way: @{self.bot_username}"
+            )
         if placeholder:
             # Morph the "checking…" message into the answer (no second bubble).
             from telegram.constants import ParseMode

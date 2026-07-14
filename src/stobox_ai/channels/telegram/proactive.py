@@ -117,7 +117,8 @@ class ProactiveScheduler:
                 caption += f"\n{teaser[:220]}"
             caption += (
                 f"\n\n🔗 {post['url']}"
-                "\n\nGive it a read — and if anything sparks a question, ask me right here. 👇"
+                "\n\nGive it a read — questions welcome right here. 👇"
+                "\n🔁 Know someone who'd find this useful? Forward it their way."
             )
             delivered = False
             for chat_id in chats:
@@ -165,6 +166,9 @@ class ProactiveScheduler:
         if self._in_quiet_hours():
             return
         fmt = random.choice(_FORMATS)  # noqa: S311 - not security-sensitive
+        if fmt.startswith("Poll"):
+            await self._post_poll(context)
+            return
         retrieved = await self.engine.retriever.retrieve(fmt)
         context_text = "\n\n".join(rc.chunk.text[:300] for rc in retrieved[:3])
         prompt = self.engine.prompts.render(
@@ -191,6 +195,42 @@ class ProactiveScheduler:
             except Exception:  # noqa: BLE001
                 pass
         log.info("proactive.evangelist_posted", format=fmt, chats=len(self._known_chats()))
+
+    async def _post_poll(self, context) -> None:
+        """Post a native Telegram poll — an education question, never anything
+        price/investment-adjacent. Grounded in the docs via the LLM, validated,
+        and skipped entirely on any doubt."""
+        from ...util import extract_json
+
+        retrieved = await self.engine.retriever.retrieve("tokenization education basics")
+        context_text = "\n\n".join(rc.chunk.text[:250] for rc in retrieved[:3])
+        prompt = (
+            "Create ONE light community-poll question about RWA tokenization or Stobox "
+            "education, grounded in this context. NEVER about price, investment, or "
+            "predictions. Return ONLY minified JSON: "
+            '{"question":"...max 250 chars...","options":["...","..."]} '
+            "with 2-4 short options (max 90 chars each). Make it genuinely fun to answer.\n\n"
+            f"Context:\n{context_text}"
+        )
+        try:
+            raw = await self.engine.reasoner.complete_json(
+                [ChatMessage("user", prompt)], max_tokens=250
+            )
+            data = extract_json(raw)
+            question = str(data["question"])[:250]
+            options = [str(o)[:90] for o in data["options"]][:4]
+            assert len(options) >= 2
+        except Exception as exc:  # noqa: BLE001 - skip the tick, never post junk
+            log.warning("proactive.poll_failed", error=str(exc))
+            return
+        for chat_id in self._known_chats():
+            try:
+                await context.bot.send_poll(
+                    chat_id, question, options, is_anonymous=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        log.info("proactive.poll_posted", q=question[:80], chats=len(self._known_chats()))
 
     async def _revival_job(self, context) -> None:
         cfg = self.engine.config

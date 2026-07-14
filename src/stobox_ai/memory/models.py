@@ -32,6 +32,7 @@ class UserProfile:
     customer_stage: str = "member"                  # member | curious | evaluating | lead | customer
     recent_questions: list[str] = field(default_factory=list)
     lead_score: int = 0                             # 0..100
+    helpful_answers: int = 0                        # drives the share-with-a-friend cadence
     email: str | None = None
     first_seen: datetime = field(default_factory=_now)
     last_interaction: datetime = field(default_factory=_now)

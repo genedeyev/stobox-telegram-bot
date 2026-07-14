@@ -45,6 +45,36 @@ async def test_blog_diff_waits_for_first_sync(config):
 
 
 @pytest.mark.asyncio
+async def test_share_nudge_every_fourth_helpful_answer(config):
+    from stobox_ai.core.types import Author, ChatType, IncomingMessage
+
+    eng = await AgentEngine.create(config)
+
+    def m(i):
+        return IncomingMessage(author=Author(external_id="sharer"), text="What is the STBU token?",
+            chat_id="sh", chat_type=ChatType.PRIVATE, message_id=str(i), raw={"addressed": True})
+
+    nudges = []
+    for i in range(8):
+        r = await eng.handle(m(i))
+        nudges.append(bool(r.meta.get("share_nudge")))
+    # Exactly on the 4th and 8th helpful answers.
+    assert nudges == [False, False, False, True, False, False, False, True]
+
+
+@pytest.mark.asyncio
+async def test_no_share_nudge_on_refusals(config):
+    from stobox_ai.core.types import Author, ChatType, IncomingMessage
+
+    eng = await AgentEngine.create(config)
+    msg = IncomingMessage(author=Author(external_id="refuser"), text="should I buy STBU?",
+        chat_id="rf", chat_type=ChatType.PRIVATE, message_id="1", raw={"addressed": True})
+    for _ in range(8):
+        r = await eng.handle(msg)
+        assert not r.meta.get("share_nudge")   # intercepted advice answers never nudge
+
+
+@pytest.mark.asyncio
 async def test_fetch_og_meta_degrades_to_empty():
     from stobox_ai.channels.telegram.proactive import fetch_og_meta
 
