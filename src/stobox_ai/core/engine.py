@@ -87,6 +87,8 @@ class AgentEngine:
         )
         self.paused = False
         self.pause_reason = ""
+        # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
+        self.blog_posts: list[dict] = []
         # Compliance guardrails (three-block prompt + deterministic rails).
         from ..guardrails import ComplianceRails, PromptAssembler
 
@@ -133,6 +135,7 @@ class AgentEngine:
             leads, decision_log, get_prompts(), indexer,
         )
         engine.last_sync = datetime.now(UTC)
+        await engine.refresh_blog_posts()
         return engine
 
     # ------------------------------------------------------------------ #
@@ -189,7 +192,22 @@ class AgentEngine:
 
         results = await sync_sources(self.indexer, self.config)
         self.last_sync = datetime.now(UTC)
+        await self.refresh_blog_posts()
         return results
+
+    async def refresh_blog_posts(self, limit: int = 5) -> None:
+        """Collect the freshest blog/digest URLs from the index for [FRESHNESS]
+        and /blog. Best-effort — empty until a web sync has run."""
+        try:
+            chunks = await self.retriever.store.all_chunks()
+        except Exception:  # noqa: BLE001
+            return
+        seen: dict[str, str] = {}
+        for c in chunks:
+            url = c.meta.source_url if c.meta else None
+            if url and "/blog" in url and url.rstrip("/") != "https://www.stobox.io/blog":
+                seen.setdefault(url, c.meta.title)
+        self.blog_posts = [{"title": t, "url": u} for u, t in list(seen.items())[:limit]]
 
     def build_freshness(self) -> str:
         """Assemble the live [FRESHNESS] block for the current request."""
@@ -203,6 +221,7 @@ class AgentEngine:
             canon=canon,
             last_sync=self.last_sync,
             corpus_hash=corpus_hash,
+            blog_posts=self.blog_posts or None,
             valuation_mark=FreshnessBuilder.valuation_from_env(),
         ).build()
 

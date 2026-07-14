@@ -30,6 +30,10 @@ from .proactive import ProactiveScheduler
 log = get_logger(__name__)
 _URL = re.compile(r"https?://\S+")
 _HTML_TAGS = re.compile(r"</?(b|strong|i|em|u|s|code|pre|a|tg-spoiler)(\s[^>]*)?>", re.I)
+# Cheap "this will need retrieval" heuristic → show the searching placeholder.
+_QUESTION_LIKE = re.compile(
+    r"\?|^\s*(what|how|why|when|where|which|who|can|does|do|is|are|explain|tell)\b", re.I
+)
 
 
 def strip_html(text: str) -> str:
@@ -141,23 +145,44 @@ class TelegramChannel(Channel):
         if chat and chat.type in ("group", "supergroup"):
             self.known_chats.add(str(chat.id))
         incoming = self._to_incoming(update)
+
+        # Immediate feedback: for question-like messages we'll answer, post a
+        # "checking the docs" placeholder right away, then EDIT it into the
+        # final answer — the user is never left staring at silence.
+        placeholder = None
+        will_answer = incoming.is_private or incoming.raw.get("addressed")
+        if will_answer and _QUESTION_LIKE.search(incoming.text):
+            try:
+                placeholder = await message.reply_text("🔍 Checking the Stobox docs…")
+            except Exception:  # noqa: BLE001
+                placeholder = None
+
         try:
             response = await self.engine.handle(incoming)
         except Exception as exc:  # noqa: BLE001
             log.error("telegram.handle_failed", error=str(exc))
             # Never fail silently in a DM — tell the user and move on.
-            if incoming.is_private:
+            apology = (
+                "Sorry — something went wrong on my side processing that. "
+                "Please try again in a moment, or email support@stobox.io."
+            )
+            try:
+                if placeholder:
+                    await placeholder.edit_text(apology)
+                elif incoming.is_private:
+                    await message.reply_text(apology)
+            except Exception:  # noqa: BLE001
+                pass
+            return
+
+        if response is None:
+            if placeholder:  # engine chose not to reply — clean up quietly
                 try:
-                    await update.effective_message.reply_text(
-                        "Sorry — something went wrong on my side processing that. "
-                        "Please try again in a moment, or email support@stobox.io."
-                    )
+                    await placeholder.delete()
                 except Exception:  # noqa: BLE001
                     pass
             return
-        if response is None:
-            return
-        await self._render(update, context, response)
+        await self._render(update, context, response, placeholder=placeholder)
 
     async def _on_inline_query(self, update, context) -> None:
         """Answer @bot <query> from any chat, via the full compliance pipeline."""
@@ -229,15 +254,39 @@ class TelegramChannel(Channel):
             footer = self.render_citations(response)
             await self.reply_html(update.effective_message, response.text + footer)
 
-    async def _render(self, update, context, response) -> None:
+    async def _render(self, update, context, response, placeholder=None) -> None:
         # Moderation actions first.
         if response.moderation != ModerationAction.NONE:
             await self._apply_moderation(update, context, response)
         if response.escalate:
             await self._escalate(update, context, response)
-        if response.should_reply:
-            footer = self.render_citations(response)
-            await self.reply_html(update.effective_message, response.text + footer)
+        if not response.should_reply:
+            if placeholder:
+                try:
+                    await placeholder.delete()
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+        footer = self.render_citations(response)
+        text = response.text + footer
+        if placeholder:
+            # Morph the "checking…" message into the answer (no second bubble).
+            from telegram.constants import ParseMode
+            from telegram.error import BadRequest
+
+            try:
+                await placeholder.edit_text(
+                    text[:4096], parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                )
+            except BadRequest:
+                try:
+                    await placeholder.edit_text(
+                        strip_html(text)[:4096], disable_web_page_preview=True
+                    )
+                except Exception:  # noqa: BLE001
+                    await self.reply_html(update.effective_message, text)
+        else:
+            await self.reply_html(update.effective_message, text)
 
     async def _apply_moderation(self, update, context, response) -> None:
         chat = update.effective_chat

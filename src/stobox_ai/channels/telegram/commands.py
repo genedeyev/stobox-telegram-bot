@@ -60,6 +60,7 @@ async def help_cmd(update, context) -> None:
         "/migrate – STBU→Base migration explainer\n"
         "/compass – Stobox Compass + readiness check\n"
         "/valuation – company valuation (not a token price)\n"
+        "/blog – latest posts + the weekly RWA digest\n"
         "/sources – official links to verify me\n"
         "/contact – reach the team / support\n"
         "/search &lt;query&gt; – search the knowledge base\n"
@@ -193,6 +194,23 @@ async def sources_cmd(update, context) -> None:
     lines.append("\nStobox staff never DM you first. Anything else is not us.")
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML",
                                               disable_web_page_preview=True)
+
+
+async def blog_cmd(update, context) -> None:
+    """Point readers at the blog + the freshest posts from the index."""
+    engine = _engine(context)
+    lines = [
+        "📰 <b>The Stobox Blog</b> — tokenization news, deep dives, and the weekly "
+        "<b>RWA &amp; Tokenization Digest</b>:",
+        "https://www.stobox.io/blog",
+    ]
+    if engine.blog_posts:
+        lines.append("\nLatest:")
+        lines += [f"• {p['title'][:80]} — {p['url']}" for p in engine.blog_posts[:5]]
+    lines.append("\nAsk me about anything you read — I'll pull up the details.")
+    await update.effective_message.reply_text(
+        "\n".join(lines), parse_mode="HTML", disable_web_page_preview=True
+    )
 
 
 async def contact_cmd(update, context) -> None:
@@ -417,6 +435,7 @@ def registry() -> dict:
         "compass": compass_cmd,
         "valuation": valuation_cmd,
         "sources": sources_cmd,
+        "blog": blog_cmd,
         "contact": contact_cmd,
         "support": support_cmd,
         "report": report_cmd,
