@@ -39,7 +39,7 @@ dependencies = [
   "pgvector>=0.3",
 
   # --- Channels ---
-  "python-telegram-bot>=21.0",
+  "python-telegram-bot[job-queue]>=21.0",   # job-queue powers proactive/digest/resync jobs
   "langdetect>=1.0.9",
 
   # --- Remote knowledge sync (web crawl + GitHub ingestion) ---
