@@ -59,15 +59,20 @@ class LlmsTxtSource(Source):
         return docs
 
     def _to_doc(self, url: str, name: str, body: str) -> Document:
-        title = "Stobox — AI Reference" if "full" in name else "Stobox — LLM Overview"
+        # PUBLIC citation = the website, never the .txt machine file. The txt
+        # URL is kept internally (extra.fetched_from) for sync bookkeeping.
+        from urllib.parse import urlparse
+
+        p = urlparse(url)
+        site_url = f"{p.scheme}://{p.netloc}"
         meta = DocMeta(
-            title=title,
+            title="Stobox — Official Website Reference",
             source_file=f"llms://{url}",
-            source_url=url,
+            source_url=site_url,
             category="documentation",
             product="Stobox",
             visibility="public",
             confidence=self.confidence,
-            extra={"kind": "llms.txt", "file": name},
+            extra={"kind": "llms.txt", "file": name, "fetched_from": url},
         )
         return Document(meta=meta, text=body)

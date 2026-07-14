@@ -17,7 +17,7 @@ from typing import Any
 from ...core.engine import AgentEngine
 from ...core.types import AgentResponse, Author, ChatType, IncomingMessage
 from ...logging import get_logger
-from ..base import Channel
+from ..base import Channel, public_citation_url
 
 log = get_logger(__name__)
 
@@ -76,7 +76,7 @@ class WebChannel(Channel):
                     "title": c.title,
                     "section": c.section,
                     "version": c.version,
-                    "source_url": c.source_url,
+                    "source_url": public_citation_url(c.source_url),
                     "label": c.render(),
                 }
                 for c in response.citations
