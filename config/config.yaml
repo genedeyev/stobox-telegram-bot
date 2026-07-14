@@ -1,0 +1,174 @@
+# ============================================================================
+# Stobox AI Community Manager — central configuration
+# Everything the spec calls "configurable" lives here (or in env for secrets).
+# Values here are defaults; env vars referenced as ${VAR} override at load time.
+# ============================================================================
+
+app:
+  name: "Stobox AI Community Manager"
+  environment: ${STOBOX_ENV:-development}
+  log_level: ${LOG_LEVEL:-INFO}
+
+# --- LLM: provider-abstracted. Reasoning defaults to Anthropic. --------------
+llm:
+  reasoning:
+    provider: anthropic            # anthropic | openai
+    model: claude-opus-4-8         # config value; swap freely
+    temperature: 0.3
+    max_tokens: 1200
+    # Fallback provider used if the primary errors out.
+    fallback_provider: openai
+    fallback_model: gpt-4.1
+  embeddings:
+    provider: openai               # OpenAI embeddings feed pgvector
+    model: text-embedding-3-large
+    dimensions: 1024
+  # Cheaper/faster model for classification (intent, language, moderation).
+  classifier:
+    provider: anthropic
+    model: claude-haiku-4-5-20251001
+    temperature: 0.0
+
+# --- Knowledge / RAG ---------------------------------------------------------
+knowledge:
+  docs_path: ${DOCS_PATH:-docs}
+  watch: true                      # hot re-index on file changes
+  sync_on_boot: false              # crawl remote sources at startup (heavy; prefer /sync or cron)
+  sources:
+    # Curated AI reference published by Stobox (llms.txt / llms-full.txt) — the
+    # canonical, highest-confidence source. docs.stobox.io now redirects here.
+    llms:
+      enabled: true
+      hosts: [https://www.stobox.io]
+      confidence: 1.0
+    web:
+      enabled: true
+      # No sitemap on stobox.io; the crawler auto-discovers the page inventory
+      # from llms-full.txt, then fetches each page.
+      # docs.stobox.io is DEPRECATED (301→www) and is NOT a source of truth —
+      # it's excluded from allow_domains so it's never crawled or ingested.
+      seeds:
+        - https://www.stobox.io/
+      allow_domains: [stobox.io, www.stobox.io]
+      max_pages: 200
+      max_depth: 3
+      delay_seconds: 0.3
+    github:
+      enabled: true
+      org: StoboxTechnologies      # auto-discovers all public repos in the org
+      repos: []                    # or pin: ["StoboxTechnologies/Stobox_STV3_Protocol", ...]
+      branch: null                 # null = each repo's default branch
+      include_ext: null            # null = docs (.md/.rst/.txt) + code (see include_code)
+      include_code: true           # ingest Solidity/TS/… source, not just docs
+      max_files: 500
+  chunking:
+    strategy: semantic             # semantic | recursive
+    target_tokens: 400
+    max_tokens: 800
+    overlap_tokens: 60
+  retrieval:
+    top_k: 8                       # candidates per retriever before rerank
+    final_k: 5                     # chunks passed to the reasoner
+    hybrid:
+      vector_weight: 0.6
+      bm25_weight: 0.4
+    rerank: true                   # cross-encoder-style LLM rerank of candidates
+    multi_hop: true
+    max_hops: 2
+
+# --- Confidence / anti-hallucination ----------------------------------------
+confidence:
+  threshold: 0.55                  # below this -> "I don't know based on the docs"
+  require_citations: true
+
+# --- Memory ------------------------------------------------------------------
+memory:
+  conversation_window: 12          # recent turns kept in working context
+  long_term: true                  # per-user durable profile
+  summarize_after_turns: 20
+
+# --- Agent behaviour / modes -------------------------------------------------
+agent:
+  default_persona: auto            # auto-detect, or force one of personas below
+  personas:
+    - developer
+    - investor
+    - founder
+    - lawyer
+    - enterprise
+    - retail
+    - beginner
+    - journalist
+    - partner
+    - regulator
+  modes:
+    community_manager: true
+    technical_expert: true
+    sales_assistant: true
+    moderator: true
+    product_evangelist: true
+
+# --- Proactive engagement ----------------------------------------------------
+proactive:
+  evangelist:
+    enabled: true
+    interval_hours: 4              # publish useful content every N hours
+    quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 (chat tz)
+  growth:
+    revive_inactive: true
+    inactivity_minutes: 240        # nudge a quiet chat after N minutes
+
+# --- Moderation --------------------------------------------------------------
+moderation:
+  enabled: true
+  level: standard                  # off | light | standard | strict
+  actions:                         # escalation ladder
+    spam: delete
+    scam: ban
+    fud: warn
+    toxicity: mute
+    flood: mute
+    advertising: delete
+  flood:
+    max_messages: 5
+    per_seconds: 10
+  mute_minutes: 60
+
+# --- Compliance guardrails (three-block prompt + canonicals) -----------------
+guardrails:
+  system_prompt: SYSTEM-PROMPT.md       # [CORE] behavior — changed only via PR
+  canonicals: canonicals.yaml           # [CANONICALS] facts — changed only via PR
+  golden: evals/golden.yaml             # regression gate before index promotion
+
+# --- Leads / sales -----------------------------------------------------------
+leads:
+  enabled: true
+  qualify_on_intent: true
+  # Website contact flow posts to the Twenty CRM connector; mirror it with
+  # source=telegram-bot. Set CRM_WEBHOOK_URL to that endpoint.
+  crm_webhook: ${CRM_WEBHOOK_URL:-}
+  crm_source: telegram-bot
+
+# --- Languages ---------------------------------------------------------------
+languages:
+  auto_detect: true
+  default: en
+  supported: [en, ru, uk, es, fr, de, ar, zh, ja, pt, it, ro]
+
+# --- Channels (adapters over the reusable core) ------------------------------
+channels:
+  telegram:
+    enabled: true
+    handle_private: true
+    handle_groups: true
+    handle_channels: true
+
+# --- Rate limiting / abuse ---------------------------------------------------
+limits:
+  per_user_messages_per_minute: 20
+  max_reply_chars: 3500
+
+# --- Observability -----------------------------------------------------------
+observability:
+  log_decisions: true              # log retrieval, reasoning meta, sources, confidence
+  daily_digest: true

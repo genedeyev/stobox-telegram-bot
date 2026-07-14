@@ -1,0 +1,77 @@
+<!doctype html>
+<!--
+  Minimal reference chat widget for the Stobox AI web channel.
+  Serve the backend with `stobox-web` (POST /chat), then open this file and set
+  API_BASE to the server URL. Citations are rendered under each answer.
+  This is a demo, not a production widget (no auth, no rate limiting UI).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stobox AI — Chat Widget Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    #log { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; height: 60vh; overflow-y: auto; }
+    .msg { margin: .5rem 0; }
+    .user { text-align: right; }
+    .bubble { display: inline-block; padding: .5rem .75rem; border-radius: 10px; max-width: 85%; }
+    .user .bubble { background: #2563eb; color: #fff; }
+    .bot .bubble { background: #f1f5f9; }
+    .cites { font-size: .8rem; color: #64748b; margin-top: .25rem; }
+    .conf { font-size: .7rem; color: #94a3b8; }
+    form { display: flex; gap: .5rem; margin-top: 1rem; }
+    input { flex: 1; padding: .6rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+    button { padding: .6rem 1rem; border: 0; border-radius: 8px; background: #2563eb; color: #fff; }
+  </style>
+</head>
+<body>
+  <h2>Stobox AI Community Manager</h2>
+  <div id="log"></div>
+  <form id="f">
+    <input id="q" placeholder="Ask about Stobox, Compass, STBU, RWA…" autocomplete="off" />
+    <button>Send</button>
+  </form>
+
+  <script>
+    const API_BASE = "http://localhost:8080";           // where `stobox-web` runs
+    const userId = "web-" + Math.random().toString(36).slice(2, 8);
+    const log = document.getElementById("log");
+
+    function add(role, html) {
+      const d = document.createElement("div");
+      d.className = "msg " + role;
+      d.innerHTML = '<span class="bubble">' + html + "</span>";
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    document.getElementById("f").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = document.getElementById("q");
+      const text = q.value.trim();
+      if (!text) return;
+      add("user", text);
+      q.value = "";
+      try {
+        const res = await fetch(API_BASE + "/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, text }),
+        });
+        const data = await res.json();
+        if (!data.answered) { add("bot", "…"); return; }
+        let html = data.reply.replace(/\n/g, "<br>");
+        if (data.citations && data.citations.length) {
+          html += '<div class="cites">📚 ' +
+            data.citations.map(c => c.label).join("<br>") + "</div>";
+        }
+        html += '<div class="conf">confidence: ' + data.confidence + "</div>";
+        add("bot", html);
+      } catch (err) {
+        add("bot", "⚠️ Could not reach the Stobox AI backend.");
+      }
+    });
+  </script>
+</body>
+</html>

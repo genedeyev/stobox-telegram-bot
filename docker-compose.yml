@@ -1,0 +1,39 @@
+# Local / single-node deployment. For Kubernetes, see deploy/ (charts derive
+# from these same env vars). Secrets come from your .env (never commit it).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: stobox
+      POSTGRES_PASSWORD: stobox
+      POSTGRES_DB: stobox_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stobox -d stobox_ai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bot:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      STOBOX_ENV: production
+      DATABASE_URL: postgresql://stobox:stobox@db:5432/stobox_ai
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_ADMIN_USER_IDS: ${TELEGRAM_ADMIN_USER_IDS}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      CRM_WEBHOOK_URL: ${CRM_WEBHOOK_URL:-}
+    volumes:
+      - ./docs:/app/docs:ro          # mount docs read-only; hot-reindex on change
+      - ./config:/app/config:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:

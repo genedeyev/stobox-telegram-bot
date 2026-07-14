@@ -1,0 +1,239 @@
+"""Telegram adapter (python-telegram-bot v21, async).
+
+Responsibilities:
+  * translate Telegram updates → :class:`IncomingMessage` (groups, supergroups,
+    channels, private, forum topics, replies, edits, attachments, links);
+  * run them through the shared engine and render the reply + citations;
+  * execute moderation actions (delete / mute / ban) the engine requests;
+  * register commands and proactive jobs (evangelist + inactivity revival).
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import timedelta
+
+from ...config import Secrets, get_secrets
+from ...core.engine import AgentEngine
+from ...core.types import (
+    Attachment,
+    Author,
+    ChatType,
+    IncomingMessage,
+    ModerationAction,
+)
+from ...logging import get_logger
+from ..base import Channel
+from . import commands as cmd
+from .proactive import ProactiveScheduler
+
+log = get_logger(__name__)
+_URL = re.compile(r"https?://\S+")
+
+_CHAT_TYPES = {
+    "private": ChatType.PRIVATE,
+    "group": ChatType.GROUP,
+    "supergroup": ChatType.SUPERGROUP,
+    "channel": ChatType.CHANNEL,
+}
+
+
+class TelegramChannel(Channel):
+    name = "telegram"
+
+    def __init__(self, engine: AgentEngine, secrets: Secrets | None = None) -> None:
+        super().__init__(engine)
+        self.secrets = secrets or get_secrets()
+        self.app = None
+        self.bot_username: str | None = None
+        self.admins = self.secrets.admin_user_ids
+        self.proactive: ProactiveScheduler | None = None
+        # Group chats the bot has seen — targets for proactive posts.
+        self.known_chats: set[str] = set()
+
+    async def start(self) -> None:
+        from telegram.ext import (
+            ApplicationBuilder,
+            CommandHandler,
+            MessageHandler,
+            filters,
+        )
+
+        if not self.secrets.telegram_token:
+            raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
+
+        self.app = ApplicationBuilder().token(self.secrets.telegram_token).build()
+        self.app.bot_data["engine"] = self.engine
+        self.app.bot_data["adapter"] = self
+
+        # User + admin commands (see commands.py).
+        for name, handler in cmd.registry().items():
+            self.app.add_handler(CommandHandler(name, handler))
+
+        self.app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
+        )
+        self.app.add_error_handler(self._on_error)
+
+        await self.app.initialize()
+        me = await self.app.bot.get_me()
+        self.bot_username = me.username
+        log.info("telegram.start", username=me.username)
+
+        # Proactive engagement (evangelist + inactivity revival).
+        self.proactive = ProactiveScheduler(self.engine, self.app)
+        self.proactive.schedule()
+
+        await self.app.start()
+        await self.app.updater.start_polling(drop_pending_updates=True)
+
+    async def stop(self) -> None:
+        if self.app:
+            await self.app.updater.stop()
+            await self.app.stop()
+            await self.app.shutdown()
+            log.info("telegram.stopped")
+
+    # ------------------------------------------------------------------ #
+    async def _on_message(self, update, context) -> None:
+        message = update.effective_message
+        if message is None or not (message.text or message.caption):
+            return
+        chat = update.effective_chat
+        if chat and chat.type in ("group", "supergroup"):
+            self.known_chats.add(str(chat.id))
+        incoming = self._to_incoming(update)
+        try:
+            response = await self.engine.handle(incoming)
+        except Exception as exc:  # noqa: BLE001
+            log.error("telegram.handle_failed", error=str(exc))
+            return
+        if response is None:
+            return
+        await self._render(update, context, response)
+
+    async def process_query(self, update, context, query: str) -> None:
+        """Run arbitrary text (e.g. from a slash command) through the full
+        engine pipeline and render the reply. Marked as addressed so the engine
+        always answers."""
+        incoming = self._to_incoming(update)
+        incoming.text = query
+        incoming.raw["addressed"] = True
+        response = await self.engine.handle(incoming)
+        if response and response.should_reply:
+            footer = self.render_citations(response)
+            await update.effective_message.reply_text(
+                (response.text + footer)[:4096], disable_web_page_preview=True
+            )
+
+    async def _render(self, update, context, response) -> None:
+        # Moderation actions first.
+        if response.moderation != ModerationAction.NONE:
+            await self._apply_moderation(update, context, response)
+        if response.escalate:
+            await self._escalate(update, context, response)
+        if response.should_reply:
+            footer = self.render_citations(response)
+            await update.effective_message.reply_text(
+                (response.text + footer)[:4096],
+                disable_web_page_preview=True,
+            )
+
+    async def _apply_moderation(self, update, context, response) -> None:
+        chat = update.effective_chat
+        user = update.effective_user
+        msg = update.effective_message
+        action = response.moderation
+        try:
+            if action == ModerationAction.DELETE:
+                await msg.delete()
+            elif action == ModerationAction.MUTE:
+                from telegram import ChatPermissions
+
+                until = msg.date + timedelta(
+                    minutes=int(self.engine.config.get("moderation.mute_minutes", 60))
+                )
+                await context.bot.restrict_chat_member(
+                    chat.id, user.id, ChatPermissions(can_send_messages=False), until_date=until
+                )
+            elif action == ModerationAction.BAN:
+                await msg.delete()
+                await context.bot.ban_chat_member(chat.id, user.id)
+            log.info("telegram.moderation_applied", action=action.value, user=user.id)
+        except Exception as exc:  # noqa: BLE001 - lacking admin rights, etc.
+            log.warning("telegram.moderation_failed", action=action.value, error=str(exc))
+
+    async def _escalate(self, update, context, response) -> None:
+        """Notify admins of scams/low-confidence escalations."""
+        text = (
+            f"🚨 Escalation in {update.effective_chat.title or 'chat'} "
+            f"({response.meta.get('category', 'low_confidence')}). "
+            f"Message: {update.effective_message.text[:200]}"
+        )
+        for admin_id in self.admins:
+            try:
+                await context.bot.send_message(admin_id, text)
+            except Exception:  # noqa: BLE001
+                pass
+
+    # ------------------------------------------------------------------ #
+    def _to_incoming(self, update) -> IncomingMessage:
+        message = update.effective_message
+        chat = update.effective_chat
+        user = update.effective_user
+        text = message.text or message.caption or ""
+
+        author = Author(
+            external_id=str(user.id) if user else "unknown",
+            channel="telegram",
+            username=user.username if user else None,
+            display_name=(user.full_name if user else None),
+            is_admin=bool(user and user.id in self.admins),
+        )
+        addressed = self._is_addressed(message, text)
+        return IncomingMessage(
+            author=author,
+            text=text,
+            chat_id=str(chat.id),
+            chat_type=_CHAT_TYPES.get(chat.type, ChatType.GROUP),
+            message_id=str(message.message_id),
+            channel="telegram",
+            thread_id=str(message.message_thread_id) if message.message_thread_id else None,
+            reply_to_text=(
+                message.reply_to_message.text
+                if message.reply_to_message and message.reply_to_message.text
+                else None
+            ),
+            is_forwarded=bool(getattr(message, "forward_origin", None)),
+            is_edited=bool(update.edited_message),
+            attachments=self._attachments(message),
+            links=_URL.findall(text),
+            raw={"addressed": addressed},
+        )
+
+    def _is_addressed(self, message, text: str) -> bool:
+        if self.bot_username and f"@{self.bot_username}".lower() in text.lower():
+            return True
+        reply = message.reply_to_message
+        if reply and reply.from_user and self.bot_username:
+            return reply.from_user.username == self.bot_username
+        return False
+
+    @staticmethod
+    def _attachments(message) -> list[Attachment]:
+        out: list[Attachment] = []
+        if message.photo:
+            out.append(Attachment.IMAGE)
+        if message.document:
+            name = (message.document.file_name or "").lower()
+            out.append(Attachment.PDF if name.endswith(".pdf") else Attachment.DOCUMENT)
+        if message.voice:
+            out.append(Attachment.VOICE)
+        if message.video:
+            out.append(Attachment.VIDEO)
+        if message.sticker:
+            out.append(Attachment.STICKER)
+        return out
+
+    async def _on_error(self, update, context) -> None:
+        log.error("telegram.error", error=str(context.error))

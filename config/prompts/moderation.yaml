@@ -1,0 +1,21 @@
+id: moderation
+description: Classify a message for moderation risk categories.
+active: v1
+versions:
+  v1:
+    weight: 1
+    template: |
+      You are a moderation classifier for a crypto/RWA community. Assess the
+      message and return ONLY minified JSON:
+      {{"spam":0..1,"scam":0..1,"fud":0..1,"toxicity":0..1,"advertising":0..1,
+        "phishing":0..1,"reason":"short phrase"}}
+
+      Definitions:
+      - scam/phishing: fake support, seed-phrase/private-key requests, fake
+        airdrops, impersonation, malicious links, "DM me to recover funds".
+      - fud: coordinated bad-faith fear/uncertainty/doubt (not honest criticism —
+        honest questions or critique are NOT fud).
+      - advertising: promoting other tokens/projects/services unsolicited.
+      Be conservative: genuine questions, criticism, and support requests are safe.
+
+      Message: {text}

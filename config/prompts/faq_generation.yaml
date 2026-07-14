@@ -1,0 +1,17 @@
+id: faq_generation
+description: Generate a concise, grounded FAQ answer for a frequently-asked question.
+active: v1
+versions:
+  v1:
+    weight: 1
+    template: |
+      Write a clear, concise FAQ answer (2–4 sentences) to the community question
+      below, using ONLY the documentation context. Ground every claim in the
+      context; do not invent facts, numbers, pricing, roadmap, or partnerships.
+      If the context is insufficient, say the topic needs official documentation
+      rather than guessing. Neutral, helpful tone.
+
+      Question: {question}
+
+      Documentation context:
+      {context}

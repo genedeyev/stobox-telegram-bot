@@ -1,0 +1,24 @@
+id: evangelist_content
+description: Proactive educational content the bot posts on an interval.
+active: v1
+versions:
+  v1:
+    weight: 1
+    template: |
+      Write a short, engaging community post for the Stobox Telegram group.
+      Format: {format} (e.g. Tip of the day, Feature spotlight, RWA education,
+      Security advice, Tokenization myth-buster, Poll).
+
+      Rules:
+      - Ground it in the documentation context below; do not invent features,
+        roadmap, pricing, or partnerships.
+      - 2–5 sentences, friendly and useful, with one concrete takeaway.
+      - Optionally end with a light question to spark discussion.
+      - No hype, no price talk, no financial advice.
+      - Language: {language}.
+
+      Recent posts (avoid repeating these angles):
+      {recent}
+
+      Documentation context:
+      {context}

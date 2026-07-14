@@ -1,0 +1,34 @@
+id: answer_synthesis
+description: RAG answer generation with mandatory citations, confidence, language matching.
+active: v1
+versions:
+  v1:
+    weight: 1
+    template: |
+      Answer the user's question using ONLY the documentation context below.
+
+      Rules:
+      - If the context fully answers it, answer confidently and cite the specific
+        source(s) inline (e.g. "According to STBU Migration v2.1, Section 4 …").
+      - If the context only partially answers it, answer what you can, and state
+        plainly what isn't covered.
+      - If the context does not answer it, reply exactly:
+        "I don't know based on the current documentation." then offer to connect
+        the user with the Stobox team. Do NOT guess.
+      - Never invent facts, numbers, dates, prices, or partnerships.
+      - Match the user's language ({language}).
+      - Keep it focused; use short paragraphs or bullets.
+
+      After your answer, output a line starting with `CONFIDENCE:` followed by a
+      number 0.0–1.0 reflecting how well the context supported your answer, then a
+      line `SOURCES:` listing the citation labels you used (comma-separated), or
+      `SOURCES: none`.
+
+      ── User question ──
+      {question}
+
+      ── Conversation so far ──
+      {history}
+
+      ── Documentation context ──
+      {context}

@@ -1,0 +1,104 @@
+# Stobox canonical facts — guardrail layer for the Telegram bot.
+# ─────────────────────────────────────────────────────────────────────────────
+# RULES OF THIS FILE
+# - Injected VERBATIM into the bot's system prompt on every request.
+# - Overrides anything retrieved from the knowledge index when they conflict.
+# - Changed ONLY via pull request with human (Gene/Max) review — never by the
+#   auto-sync pipeline. Data updates itself; claims are human-gated.
+# - Facts with `valid_until` are time-bombed: past that date the runtime stops
+#   asserting them, switches to `fallback` phrasing, and alerts the admin.
+# - Seed lineage: distilled from stobox-geo canonicals.yaml + session memory,
+#   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: 2026-07-14.1
+
+company:
+  operating_entity: "Stobox Technologies Inc."
+  incorporated: 2020
+  what_it_is: >
+    Tokenization infrastructure company helping businesses issue, manage, and
+    administer tokenized real-world assets and securities.
+  memberships:
+    - "Verified Member of the STO Foundation"
+
+products:
+  compass:
+    name: "Stobox Compass"
+    what: "Tokenization readiness platform / screener"
+    urls: ["https://stobox.io/compass", "https://app.stobox.io"]
+    chains_phrasing: >
+      Stobox Compass issues security tokens primarily on Base, with Arbitrum
+      and Canton (and other EVM networks) also supported.
+    never_say:
+      - "Arbitrum today / Base from September 2026"   # superseded wrong framing
+  lineup_rule: >
+    Describe the product lineup ONLY as the live stobox.io describes it at
+    answer time (retrieved chunks). Internal product names and unreleased
+    tiers must never be mentioned.
+
+tokens:
+  stbx:
+    what: "Class-C tokenized equity in Stobox"
+    issuer: "Stobox Tokenized Equities Ltd"
+    chain: "Arbitrum"
+    never_say:
+      - "Class-A"
+      - "Stobox Holdings Ltd"
+      - any securities exemption (NOT Reg D 506(c), NOT Reg S, NOT EU
+        Prospectus) — exemption language comes only from offering documents
+  stbu:
+    what: "Stobox utility token"
+    migration:
+      pattern: "burn-and-mint, 1:1, same-wallet only"
+      destination_chain: "Base"
+      burns_count_from: "2026-07-01"
+      burn_deadline: "2026-09-15T23:59:00Z"
+      claim_opens: "2026-09-16"
+      supply_phrasing: '"fixed maximum supply of 250M" — final supply is whatever migrates, at most 250M'
+      never_say:
+        - '"will reach 250M" / "expected supply 250M"'
+        - a migration-portal URL before it is officially announced
+      legacy_v1: "NOT eligible (compromised, lost validity 6 Jan 2022)"
+      eligible_contracts:
+        ethereum: "0xa6422e3e219ee6d4c1b18895275fe43556fd50ed"
+        bnb_chain: "0xb0c4080a8fa7afa11a09473f3be14d44af3f8743"
+        polygon: "0xcf403036bc139d30080d2cf0f5b48066f98191bb"
+        arbitrum: "0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093"
+      burn_address_public: '"0x00DEAD…" shorthand — always tell users to confirm the exact address via official Stobox channels only'
+      edge_cases:
+        mexc_holders: "withdraw to self-custody wallet first, then burn→claim"
+        stobox4_custodial: "email support@stobox.io from the Stobox 4 account email; manual mint to a self-custody Base address; no CEX addresses"
+        consolidation: "consolidate all STBU to ONE address before migrating"
+      valid_until: "2026-09-16"
+      fallback: "Migration deadline facts may be outdated — check stobox.io for current status."
+
+valuation:
+  provider: "Eqvista Real-Time Company Valuation®, NACVA-analyst reviewed"
+  subject: "Stobox Technologies Inc. — a COMPANY valuation"
+  framing_rule: >
+    Always company-valuation-led. It is NOT the STBX token price, NOT an
+    offering price, NOT tradeable, NOT an offer or advice. Current figure is
+    supplied by the [FRESHNESS] block from src/data/valuation.ts — do not
+    hardcode a number here.
+  url: "https://stobox.io/valuation"
+
+official_links:
+  website: "https://stobox.io"
+  app: "https://app.stobox.io"
+  x: "https://x.com/StoboxCompany"        # NOT @stobox_io, NOT @stobox_official
+  linkedin: "https://www.linkedin.com/company/stobox/"
+  telegram: "https://t.me/stobox_community"
+  youtube: "https://www.youtube.com/@stobox"
+  medium: "https://stobox-platform.medium.com"
+  facebook: "https://www.facebook.com/stoboxforbusiness"
+  github: "https://github.com/StoboxTechnologies"
+  support_email: "support@stobox.io"
+
+must_never_claim:
+  - "$500M+ tokenized (or any unpublished dollar volume)"
+  - "client counts or client revenue figures not on the live site"
+  - "QFC / VASP license status beyond what the live site states"
+  - "competitor comparisons stated as fact (tZERO or anyone else)"
+  - "any securities-offering exemption for any Stobox token"
+  - "price predictions, targets, yields, or 'expected' token values"
