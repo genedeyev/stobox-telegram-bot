@@ -27,12 +27,45 @@ _FORMATS = [
     "Poll (pose one question)",
 ]
 
+# Rotating friendly openers for new-blog announcements (deterministic — no LLM
+# in broadcasts). Index rotates per announcement so consecutive posts differ.
+_BLOG_OPENERS = [
+    "📰 Fresh from the Stobox blog — check out our new article:",
+    "🆕 Just published on the Stobox blog:",
+    "📚 New read for you — hot off the Stobox blog:",
+    "✍️ The Stobox team just published something new:",
+]
+
+
+async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
+    """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
+    returns {} on any failure so announcements degrade to a link card."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return {}
+            soup = BeautifulSoup(resp.text, "html.parser")
+            out = {}
+            for key in ("image", "title", "description"):
+                tag = soup.find("meta", property=f"og:{key}")
+                if tag and tag.get("content"):
+                    out[key] = tag["content"].strip()
+            return out
+    except Exception as exc:  # noqa: BLE001
+        log.warning("blog.og_fetch_failed", url=url, error=str(exc))
+        return {}
+
 
 class ProactiveScheduler:
     def __init__(self, engine, app) -> None:
         self.engine = engine
         self.app = app
         self._recent_posts: list[str] = []
+        self._opener_i = 0
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -52,7 +85,59 @@ class ProactiveScheduler:
             from datetime import time as _time
 
             jq.run_daily(self._resync_job, time=_time(4, 0, tzinfo=UTC))
+        # New-blog announcements: cheap in-memory diff, so a tight interval is
+        # fine — a post lands minutes after the sync that discovers it.
+        blog = cfg.section("proactive.blog_announcements")
+        if blog.get("enabled", True):
+            minutes = float(blog.get("interval_minutes", 10))
+            jq.run_repeating(self._blog_announce_job, interval=minutes * 60, first=120)
         log.info("proactive.scheduled")
+
+    async def _blog_announce_job(self, context) -> None:
+        """Announce newly published blog posts with an OG-image card."""
+        if self._in_quiet_hours():
+            return  # posts stay queued (un-marked) and go out after quiet hours
+        new_posts = self.engine.pop_new_blog_posts()
+        if not new_posts:
+            return
+        cfg = self.engine.config.section("proactive.blog_announcements")
+        chats = {str(c) for c in (cfg.get("chat_ids") or [])} | self._known_chats()
+        if not chats:
+            log.info("blog.no_chats_to_announce", posts=len(new_posts))
+            return
+
+        for post in new_posts[:3]:  # cap per tick — never flood the chat
+            og = await fetch_og_meta(post["url"])
+            title = og.get("title") or post["title"]
+            teaser = (og.get("description") or "").strip()
+            opener = _BLOG_OPENERS[self._opener_i % len(_BLOG_OPENERS)]
+            self._opener_i += 1
+            caption = f"{opener}\n\n<b>{title}</b>"
+            if teaser:
+                caption += f"\n{teaser[:220]}"
+            caption += (
+                f"\n\n🔗 {post['url']}"
+                "\n\nGive it a read — and if anything sparks a question, ask me right here. 👇"
+            )
+            delivered = False
+            for chat_id in chats:
+                try:
+                    if og.get("image"):
+                        await context.bot.send_photo(
+                            chat_id, photo=og["image"], caption=caption[:1024],
+                            parse_mode="HTML",
+                        )
+                    else:
+                        # No OG image → let Telegram render the link-preview card.
+                        await context.bot.send_message(
+                            chat_id, caption[:4096], parse_mode="HTML",
+                        )
+                    delivered = True
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("blog.announce_failed", chat=chat_id, error=str(exc))
+            if delivered:
+                self.engine.mark_blog_announced(post["url"])
+                log.info("blog.announced", url=post["url"], chats=len(chats))
 
     async def _resync_job(self, context) -> None:
         try:

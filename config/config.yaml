@@ -119,6 +119,11 @@ proactive:
   growth:
     revive_inactive: true
     inactivity_minutes: 240        # nudge a quiet chat after N minutes
+  blog_announcements:
+    enabled: true                  # announce every newly published blog post
+    interval_minutes: 10           # how often to check for new posts (cheap diff)
+    chat_ids: []                   # extra chats to announce in (e.g. the community
+                                   # group id); groups the bot has seen are included
 
 # --- Moderation --------------------------------------------------------------
 moderation:

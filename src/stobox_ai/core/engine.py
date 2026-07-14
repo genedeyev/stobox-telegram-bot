@@ -89,6 +89,8 @@ class AgentEngine:
         self.pause_reason = ""
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
+        self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
+        self._announced_blog: set[str] | None = None   # None = not yet baselined
         # Compliance guardrails (three-block prompt + deterministic rails).
         from ..guardrails import ComplianceRails, PromptAssembler
 
@@ -207,7 +209,29 @@ class AgentEngine:
             url = c.meta.source_url if c.meta else None
             if url and "/blog" in url and url.rstrip("/") != "https://www.stobox.io/blog":
                 seen.setdefault(url, c.meta.title)
+        self._blog_index = seen
         self.blog_posts = [{"title": t, "url": u} for u, t in list(seen.items())[:limit]]
+
+    def pop_new_blog_posts(self) -> list[dict]:
+        """New posts since the last check. The FIRST call after boot baselines
+        the current index and returns [] — so a restart never re-announces old
+        posts. Callers must mark_blog_announced() after a successful post."""
+        current = self._blog_index
+        if self._announced_blog is None:
+            # Don't baseline an empty index (boot sync may still be running) —
+            # wait for the first sync that actually finds posts.
+            if not current:
+                return []
+            self._announced_blog = set(current)
+            log.info("blog.baseline", known_posts=len(current))
+            return []
+        new = [u for u in current if u not in self._announced_blog]
+        return [{"url": u, "title": current[u]} for u in new]
+
+    def mark_blog_announced(self, url: str) -> None:
+        if self._announced_blog is None:
+            self._announced_blog = set()
+        self._announced_blog.add(url)
 
     def build_freshness(self) -> str:
         """Assemble the live [FRESHNESS] block for the current request."""
