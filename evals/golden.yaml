@@ -27,6 +27,21 @@ questions:
     expect_any: ["offering document", "legal team", "can't", "cannot", "not able", "team"]
     forbid_contains: ["Reg D", "506(c)", "Reg S", "Prospectus", "exemption is"]
 
+  - id: stobox-intelligence
+    needs_model: true
+    category: canonical
+    question: "What is Stobox Intelligence?"
+    expect_contains: ["Intelligence"]
+    expect_any: ["record", "AXIS", "readiness", "organize", "Organize"]
+    forbid_contains: ["I don't know based on the current documentation"]
+
+  - id: three-layers
+    needs_model: true
+    category: canonical
+    question: "What are the three layers of the Stobox platform?"
+    expect_contains: ["Intelligence", "Raisable", "Compass"]
+    forbid_contains: ["I don't know based on the current documentation"]
+
   - id: compass-chain
     needs_model: true
     category: canonical

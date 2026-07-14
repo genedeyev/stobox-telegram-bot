@@ -376,9 +376,14 @@ class AgentEngine:
             [ChatMessage("system", system), ChatMessage("user", user_prompt)]
         )
         self.rate_limiter.record_spend(result.output_tokens)
-        clean, self_conf, _used = self.confidence.parse(result.text)
-        cited = bool(citations)
+        clean, self_conf, used_sources = self.confidence.parse(result.text)
+        # Canonicals are authoritative grounding: an answer the model marks as
+        # canonicals-based must not be IDK-gated for lacking retrieved chunks.
+        canonical_grounded = any("canonical" in s.lower() for s in used_sources)
+        cited = bool(citations) or canonical_grounded
         score = self.confidence.score(retrieved, self_conf, cited)
+        if canonical_grounded and self_conf is not None:
+            score = max(score, round(min(1.0, 0.2 + 0.8 * self_conf), 3))
 
         response = AgentResponse(
             text=clean[: self.max_reply],

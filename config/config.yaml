@@ -33,7 +33,8 @@ llm:
 knowledge:
   docs_path: ${DOCS_PATH:-docs}
   watch: true                      # hot re-index on file changes
-  sync_on_boot: false              # crawl remote sources at startup (heavy; prefer /sync or cron)
+  sync_on_boot: false              # BLOCKING sync before start (rarely wanted)
+  background_sync_on_boot: true    # auto-load the live corpus right after boot (non-blocking)
   daily_resync: true               # 04:00 UTC daily reconciliation sync (self-update loop)
   sources:
     # Curated AI reference published by Stobox (llms.txt / llms-full.txt) — the

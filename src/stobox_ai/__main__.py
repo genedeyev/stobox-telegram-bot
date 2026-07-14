@@ -51,6 +51,21 @@ async def run() -> None:
     channel = TelegramChannel(engine)
     await channel.start()
 
+    # Auto-load the live Stobox corpus in the BACKGROUND after boot — the bot
+    # answers immediately from seed docs + canonicals while the full index
+    # streams in. Hash-gated, so with a persistent DB this is a cheap no-op.
+    sync_task: asyncio.Task | None = None
+    if config.get("knowledge.background_sync_on_boot", True):
+        async def _bg_sync() -> None:
+            try:
+                results = await engine.sync_knowledge()
+                log.info("boot.background_sync_done", results=results,
+                         chunks=await engine.retriever.store.count())
+            except Exception as exc:  # noqa: BLE001
+                log.error("boot.background_sync_failed", error=str(exc))
+
+        sync_task = asyncio.create_task(_bg_sync())
+
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -63,6 +78,8 @@ async def run() -> None:
     await stop.wait()
 
     log.info("shutdown")
+    if sync_task and not sync_task.done():
+        sync_task.cancel()
     if watcher:
         watcher.stop()
     await channel.stop()

@@ -22,12 +22,16 @@ def _dt(s: str) -> datetime:
 # --------------------------------------------------------------------------- #
 def test_canonicals_load_and_verbatim_injection():
     canon = load_canonicals("canonicals.yaml", now=_dt("2026-07-14"))
-    assert canon.version == "2026-07-14.1"
+    assert canon.version == "2026-07-14.2"
     block = canon.injection_block(_dt("2026-07-14"))
     # Verbatim key facts present.
     assert "Stobox Tokenized Equities Ltd" in block
     assert "Class-C" in block
     assert "burn-and-mint" in block
+    # Three-layer product lineup is canonical knowledge.
+    assert "Stobox Intelligence" in block
+    assert "Raisable" in block
+    assert "AXIS" in block
     # Not yet expired → no override section.
     assert "RUNTIME OVERRIDE" not in block
 

@@ -5,14 +5,18 @@ versions:
   v1:
     weight: 1
     template: |
-      Answer the user's question using ONLY the documentation context below.
+      Answer the user's question using ONLY these grounding sources:
+      (a) the [CANONICALS] facts in your system prompt (authoritative — they
+          override everything), (b) the [FRESHNESS] block, and (c) the
+      documentation context below.
 
       Rules:
-      - If the context fully answers it, answer confidently and cite the specific
-        source(s) inline (e.g. "According to STBU Migration v2.1, Section 4 …").
-      - If the context only partially answers it, answer what you can, and state
-        plainly what isn't covered.
-      - If the context does not answer it, reply exactly:
+      - If the grounding answers it, answer confidently. Cite documentation
+        sources inline (e.g. "According to STBU Migration v2.1, Section 4 …");
+        canonical facts need no inline citation.
+      - If the grounding only partially answers it, answer what you can, and
+        state plainly what isn't covered.
+      - If NONE of the grounding answers it, reply exactly:
         "I don't know based on the current documentation." then offer to connect
         the user with the Stobox team. Do NOT guess.
       - Never invent facts, numbers, dates, prices, or partnerships.
@@ -20,9 +24,10 @@ versions:
       - Keep it focused; use short paragraphs or bullets.
 
       After your answer, output a line starting with `CONFIDENCE:` followed by a
-      number 0.0–1.0 reflecting how well the context supported your answer, then a
-      line `SOURCES:` listing the citation labels you used (comma-separated), or
-      `SOURCES: none`.
+      number 0.0–1.0 reflecting how well the grounding supported your answer,
+      then a line `SOURCES:` listing the citation labels you used
+      (comma-separated). If you relied on the canonical facts, include
+      `canonicals` in the list. If you used nothing, output `SOURCES: none`.
 
       ── User question ──
       {question}
