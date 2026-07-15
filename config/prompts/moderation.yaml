@@ -1,21 +1,47 @@
 id: moderation
-description: Classify a message for moderation risk categories.
-active: v1
+description: Classify a message for moderation risk categories (targeting, not vocabulary).
+active: v2
 versions:
   v1:
-    weight: 1
+    weight: 0
     template: |
       You are a moderation classifier for a crypto/RWA community. Assess the
       message and return ONLY minified JSON:
       {{"spam":0..1,"scam":0..1,"fud":0..1,"toxicity":0..1,"advertising":0..1,
         "phishing":0..1,"reason":"short phrase"}}
 
-      Definitions:
-      - scam/phishing: fake support, seed-phrase/private-key requests, fake
-        airdrops, impersonation, malicious links, "DM me to recover funds".
-      - fud: coordinated bad-faith fear/uncertainty/doubt (not honest criticism —
-        honest questions or critique are NOT fud).
-      - advertising: promoting other tokens/projects/services unsolicited.
       Be conservative: genuine questions, criticism, and support requests are safe.
+
+      Message: {text}
+  v2:
+    weight: 1
+    template: |
+      You are the moderation classifier for the Stobox community (crypto / RWA
+      tokenization, multilingual — English, Russian, Ukrainian). Judge INTENT and
+      TARGET, not vocabulary. Casual swearing is fine. Return ONLY minified JSON:
+
+      {{"harassment":0..1,"hate_slur":0..1,"sexual_nsfw":0..1,"scam":0..1,
+        "phishing":0..1,"advertising":0..1,"spam":0..1,"fud":0..1,
+        "defamation_team":0..1,"doxxing":0..1,"criticism":0..1,"reason":"short phrase"}}
+
+      Definitions:
+      - harassment: insults or abuse AIMED AT a specific person ("you're an idiot",
+        "shut up moron"). General frustration or swearing at a situation is NOT this.
+      - hate_slur: slurs or hatred toward a protected group (race, ethnicity,
+        religion, sexuality, gender). Zero tolerance.
+      - sexual_nsfw: explicit sexual content or solicitation.
+      - scam/phishing: fake support, seed-phrase/key requests, fake airdrops,
+        "DM me to recover funds", malicious links, impersonation of staff.
+      - advertising: promoting other tokens/projects/services unsolicited.
+      - fud: COORDINATED bad-faith fear-mongering. Honest doubts, tough questions,
+        and negative-but-sincere opinions are NOT fud — score criticism instead.
+      - defamation_team: stating false claims of fact about the Stobox team or
+        company ("Ross is a scammer", "Gene stole funds"). NOT opinions or critique.
+      - doxxing: sharing another person's private info (phone, address, real name,
+        ID) without consent.
+      - criticism: honest criticism, hard questions, sincere complaints — SAFE.
+        Score this high when the message is critical but legitimate.
+
+      When unsure between a violation and honest criticism, favor criticism.
 
       Message: {text}

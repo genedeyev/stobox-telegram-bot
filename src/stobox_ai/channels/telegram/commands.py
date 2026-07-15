@@ -420,6 +420,161 @@ async def faq_cmd(update, context) -> None:
     await update.effective_message.reply_text(md[:4096])
 
 
+def _reply_target(update):
+    """The user an admin is acting on: the replied-to message's author."""
+    r = update.effective_message.reply_to_message
+    return r.from_user if r else None
+
+
+async def strikes_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    target = _reply_target(update)
+    if not target and context.args and context.args[0].lstrip("-").isdigit():
+        uid = context.args[0]
+    elif target:
+        uid = str(target.id)
+    else:
+        await update.effective_message.reply_text(
+            "Reply to a user's message with /strikes (or /strikes <user_id>)."
+        )
+        return
+    rec = _engine(context).strikes.record(f"telegram:{uid}")
+    if not rec or not rec.strikes:
+        await update.effective_message.reply_text(f"User {uid}: clean record. ✅")
+        return
+    from collections import Counter
+    cats = Counter(s.category for s in rec.strikes)
+    lines = [f"🛡 <b>{rec.display_name or uid}</b> — {len(rec.strikes)} total strike(s)"
+             + (" · <b>BANNED</b>" if rec.banned else "")]
+    lines += [f"• {c}: {n}" for c, n in cats.most_common()]
+    lines.append("\n/warn /mute /ban (reply) · /clearstrikes <id> to reset")
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def _manual_action(update, context, action: str, minutes: int = 0) -> None:
+    if not _is_admin(update, context):
+        return
+    target = _reply_target(update)
+    if not target:
+        await update.effective_message.reply_text(
+            f"Reply to the user's message with /{action}."
+        )
+        return
+    engine = _engine(context)
+    chat = update.effective_chat
+    uk = f"telegram:{target.id}"
+    try:
+        if action == "warn":
+            engine.strikes.add(uk, "manual", display_name=target.full_name, chat_id=str(chat.id))
+            await context.bot.send_message(
+                target.id, "⚠️ A Stobox community admin has warned you. Please keep it "
+                           "respectful and constructive. Reply /appeal to contest."
+            )
+            await update.effective_message.reply_text(f"⚠️ Warned {target.full_name}.")
+        elif action == "mute":
+            from datetime import UTC, datetime, timedelta
+
+            from telegram import ChatPermissions
+            until = datetime.now(UTC) + timedelta(minutes=minutes or 60)
+            await context.bot.restrict_chat_member(
+                chat.id, target.id, ChatPermissions(can_send_messages=False), until_date=until
+            )
+            engine.strikes.add(uk, "manual", display_name=target.full_name, chat_id=str(chat.id))
+            await update.effective_message.reply_text(f"🔇 Muted {target.full_name} for {minutes or 60} min.")
+        elif action == "unmute":
+            from telegram import ChatPermissions
+            await context.bot.restrict_chat_member(
+                chat.id, target.id,
+                ChatPermissions(can_send_messages=True, can_send_polls=True,
+                                can_send_other_messages=True, can_add_web_page_previews=True),
+            )
+            await update.effective_message.reply_text(f"🔊 Unmuted {target.full_name}.")
+        elif action == "ban":
+            await context.bot.ban_chat_member(chat.id, target.id)
+            engine.strikes.set_banned(uk, True, target.full_name)
+            await update.effective_message.reply_text(f"⛔ Banned {target.full_name}.")
+    except Exception as exc:  # noqa: BLE001
+        await update.effective_message.reply_text(f"Action failed (admin rights?): {exc}")
+
+
+async def warn_cmd(update, context):
+    await _manual_action(update, context, "warn")
+
+async def mute_cmd(update, context):
+    mins = int(context.args[0]) if context.args and context.args[0].isdigit() else 60
+    await _manual_action(update, context, "mute", mins)
+
+async def unmute_cmd(update, context):
+    await _manual_action(update, context, "unmute")
+
+async def ban_cmd(update, context):
+    await _manual_action(update, context, "ban")
+
+
+async def unban_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    if not context.args or not context.args[0].lstrip("-").isdigit():
+        await update.effective_message.reply_text("Usage: /unban <user_id>")
+        return
+    uid = context.args[0]
+    engine = _engine(context)
+    engine.strikes.pardon(f"telegram:{uid}")
+    freed = 0
+    for chat_id in getattr(_adapter(context), "known_chats", set()):
+        try:
+            await context.bot.unban_chat_member(chat_id, int(uid), only_if_banned=True)
+            freed += 1
+        except Exception:  # noqa: BLE001
+            pass
+    await update.effective_message.reply_text(f"✅ Unbanned {uid} in {freed} chat(s), strike cleared.")
+
+
+async def clearstrikes_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    target = _reply_target(update)
+    uid = str(target.id) if target else (context.args[0] if context.args else None)
+    if not uid:
+        await update.effective_message.reply_text("Reply to a user or /clearstrikes <user_id>.")
+        return
+    _engine(context).strikes.clear(f"telegram:{uid}")
+    await update.effective_message.reply_text(f"🧹 Cleared record for {uid}.")
+
+
+async def modstats_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    s = _engine(context).strikes.stats()
+    lines = ["🛡 <b>Moderation</b>",
+             f"users with active strikes: {s['users_with_strikes']}",
+             f"active strikes: {s['active_strikes']} · banned: {s['banned']}"]
+    if s["by_category"]:
+        lines.append("by category: " + ", ".join(f"{k}={v}" for k, v in
+                     sorted(s["by_category"].items(), key=lambda x: -x[1])))
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def appeal_cmd(update, context) -> None:
+    """User contests a moderation action → routed to admins."""
+    user = update.effective_user
+    reason = " ".join(context.args) if context.args else "(no details given)"
+    for admin_id in _adapter(context).admins:
+        try:
+            await context.bot.send_message(
+                admin_id,
+                f"📣 <b>Appeal</b> from {user.full_name} (id {user.id}):\n“{reason[:400]}”\n"
+                f"Pardon: /unban {user.id}  ·  Record: reply /strikes",
+                parse_mode="HTML",
+            )
+        except Exception:  # noqa: BLE001
+            pass
+    await update.effective_message.reply_text(
+        "Thanks — your appeal has been sent to a human admin. We'll review it fairly."
+    )
+
+
 async def pending_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -577,7 +732,9 @@ async def admin_cmd(update, context) -> None:
         return
     await update.effective_message.reply_text(
         "🔐 Admin: /pending /answer /pause /resume /sync /reindex /stats /health "
-        "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users"
+        "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users\n"
+        "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
+        "/unban &lt;id&gt; /strikes /clearstrikes /modstats"
     )
 
 
@@ -625,6 +782,16 @@ def registry() -> dict:
         "approve": approve_cmd,
         "remindme": remindme_cmd,
         "stopreminders": stopreminders_cmd,
+        # moderation
+        "strikes": strikes_cmd,
+        "warn": warn_cmd,
+        "mute": mute_cmd,
+        "unmute": unmute_cmd,
+        "ban": ban_cmd,
+        "unban": unban_cmd,
+        "clearstrikes": clearstrikes_cmd,
+        "modstats": modstats_cmd,
+        "appeal": appeal_cmd,
         "admin": admin_cmd,
     }
     for topic in _TOPIC_QUERIES:

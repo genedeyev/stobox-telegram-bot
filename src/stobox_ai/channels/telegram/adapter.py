@@ -64,6 +64,7 @@ class TelegramChannel(Channel):
     async def start(self) -> None:
         from telegram.ext import (
             ApplicationBuilder,
+            CallbackQueryHandler,
             CommandHandler,
             InlineQueryHandler,
             MessageHandler,
@@ -102,6 +103,8 @@ class TelegramChannel(Channel):
         # Inline mode — @bot <query> callable in ANY chat (enable via BotFather
         # /setinline). Answers go through the same compliance pipeline.
         self.app.add_handler(InlineQueryHandler(self._on_inline_query))
+        # Mod-log Pardon/Ban buttons.
+        self.app.add_handler(CallbackQueryHandler(self._on_mod_callback, pattern=r"^mod:"))
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
@@ -311,9 +314,10 @@ class TelegramChannel(Channel):
             await self.reply_html(update.effective_message, response.text + footer)
 
     async def _render(self, update, context, response, placeholder=None) -> None:
-        # Moderation actions first.
-        if response.moderation != ModerationAction.NONE:
-            await self._apply_moderation(update, context, response)
+        # Moderation verdict → apply action, DM the offender, post the mod-log.
+        if response.moderation != ModerationAction.NONE or response.meta.get("alert_admin"):
+            await self._handle_moderation(update, context, response)
+            return
         # New unanswered question captured → mirror DRAFT to the register and
         # ping admins with ready-to-use /answer instructions.
         qa_meta = response.meta.get("qa")
@@ -357,29 +361,109 @@ class TelegramChannel(Channel):
         else:
             await self.reply_html(update.effective_message, text, markup)
 
-    async def _apply_moderation(self, update, context, response) -> None:
+    async def _handle_moderation(self, update, context, response) -> None:
+        """Execute the graded action, DM the offender an explanation, and post a
+        mod-log to admins with one-tap Pardon / Ban buttons."""
         chat = update.effective_chat
         user = update.effective_user
         msg = update.effective_message
+        m = response.meta
         action = response.moderation
+
+        # 1) Execute (delete → mute → ban), tolerant of missing admin rights.
         try:
-            if action == ModerationAction.DELETE:
+            if m.get("delete") and action != ModerationAction.NONE:
                 await msg.delete()
-            elif action == ModerationAction.MUTE:
+            if action == ModerationAction.MUTE:
                 from telegram import ChatPermissions
 
-                until = msg.date + timedelta(
-                    minutes=int(self.engine.config.get("moderation.mute_minutes", 60))
-                )
+                until = msg.date + timedelta(minutes=int(m.get("mute_minutes", 60) or 60))
                 await context.bot.restrict_chat_member(
                     chat.id, user.id, ChatPermissions(can_send_messages=False), until_date=until
                 )
             elif action == ModerationAction.BAN:
-                await msg.delete()
                 await context.bot.ban_chat_member(chat.id, user.id)
-            log.info("telegram.moderation_applied", action=action.value, user=user.id)
-        except Exception as exc:  # noqa: BLE001 - lacking admin rights, etc.
+            if action != ModerationAction.NONE:
+                log.info("telegram.moderation_applied", action=action.value, user=user.id,
+                         category=m.get("category"), strike=m.get("strike_count"))
+        except Exception as exc:  # noqa: BLE001
             log.warning("telegram.moderation_failed", action=action.value, error=str(exc))
+
+        # 2) Public note (WARN only — keep the chat clean, don't spotlight).
+        if response.text:
+            try:
+                await msg.reply_text(response.text)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # 3) DM the offender an explanation + appeal path.
+        dm = m.get("dm_text")
+        if dm and action != ModerationAction.NONE:
+            try:
+                await context.bot.send_message(user.id, dm)
+            except Exception:  # noqa: BLE001 - user hasn't started the bot; that's fine
+                pass
+
+        # 4) Mod-log to admins with actionable buttons.
+        await self._post_modlog(context, chat, m, action)
+
+    async def _post_modlog(self, context, chat, m: dict, action) -> None:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        uk = m.get("offender_user_key", "")
+        name = m.get("offender_name") or m.get("offender_id")
+        cat = m.get("category", "?")
+        excerpt = (m.get("reason") or "")[:200]
+        title = "🛡 Impersonation flag" if action == ModerationAction.NONE else "🛡 Moderation action"
+        text = (
+            f"{title} in <b>{getattr(chat, 'title', None) or chat.id}</b>\n"
+            f"User: {name}\nCategory: <b>{cat}</b> · Action: <b>{action.value}</b> · "
+            f"Strike {m.get('strike_count', '?')}\n"
+        )
+        if excerpt:
+            text += f"Why: {excerpt}\n"
+        buttons = [InlineKeyboardButton("↩️ Pardon", callback_data=f"mod:pardon:{uk}")]
+        if action != ModerationAction.BAN:
+            buttons.append(InlineKeyboardButton("⛔ Ban", callback_data=f"mod:ban:{uk}:{chat.id}"))
+        markup = InlineKeyboardMarkup([buttons])
+        for admin_id in self.admins:
+            try:
+                await context.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=markup)
+            except Exception:  # noqa: BLE001
+                pass
+
+    async def _on_mod_callback(self, update, context) -> None:
+        """Admin taps Pardon / Ban in the mod-log."""
+        query = update.callback_query
+        if query.from_user.id not in self.admins:
+            await query.answer("Admins only.", show_alert=True)
+            return
+        parts = (query.data or "").split(":")
+        _, verb, uk = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
+        if verb == "pardon" and uk:
+            self.engine.strikes.pardon(uk)
+            # Un-ban / un-mute in every group the bot knows, best-effort.
+            uid = uk.split(":")[-1]
+            for chat_id in self.known_chats:
+                try:
+                    await context.bot.unban_chat_member(chat_id, int(uid), only_if_banned=True)
+                except Exception:  # noqa: BLE001
+                    pass
+            await query.answer("Pardoned — strike removed.")
+            await query.edit_message_text((query.message.text or "") + "\n\n✅ Pardoned.")
+        elif verb == "ban" and uk:
+            uid = uk.split(":")[-1]
+            chat_id = parts[3] if len(parts) > 3 else None
+            self.engine.strikes.set_banned(uk, True)
+            try:
+                if chat_id:
+                    await context.bot.ban_chat_member(int(chat_id), int(uid))
+            except Exception:  # noqa: BLE001
+                pass
+            await query.answer("Banned.")
+            await query.edit_message_text((query.message.text or "") + "\n\n⛔ Banned by admin.")
+        else:
+            await query.answer()
 
     async def _notify_new_question(self, context, qa_meta: dict) -> None:
         """Mirror the DRAFT into the stobox-v15 register and DM the admins."""

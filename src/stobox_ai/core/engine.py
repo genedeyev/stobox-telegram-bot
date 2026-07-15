@@ -35,7 +35,6 @@ from .types import (
     Confidence,
     IncomingMessage,
     Mode,
-    ModerationAction,
 )
 
 log = get_logger(__name__)
@@ -74,6 +73,7 @@ class AgentEngine:
         self.retriever = retriever
         self.memory = memory
         self.moderator = moderator
+        self.strikes = moderator.strikes
         self.leads = leads
         self.decisions = decision_log
         self.prompts = prompts
@@ -143,7 +143,13 @@ class AgentEngine:
                 log.error("boot.sync_failed", error=str(exc))
         retriever = HybridRetriever(indexer.store, indexer.embedder, config, reasoner)
         memory = await build_memory_store(config)
-        moderator = Moderator(config, classifier)
+        from ..moderation import StrikeBook
+
+        strikes = StrikeBook(
+            config.get("moderation.strikes_path", "data/strikes.json"),
+            decay_days=int(config.get("moderation.strike_decay_days", 30)),
+        )
+        moderator = Moderator(config, classifier, strikes)
         leads = LeadQualifier(config)
         decision_log = await build_decision_log(config)
         engine = cls(
@@ -557,19 +563,25 @@ class AgentEngine:
     async def _moderation_response(
         self, msg: IncomingMessage, verdict, thread_key: str, started: float
     ) -> AgentResponse:
-        warn_text = ""
-        if verdict.action == ModerationAction.WARN:
-            warn_text = (
-                "⚠️ Please keep the discussion constructive and on-topic. "
-                "Repeated violations may lead to a mute."
-            )
         response = AgentResponse(
-            text=warn_text,
+            text=verdict.warn_text,
             mode=Mode.MODERATOR,
             moderation=verdict.action,
-            escalate=verdict.category in ("scam", "phishing"),
+            escalate=verdict.alert_admin,
             reply_to_message_id=msg.message_id,
-            meta={"category": verdict.category, "score": verdict.score, "reason": verdict.reason},
+            meta={
+                "category": verdict.category,
+                "score": verdict.score,
+                "reason": verdict.reason,
+                "delete": verdict.delete,
+                "mute_minutes": verdict.mute_minutes,
+                "strike_count": verdict.strike_count,
+                "dm_text": verdict.dm_text,
+                "alert_admin": verdict.alert_admin,
+                "offender_user_key": f"{msg.channel}:{msg.author.external_id}",
+                "offender_id": msg.author.external_id,
+                "offender_name": msg.author.display_name,
+            },
         )
         await self._log(
             msg, Routing(mode=Mode.MODERATOR), [], response,

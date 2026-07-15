@@ -129,17 +129,20 @@ proactive:
 moderation:
   enabled: true
   level: standard                  # off | light | standard | strict
-  actions:                         # escalation ladder
-    spam: delete
-    scam: ban
-    fud: warn
-    toxicity: mute
-    flood: mute
-    advertising: delete
+  # Actions are now driven by the strike-aware policy (moderation/policy.py) —
+  # graded per category and escalating with each active strike. See that file.
+  strike_decay_days: 30            # strikes older than this stop counting
+  strikes_path: data/strikes.json  # persisted (mount /app/data volume in prod)
+  announce_actions: false          # post a public note on mute/ban (default: quiet)
   flood:
     max_messages: 5
     per_seconds: 10
-  mute_minutes: 60
+  # Impersonation defense: display names containing these terms (from a
+  # non-allowlisted account) are flagged. Add team names to protect.
+  protected_terms: [stobox, support, admin, moderator, official, team]
+  team_names: []                   # e.g. ["gene deyev", "ross shemeliak"]
+  impersonation_allowlist: []      # numeric user ids that legitimately use these terms
+  blocklist_path: ""               # optional file of extra slur/hate terms (one per line)
 
 # --- Compliance guardrails (three-block prompt + canonicals) -----------------
 guardrails:
