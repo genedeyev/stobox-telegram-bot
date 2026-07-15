@@ -137,9 +137,11 @@ class AgentEngine:
 
         self.message_log_enabled = bool(config.get("message_log.enabled", True))
         self.message_log = MessageLog(
-            config.get("message_log.state_path", "data/message_log.json"),
-            cap_per_chat=int(config.get("message_log.cap_per_chat", 2000)),
+            config.get("message_log.state_path", "data/message_log.jsonl"),
+            cap_per_chat=int(config.get("message_log.cap_per_chat", 5000)),
+            retention_days=int(config.get("message_log.retention_days", 90)),
         )
+        self._recall_enabled = bool(config.get("message_log.recall", True))
         # Real-time FUD spike detector (immediate admin alert on coordinated FUD).
         from ..moderation.fud_alarm import FudAlarm
 
@@ -625,6 +627,19 @@ class AgentEngine:
         # Otherwise stay quiet — pure chatter ("hey", "gm", "lol") isn't ours.
         return False
 
+    def _chat_recall(self, msg: IncomingMessage) -> str:
+        """Older messages in this group related to the question (beyond the short
+        working window) — up to ~3 months back, from the message log."""
+        if msg.is_private or not (self._recall_enabled and self.message_log_enabled):
+            return "(none)"
+        try:
+            hits = self.message_log.relevant(msg.chat_id, msg.text, n=4)
+        except Exception:  # noqa: BLE001 - recall must never break an answer
+            return "(none)"
+        if not hits:
+            return "(none)"
+        return "\n".join(f"- [{m.at[:10]}] {m.display_name}: {m.text[:180]}" for m in hits)
+
     async def _answer(
         self,
         msg: IncomingMessage,
@@ -687,6 +702,7 @@ class AgentEngine:
                 "answer_synthesis",
                 question=msg.text,
                 history=history,
+                recall=self._chat_recall(msg),
                 language=routing.language,
                 context=context or "(no documentation retrieved)",
                 user_context=user_context,

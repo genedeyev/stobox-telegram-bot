@@ -1,29 +1,41 @@
 """Internal message log — every message Stoby sees in a group, on the record.
 
-Append-only, per-chat, capped, persisted to JSON so it survives restarts. This
-is the audit/context layer: it lets admins see exactly who said what and when
-(resolving "she was first" / "which message"), and gives Stoby a full transcript
-to draw on beyond the short working-memory window.
+Append-only and built to hold ~months of history: writes are O(1) line-appends to
+a JSONL file (no whole-file rewrite per message), the in-memory copy is pruned by
+age (retention_days) and a hard per-chat ceiling, and the file is compacted on
+load so it can't grow without bound across restarts.
+
+Two jobs: (1) audit/context for admins (/log, /whosaid), and (2) recall — when
+Stoby answers, `relevant()` surfaces older messages related to the question so he
+can reference things said long before the short working-memory window.
 
 Privacy note: this deliberately retains message text, so it's config-gated
-(message_log.enabled) and capped per chat. It is separate from the per-user
-profile retention controls.
+(message_log.enabled) and separate from per-user profile retention.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from ..logging import get_logger
 
 log = get_logger(__name__)
 
+_TOKEN = re.compile(r"[a-z0-9]{3,}")
+_STOP = {"the", "and", "for", "are", "with", "that", "this", "you", "your", "what",
+         "how", "why", "when", "does", "can", "stobox", "about", "have", "was", "our"}
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in _TOKEN.findall(text.lower()) if t not in _STOP}
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(slots=True)
@@ -42,11 +54,12 @@ class LoggedMessage:
 class MessageLog:
     """Per-chat append-only log; chat_id -> list[LoggedMessage] (oldest first)."""
 
-    def __init__(self, state_path: str | Path = "data/message_log.json",
-                 cap_per_chat: int = 2000) -> None:
+    def __init__(self, state_path: str | Path = "data/message_log.jsonl",
+                 cap_per_chat: int = 5000, retention_days: int = 90) -> None:
         self.path = Path(state_path)
         self.cap_per_chat = cap_per_chat
-        self.chats = {}
+        self.retention = timedelta(days=retention_days)
+        self.chats: dict[str, list[LoggedMessage]] = {}
         self._load()
 
     # -- write --------------------------------------------------------- #
@@ -54,16 +67,15 @@ class MessageLog:
                username: str | None, display_name: str, text: str,
                message_id: str, reply_to: str | None = None) -> None:
         entry = LoggedMessage(
-            at=_now_iso(), chat_id=str(chat_id), chat_title=chat_title or "",
+            at=_now().isoformat(), chat_id=str(chat_id), chat_title=chat_title or "",
             user_id=str(user_id), username=username, display_name=display_name or "",
             text=text[:2000], message_id=str(message_id),
             reply_to=(reply_to[:200] if reply_to else None),
         )
         bucket = self.chats.setdefault(str(chat_id), [])
         bucket.append(entry)
-        if len(bucket) > self.cap_per_chat:
-            del bucket[: len(bucket) - self.cap_per_chat]   # drop oldest
-        self._save()
+        self._prune(bucket)
+        self._append_line(entry)
 
     # -- read ---------------------------------------------------------- #
     def recent(self, chat_id: str, n: int = 20) -> list[LoggedMessage]:
@@ -87,27 +99,70 @@ class MessageLog:
         ]
         return out[-n:]
 
+    def relevant(self, chat_id: str, query: str, *, n: int = 4,
+                 exclude_recent: int = 12, min_overlap: int = 2) -> list[LoggedMessage]:
+        """Older messages (beyond the working window) related to `query`, ranked
+        by shared meaningful words. Returns [] when nothing clears the bar."""
+        bucket = self.chats.get(str(chat_id), [])
+        if len(bucket) <= exclude_recent:
+            return []
+        older = bucket[:-exclude_recent]
+        q = _tokens(query)
+        if not q:
+            return []
+        scored = []
+        for m in older:
+            overlap = len(q & _tokens(m.text))
+            if overlap >= min_overlap:
+                scored.append((overlap, m))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        # Return chronological order among the top matches (reads naturally).
+        top = sorted((m for _, m in scored[:n]), key=lambda m: m.at)
+        return top
+
     def total(self, chat_id: str | None = None) -> int:
         if chat_id is not None:
             return len(self.chats.get(str(chat_id), []))
         return sum(len(v) for v in self.chats.values())
 
-    # -- persistence --------------------------------------------------- #
+    # -- pruning + persistence ----------------------------------------- #
+    def _prune(self, bucket: list[LoggedMessage]) -> None:
+        cutoff = (_now() - self.retention).isoformat()
+        while bucket and bucket[0].at < cutoff:      # ISO strings sort chronologically
+            bucket.pop(0)
+        if len(bucket) > self.cap_per_chat:
+            del bucket[: len(bucket) - self.cap_per_chat]
+
+    def _append_line(self, entry: LoggedMessage) -> None:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(asdict(entry)) + "\n")
+        except Exception as exc:  # noqa: BLE001
+            log.error("msglog.append_failed", error=str(exc))
+
     def _load(self) -> None:
         if not self.path.exists():
             return
         try:
-            data = json.loads(self.path.read_text())
-            for cid, msgs in data.get("chats", {}).items():
-                self.chats[str(cid)] = [LoggedMessage(**m) for m in msgs]
+            for line in self.path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                m = LoggedMessage(**json.loads(line))
+                self.chats.setdefault(m.chat_id, []).append(m)
+            for bucket in self.chats.values():
+                self._prune(bucket)
+            self._compact()                          # trim the on-disk file to the pruned set
         except Exception as exc:  # noqa: BLE001
             log.error("msglog.load_failed", error=str(exc))
 
-    def _save(self) -> None:
+    def _compact(self) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {"chats": {cid: [asdict(m) for m in msgs]
-                                 for cid, msgs in self.chats.items()}}
-            self.path.write_text(json.dumps(payload, indent=1))
+            with self.path.open("w", encoding="utf-8") as f:
+                for bucket in self.chats.values():
+                    for m in bucket:
+                        f.write(json.dumps(asdict(m)) + "\n")
         except Exception as exc:  # noqa: BLE001
-            log.error("msglog.save_failed", error=str(exc))
+            log.error("msglog.compact_failed", error=str(exc))

@@ -98,7 +98,9 @@ memory:
 # Retains message text on purpose — turn off to disable entirely.
 message_log:
   enabled: true
-  cap_per_chat: 2000               # keep the most recent N messages per chat
+  retention_days: 90               # keep ~3 months of history
+  cap_per_chat: 5000               # hard per-chat ceiling (safety, beyond the age window)
+  recall: true                     # feed older, relevant messages into Stoby's answers
 
 # --- Agent behaviour / modes -------------------------------------------------
 agent:
