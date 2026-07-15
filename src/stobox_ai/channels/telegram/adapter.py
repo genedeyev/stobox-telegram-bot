@@ -115,6 +115,8 @@ class TelegramChannel(Channel):
         self.app.add_handler(
             CallbackQueryHandler(self._on_followup_callback, pattern=r"^(more|email):")
         )
+        # AMA upvote buttons.
+        self.app.add_handler(CallbackQueryHandler(self._on_ama_callback, pattern=r"^ama:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         self.app.add_error_handler(self._on_error)
@@ -521,6 +523,27 @@ class TelegramChannel(Channel):
                 "I'll never share your address, and you can ignore this if you'd rather not.",
                 parse_mode="HTML",
             )
+
+    async def _on_ama_callback(self, update, context) -> None:
+        """A member taps 👍 to upvote an AMA question."""
+        query = update.callback_query
+        parts = (query.data or "").split(":")
+        if len(parts) != 3 or parts[1] != "up" or not parts[2].isdigit():
+            await query.answer()
+            return
+        qid = int(parts[2])
+        votes = self.engine.ama.upvote(qid, f"telegram:{query.from_user.id}")
+        if votes < 0:
+            await query.answer("That question's no longer in the queue.")
+            return
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        try:
+            await query.edit_message_reply_markup(InlineKeyboardMarkup([[
+                InlineKeyboardButton(f"👍 Upvote ({votes})", callback_data=f"ama:up:{qid}")
+            ]]))
+        except Exception:  # noqa: BLE001 - message may be too old to edit
+            pass
+        await query.answer("Vote counted! 👍")
 
     async def send_quiz(self, context, chat_id) -> bool:
         """Generate + post a native Telegram quiz poll; track it for XP scoring."""

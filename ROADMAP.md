@@ -31,13 +31,15 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
 
 ## 🔜 Planned
 
-### Wave 2 — the Stobox-specific engagement engine
+### Wave 2 — the Stobox-specific engagement engine  ✅ COMPLETE
 - ✅ **On-chain wallet migration checker** — SHIPPED. `/check 0x…` (or just paste
   an address) reads the 4 eligible STBU contracts across Ethereum/BNB/Polygon/
   Arbitrum via public RPC → per-chain balances + exact migration path. Read-only,
   never touches keys; a pasted private key triggers a compromise warning.
-- **AMA collector** — gather questions all month, dedupe, community-vote, hand
-  Gene a ranked list. Zero-effort AMA prep.
+- ✅ **AMA collector** — SHIPPED. /amaopen [topic] announces to groups; members
+  submit with /ama (similar questions merge = implicit upvote); everyone upvotes
+  with a 👍 button (toggle); /amalist + /amaclose hand you a vote-ranked list.
+  `engagement/ama.py`. Zero-effort AMA prep.
 - ✅ **Quiz nights + XP / streaks / leaderboard** — SHIPPED. Native Telegram quiz
   polls (auto-scored via PollAnswer, +10 XP for correct), XP for helpful
   questions/referrals/daily streaks, levels (Newcomer→Community OG), /rank +

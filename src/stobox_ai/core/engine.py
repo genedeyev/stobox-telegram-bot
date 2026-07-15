@@ -108,9 +108,10 @@ class AgentEngine:
 
         self.email = EmailSender()
         # Engagement: XP / streaks / leaderboard.
-        from ..engagement import XPBook
+        from ..engagement import AMABook, XPBook
 
         self.xp = XPBook(config.get("engagement.xp_path", "data/xp.json"))
+        self.ama = AMABook(config.get("engagement.ama_path", "data/ama.json"))
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)

@@ -147,6 +147,7 @@ moderation:
 # --- Engagement (XP / streaks / leaderboard / quizzes) -----------------------
 engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
+  ama_path: data/ama.json          # AMA question queue
 
 # --- On-chain reads (STBU wallet migration checker, /check) ------------------
 chain:

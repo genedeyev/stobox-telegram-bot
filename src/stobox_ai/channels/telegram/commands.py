@@ -98,6 +98,105 @@ async def remindme_cmd(update, context) -> None:
     )
 
 
+def _ama_button(qid: int, votes: int):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(f"👍 Upvote ({votes})", callback_data=f"ama:up:{qid}")
+    ]])
+
+
+async def ama_cmd(update, context) -> None:
+    """Submit a question for the next AMA (during an open collection window)."""
+    engine = _engine(context)
+    ama = engine.ama
+    text = " ".join(context.args).strip() if context.args else ""
+    if not ama.open:
+        await update.effective_message.reply_text(
+            "No AMA is collecting right now. I'll announce the next one — stay tuned! 📢"
+        )
+        return
+    if len(text) < 8:
+        await update.effective_message.reply_text(
+            "Ask away! Format: <code>/ama your question for the team</code>", parse_mode="HTML"
+        )
+        return
+    user = update.effective_user
+    q, is_new = ama.submit(text, f"telegram:{user.id}", user.full_name)
+    engine.xp.award(f"telegram:{user.id}", 3, "ama_submit", user.full_name)
+    if is_new:
+        await update.effective_message.reply_text(
+            f"✅ Added to the AMA queue! Others can upvote it below. 👇\n\n"
+            f"❓ <i>{q.text}</i>",
+            parse_mode="HTML", reply_markup=_ama_button(q.qid, q.votes),
+        )
+    else:
+        await update.effective_message.reply_text(
+            f"👍 Someone already asked something similar — I've added your vote to it "
+            f"(now {q.votes}):\n\n❓ <i>{q.text}</i>",
+            parse_mode="HTML", reply_markup=_ama_button(q.qid, q.votes),
+        )
+
+
+async def amaopen_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    engine = _engine(context)
+    topic = " ".join(context.args).strip()
+    engine.ama.open_session(topic)
+    announce = (
+        "📢 <b>AMA time!</b> " + (f"Topic: <b>{topic}</b>. " if topic else "")
+        + "Submit your questions for the team with:\n<code>/ama your question</code>\n"
+        "Then upvote the ones you most want answered. Top-voted questions get answered first!"
+    )
+    # Broadcast to known groups.
+    sent = 0
+    for chat_id in getattr(_adapter(context), "known_chats", set()):
+        try:
+            await context.bot.send_message(chat_id, announce, parse_mode="HTML")
+            sent += 1
+        except Exception:  # noqa: BLE001
+            pass
+    await update.effective_message.reply_text(
+        f"✅ AMA collection OPEN{f' — {topic}' if topic else ''}. Announced to {sent} group(s). "
+        "Close it with /amaclose, see submissions with /amalist."
+    )
+
+
+async def amaclose_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    engine = _engine(context)
+    engine.ama.close_session()
+    ranked = engine.ama.ranked(15)
+    if not ranked:
+        await update.effective_message.reply_text("✅ AMA closed. No questions were submitted.")
+        return
+    lines = ["✅ <b>AMA closed — ranked questions</b>"]
+    for i, q in enumerate(ranked, 1):
+        lines.append(f"\n<b>{i}. ({q.votes} 👍)</b> {q.text}\n<i>— {q.submitter_name or 'member'}</i>")
+    await update.effective_message.reply_text("\n".join(lines)[:4096], parse_mode="HTML")
+
+
+async def amalist_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    ranked = _engine(context).ama.ranked(20)
+    if not ranked:
+        await update.effective_message.reply_text("No AMA questions yet. Open one with /amaopen.")
+        return
+    lines = ["🎤 <b>AMA questions (by votes)</b>"]
+    for i, q in enumerate(ranked, 1):
+        lines.append(f"{i}. ({q.votes} 👍) {q.text[:120]}")
+    await update.effective_message.reply_text("\n".join(lines)[:4096], parse_mode="HTML")
+
+
+async def amaclear_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    _engine(context).ama.clear()
+    await update.effective_message.reply_text("🧹 AMA queue cleared.")
+
+
 async def rank_cmd(update, context) -> None:
     """A member's own XP, level, streak, and rank."""
     from ...engagement import level_for
@@ -245,6 +344,7 @@ async def help_cmd(update, context) -> None:
         "/blog – latest posts + the weekly RWA digest\n"
         "/sources – official links to verify me\n"
         "/rank – your XP, level &amp; streak · /leaderboard – top members\n"
+        "/ama – submit a question for the next community AMA\n"
         "/contact – reach the team / support\n"
         "/search &lt;query&gt; – search the knowledge base\n"
         "/report &lt;text&gt; · /feedback &lt;text&gt; · /about\n\n"
@@ -875,7 +975,8 @@ async def admin_cmd(update, context) -> None:
         await update.effective_message.reply_text("Not authorized.")
         return
     await update.effective_message.reply_text(
-        "🔐 Admin: /quiz /pending /answer /pause /resume /sync /reindex /stats /health "
+        "🔐 Admin: /amaopen /amaclose /amalist /amaclear /quiz /pending /answer /pause "
+        "/resume /sync /reindex /stats /health "
         "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users\n"
         "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
         "/unban &lt;id&gt; /strikes /clearstrikes /modstats"
@@ -932,6 +1033,11 @@ def registry() -> dict:
         "rank": rank_cmd,
         "leaderboard": leaderboard_cmd,
         "top": leaderboard_cmd,
+        "ama": ama_cmd,
+        "amaopen": amaopen_cmd,
+        "amaclose": amaclose_cmd,
+        "amalist": amalist_cmd,
+        "amaclear": amaclear_cmd,
         # moderation
         "strikes": strikes_cmd,
         "warn": warn_cmd,
