@@ -109,6 +109,10 @@ class AgentEngine:
         self.subscriptions = SubscriptionBook(
             config.get("subscriptions.state_path", "data/subscriptions.json")
         )
+        # Win-back nudges for quiet, opted-in members (opt-in only, cooldowned).
+        from ..ops.winback import WinBackBook
+
+        self.winback = WinBackBook(config.get("winback.state_path", "data/winback.json"))
         # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
         from ..ops.email import EmailSender
 

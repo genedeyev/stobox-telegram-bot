@@ -64,7 +64,8 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
 - ✅ **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — opt-in,
   DM-only, toggle-button UI; new blog posts are keyword-routed to a topic and
   DM-pushed only to that topic's subscribers, each with a one-tap way out.
-- **Win-back** DMs (14-day inactive, opt-in only).
+- ✅ **Win-back** DMs — one gentle, value-first check-in for topic subscribers
+  who've gone quiet (14-day inactive, opt-in only, 45-day cooldown, one-tap out).
 
 ### Wave 4 — ops polish
 - **Content flywheel** — top unanswered themes → auto-drafted blog outlines as

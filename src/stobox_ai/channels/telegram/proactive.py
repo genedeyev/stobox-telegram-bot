@@ -95,6 +95,9 @@ class ProactiveScheduler:
         # per-threshold dedupe means each blast fires exactly once.
         if cfg.get("proactive.reminders.enabled", True):
             jq.run_repeating(self._reminder_job, interval=3600, first=300)
+        # Opt-in win-back: check quiet subscribers a few times a day.
+        if cfg.get("proactive.winback.enabled", True):
+            jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
         log.info("proactive.scheduled")
 
     async def _reminder_job(self, context) -> None:
@@ -227,6 +230,56 @@ class ProactiveScheduler:
             except Exception as exc:  # noqa: BLE001 - user may have blocked the bot
                 log.warning("subs.push_failed", chat=chat_id, error=str(exc))
         log.info("subs.pushed", topic=topic, url=url, sent=sent)
+
+    async def _winback_job(self, context) -> None:
+        """One gentle check-in for quiet topic subscribers (opt-in only, cooldowned)."""
+        if self._in_quiet_hours():
+            return
+        subs = getattr(self.engine, "subscriptions", None)
+        book = getattr(self.engine, "winback", None)
+        if not subs or not book:
+            return
+        cfg = self.engine.config
+        inactive_days = int(cfg.get("proactive.winback.inactive_days", 14))
+        cooldown_days = int(cfg.get("proactive.winback.cooldown_days", 45))
+        cap = int(cfg.get("proactive.winback.max_per_tick", 20))
+        now = datetime.now(UTC)
+
+        # Consent = opted into topic DMs. Quiet = no interaction in N days.
+        candidates = list(subs.subs.keys())
+        sent = 0
+        for chat_id in candidates:
+            if sent >= cap:
+                break
+            if not book.can_nudge(chat_id, cooldown_days):
+                continue
+            try:
+                profile = await self.engine.memory.get_profile(f"telegram:{chat_id}")
+            except Exception:  # noqa: BLE001
+                continue
+            last = getattr(profile, "last_interaction", None)
+            if not last or (now - last).days < inactive_days:
+                continue
+            name = (getattr(profile, "display_name", "") or "").split()[:1]
+            hi = f"Hey {name[0]}, " if name else "Hey, "
+            msg = (
+                f"👋 {hi}it's been a minute! A few things have moved at Stobox since we "
+                "last chatted. Want the short version?\n\n"
+                "• Ask me anything, anytime — I'm here 24/7\n"
+                "• /blog — the latest posts + RWA digest\n"
+                "• /subscribe — fine-tune what I ping you about (or turn it off)\n\n"
+                "<i>No pressure at all — reply /unsubscribe and I'll go quiet.</i>"
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id, msg, parse_mode="HTML", disable_web_page_preview=True
+                )
+                book.mark_nudged(chat_id)
+                sent += 1
+            except Exception as exc:  # noqa: BLE001 - user may have blocked the bot
+                log.warning("winback.send_failed", chat=chat_id, error=str(exc))
+        if sent:
+            log.info("winback.nudged", sent=sent, inactive_days=inactive_days)
 
     async def _resync_job(self, context) -> None:
         try:
