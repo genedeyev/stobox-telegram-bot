@@ -77,6 +77,13 @@ class Secrets:
         return {int(x) for x in raw.replace(" ", "").split(",") if x}
 
     @property
+    def admin_usernames(self) -> set[str]:
+        """Admins by @username (lowercased, no @). Less secure than IDs — usernames
+        can change — but lets you add someone before you have their numeric ID."""
+        raw = os.environ.get("TELEGRAM_ADMIN_USERNAMES", "")
+        return {x.lower().lstrip("@") for x in raw.replace(" ", "").split(",") if x}
+
+    @property
     def anthropic_key(self) -> str | None:
         return os.environ.get("ANTHROPIC_API_KEY") or None
 

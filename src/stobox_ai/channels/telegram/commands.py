@@ -32,8 +32,7 @@ def _adapter(context):
 
 
 def _is_admin(update, context) -> bool:
-    user = update.effective_user
-    return bool(user and user.id in _adapter(context).admins)
+    return _adapter(context).is_admin(update.effective_user)
 
 
 # --------------------------------------------------------------------------- #
@@ -1247,6 +1246,84 @@ async def content_cmd(update, context) -> None:
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
+def _fmt_log(entries) -> str:
+    from datetime import datetime
+    lines = []
+    for m in entries:
+        try:
+            ts = datetime.fromisoformat(m.at).strftime("%m-%d %H:%M")
+        except ValueError:
+            ts = "?"
+        who = m.display_name or (f"@{m.username}" if m.username else m.user_id)
+        lines.append(f"[{ts}] <b>{who}</b>: {m.text[:160]}")
+    return "\n".join(lines)
+
+
+async def log_cmd(update, context) -> None:
+    """Recent messages in this chat from the internal log. /log [N]."""
+    if not _is_admin(update, context):
+        return
+    engine = _engine(context)
+    chat_id = str(update.effective_chat.id)
+    n = int(context.args[0]) if context.args and context.args[0].isdigit() else 20
+    entries = engine.message_log.recent(chat_id, min(n, 50))
+    if not entries:
+        await update.effective_message.reply_text(
+            "No messages logged for this chat yet (or logging is off)."
+        )
+        return
+    total = engine.message_log.total(chat_id)
+    await update.effective_message.reply_text(
+        f"🗒 <b>Last {len(entries)} of {total} logged messages</b>\n\n{_fmt_log(entries)}",
+        parse_mode="HTML", disable_web_page_preview=True,
+    )
+
+
+async def whosaid_cmd(update, context) -> None:
+    """Search this chat's log. /whosaid <term>  or  /whosaid @user."""
+    if not _is_admin(update, context):
+        return
+    engine = _engine(context)
+    chat_id = str(update.effective_chat.id)
+    term = " ".join(context.args).strip() if context.args else ""
+    target = _reply_target(update)
+    if target:
+        entries = engine.message_log.by_user(chat_id, str(target.id))
+        label = f"from {target.full_name}"
+    elif term.startswith("@"):
+        entries = engine.message_log.by_user(chat_id, term)
+        label = f"from {term}"
+    elif term:
+        entries = engine.message_log.search(chat_id, term)
+        label = f"matching “{term}”"
+    else:
+        await update.effective_message.reply_text(
+            "Usage: /whosaid <term>, /whosaid @user, or reply to a user with /whosaid."
+        )
+        return
+    if not entries:
+        await update.effective_message.reply_text(f"Nothing {label} in the log.")
+        return
+    await update.effective_message.reply_text(
+        f"🔎 <b>Messages {label}</b> ({len(entries)})\n\n{_fmt_log(entries)}",
+        parse_mode="HTML", disable_web_page_preview=True,
+    )
+
+
+async def userid_cmd(update, context) -> None:
+    """Reply to someone with /userid to get their numeric Telegram ID (for admin
+    config). Works on yourself with no reply."""
+    if not _is_admin(update, context):
+        return
+    target = _reply_target(update) or update.effective_user
+    uname = f" · @{target.username}" if getattr(target, "username", None) else ""
+    await update.effective_message.reply_text(
+        f"🆔 <b>{target.full_name}</b>{uname}\nUser ID: <code>{target.id}</code>\n\n"
+        "Add to TELEGRAM_ADMIN_USER_IDS to make them an admin.",
+        parse_mode="HTML",
+    )
+
+
 async def admin_cmd(update, context) -> None:
     if not _is_admin(update, context):
         await update.effective_message.reply_text("Not authorized.")
@@ -1255,6 +1332,7 @@ async def admin_cmd(update, context) -> None:
         "🔐 Admin: /amaopen /amaclose /amalist /amaclear /quiz /pending /answer /pause "
         "/resume /sync /reindex /stats /health "
         "/digest /faq /gaps /content /prompts /reload /memory /export /logs /debug /test /cache /users\n"
+        "🗒 Message log: /log [N] · /whosaid &lt;term|@user&gt; · /userid (reply)\n"
         "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
         "/unban &lt;id&gt; /strikes /clearstrikes /cleanup /modstats"
     )
@@ -1297,6 +1375,10 @@ def registry() -> dict:
         "faq": faq_cmd,
         "gaps": gaps_cmd,
         "content": content_cmd,
+        "log": log_cmd,
+        "whosaid": whosaid_cmd,
+        "userid": userid_cmd,
+        "whois": userid_cmd,
         "sync": sync_cmd,
         "resync": sync_cmd,
         "pause": pause_cmd,

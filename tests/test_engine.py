@@ -147,3 +147,35 @@ async def test_mql_summary_emitted_once(config):
     assert "lead@acme.com" in r1.meta["mql_summary"]
     r2 = await engine.handle(msg())
     assert r2 is not None and not r2.meta.get("mql_summary")    # already notified
+
+
+def test_looks_like_question_backstop():
+    from stobox_ai.core.engine import _looks_like_question
+    assert _looks_like_question("how does migration work?")
+    # The real missed message from the group — ends with '?', so it's caught.
+    assert _looks_like_question("OK and how we ensure the sources stay in sync?")
+    assert _looks_like_question("is this live")                                # opener
+    assert _looks_like_question("great, thanks — but what about fees?")        # trailing ?
+    assert not _looks_like_question("thanks, that helps")
+    assert not _looks_like_question("gm everyone")
+    assert not _looks_like_question("I'll show you how we do it")              # mid 'how', no ?
+
+
+@pytest.mark.asyncio
+async def test_untagged_question_without_qmark_engages(config):
+    """A clear question the router might miss still engages (deterministic floor)."""
+    engine = await AgentEngine.create(config)
+
+    class R:  # routing that the LLM misclassified as not-a-question
+        is_question = False
+        needs_docs = False
+        topics = []
+        sentiment = "neutral"
+
+    msg = IncomingMessage(
+        author=Author(external_id="1", display_name="Arevik"),
+        text="how do we keep the official sources in sync",
+        chat_id="g", chat_type=ChatType.GROUP, message_id="1",
+        raw={"addressed": False},
+    )
+    assert engine._should_engage(msg, R()) is True

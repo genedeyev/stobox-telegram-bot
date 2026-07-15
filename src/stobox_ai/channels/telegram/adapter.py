@@ -58,6 +58,7 @@ class TelegramChannel(Channel):
         self.app = None
         self.bot_username: str | None = None
         self.admins = self.secrets.admin_user_ids
+        self.admin_usernames = self.secrets.admin_usernames
         self.proactive: ProactiveScheduler | None = None
         # Group chats the bot has seen — targets for proactive posts.
         self.known_chats: set[str] = set()
@@ -181,6 +182,37 @@ class TelegramChannel(Channel):
             await self.app.shutdown()
             log.info("telegram.stopped")
 
+    def is_admin(self, user) -> bool:
+        """Admin by numeric ID (preferred) or by @username (convenience)."""
+        if user is None:
+            return False
+        if user.id in self.admins:
+            return True
+        uname = (getattr(user, "username", None) or "").lower()
+        return bool(uname and uname in self.admin_usernames)
+
+    def _log_message(self, update) -> None:
+        """Record a group message to the internal log (best-effort, never blocks)."""
+        if not getattr(self.engine, "message_log_enabled", False):
+            return
+        try:
+            msg = update.effective_message
+            chat = update.effective_chat
+            user = update.effective_user
+            reply = msg.reply_to_message
+            self.engine.message_log.append(
+                chat_id=str(chat.id),
+                chat_title=getattr(chat, "title", None) or "",
+                user_id=str(user.id) if user else "?",
+                username=user.username if user else None,
+                display_name=(user.full_name if user else ""),
+                text=msg.text or msg.caption or "",
+                message_id=str(msg.message_id),
+                reply_to=(reply.text if reply and reply.text else None),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("telegram.msglog_failed", error=str(exc))
+
     # ------------------------------------------------------------------ #
     async def _on_message(self, update, context) -> None:
         message = update.effective_message
@@ -189,6 +221,7 @@ class TelegramChannel(Channel):
         chat = update.effective_chat
         if chat and chat.type in ("group", "supergroup"):
             self.known_chats.add(str(chat.id))
+            self._log_message(update)
         incoming = self._to_incoming(update)
 
         # Wallet address / private key pasted → the migration checker (read-only)
@@ -333,7 +366,7 @@ class TelegramChannel(Channel):
         incoming = IncomingMessage(
             author=Author(
                 external_id=str(user.id), channel="telegram", username=user.username,
-                display_name=user.full_name, is_admin=user.id in self.admins,
+                display_name=user.full_name, is_admin=self.is_admin(user),
             ),
             text=query, chat_id=f"inline:{user.id}", chat_type=ChatType.PRIVATE,
             message_id=str(inline.id), channel="telegram",
@@ -840,7 +873,7 @@ class TelegramChannel(Channel):
     async def _on_mod_callback(self, update, context) -> None:
         """Admin taps Pardon / Ban in the mod-log."""
         query = update.callback_query
-        if query.from_user.id not in self.admins:
+        if not self.is_admin(query.from_user):
             await query.answer("Admins only.", show_alert=True)
             return
         parts = (query.data or "").split(":")
@@ -942,7 +975,7 @@ class TelegramChannel(Channel):
             channel="telegram",
             username=user.username if user else None,
             display_name=(user.full_name if user else None),
-            is_admin=bool(user and user.id in self.admins),
+            is_admin=self.is_admin(user),
         )
         addressed = self._is_addressed(message, text)
         return IncomingMessage(

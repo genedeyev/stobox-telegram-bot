@@ -11,6 +11,7 @@ that lets Discord/Slack/web-widget reuse 100% of the reasoning.
 
 from __future__ import annotations
 
+import re
 import time
 from datetime import UTC, datetime
 
@@ -40,6 +41,20 @@ from .types import (
 )
 
 log = get_logger(__name__)
+
+# Deterministic "is this a question" backstop (engine._should_engage) — trailing
+# '?' or an opening interrogative. Independent of the LLM router so a clear
+# question is never dropped to classifier variance.
+_QUESTION_RE = re.compile(
+    r"\?\s*$|^\s*(who|what|why|when|where|which|how|can|could|would|should|does|do|is|are|"
+    r"will|has|have|any|anyone|whats|hows)\b",
+    re.I,
+)
+
+
+def _looks_like_question(text: str) -> bool:
+    return bool(text and _QUESTION_RE.search(text.strip()))
+
 
 _IDK = {
     "en": "Honestly? I don't have a solid answer to that yet — and I'd rather flag it "
@@ -117,6 +132,14 @@ class AgentEngine:
         # text on the profile, and how many to keep.
         self._retain_questions = bool(config.get("memory.retain_questions", True))
         self._max_recent_q = int(config.get("memory.max_recent_questions", 8))
+        # Internal message log — every group message on the record (audit + context).
+        from ..ops.message_log import MessageLog
+
+        self.message_log_enabled = bool(config.get("message_log.enabled", True))
+        self.message_log = MessageLog(
+            config.get("message_log.state_path", "data/message_log.json"),
+            cap_per_chat=int(config.get("message_log.cap_per_chat", 2000)),
+        )
         # Real-time FUD spike detector (immediate admin alert on coordinated FUD).
         from ..moderation.fud_alarm import FudAlarm
 
@@ -585,6 +608,10 @@ class AgentEngine:
             return True
         # In a group, always engage when directly addressed (@mention or reply).
         if msg.raw.get("addressed"):
+            return True
+        # Deterministic backstop so a clear question is NEVER missed to classifier
+        # variance: a trailing '?' (or an opening question word) always engages.
+        if _looks_like_question(msg.text):
             return True
         # Untagged: jump in on any question, or a clearly Stobox-relevant message
         # (the router tags topics / needs_docs for those).

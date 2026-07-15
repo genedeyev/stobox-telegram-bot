@@ -93,6 +93,13 @@ memory:
   retain_questions: true
   max_recent_questions: 8          # was 15 — tightened
 
+# --- Internal message log ----------------------------------------------------
+# Full transcript of every group message Stoby sees (audit + admin /log /whosaid).
+# Retains message text on purpose — turn off to disable entirely.
+message_log:
+  enabled: true
+  cap_per_chat: 2000               # keep the most recent N messages per chat
+
 # --- Agent behaviour / modes -------------------------------------------------
 agent:
   default_persona: auto            # auto-detect, or force one of personas below
