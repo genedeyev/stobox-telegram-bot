@@ -129,6 +129,8 @@ class TelegramChannel(Channel):
         self.app.add_handler(CallbackQueryHandler(self._on_axis_callback, pattern=r"^axis:"))
         # Topic-subscription toggle buttons.
         self.app.add_handler(CallbackQueryHandler(self._on_sub_callback, pattern=r"^sub:"))
+        # Tailored resource matcher (from the AXIS result).
+        self.app.add_handler(CallbackQueryHandler(self._on_match_callback, pattern=r"^match:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         # Group hygiene: auto-remove deleted accounts as their membership surfaces.
@@ -638,11 +640,34 @@ class TelegramChannel(Channel):
         # Done → result + warm-lead capture.
         self._axis_sessions.pop(query.from_user.id, None)
         text = ax.result_text(session, query.from_user.first_name or "")
+        asset = session.answers.get("asset", "")
+        juris = session.answers.get("jurisdiction", "")
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton(
+            "📚 Resources for my case", callback_data=f"match:{asset}:{juris}")]])
         try:
-            await query.edit_message_text(text, parse_mode="HTML", disable_web_page_preview=True)
+            await query.edit_message_text(text, parse_mode="HTML",
+                                          reply_markup=markup, disable_web_page_preview=True)
         except Exception:  # noqa: BLE001
-            await context.bot.send_message(query.message.chat.id, text, parse_mode="HTML")
+            await context.bot.send_message(query.message.chat.id, text,
+                                           parse_mode="HTML", reply_markup=markup)
         await self._capture_axis_lead(query.from_user, session)
+
+    async def _on_match_callback(self, update, context) -> None:
+        """Show the tailored resource pack from the AXIS 'Resources' button."""
+        from ...leads import matcher
+
+        query = update.callback_query
+        parts = (query.data or "match::").split(":")
+        asset = parts[1] if len(parts) > 1 else ""
+        juris = parts[2] if len(parts) > 2 else ""
+        text = matcher.match(asset, juris, query.from_user.first_name or "")
+        try:
+            await context.bot.send_message(query.message.chat.id, text,
+                                           parse_mode="HTML", disable_web_page_preview=True)
+        except Exception:  # noqa: BLE001
+            pass
+        await query.answer()
 
     async def _capture_axis_lead(self, user, session) -> None:
         try:

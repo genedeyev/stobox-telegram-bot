@@ -57,8 +57,11 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   (strong / promising / early) → routes to the real free Readiness Score at
   stobox.io/compass, captures a scored warm lead + optional `/email` handoff.
   It's a light indicator, never a fabricated AXIS result or pricing promise.
-- **Case-study & jurisdiction matcher** — match the asker's profile to the right
-  guide + case studies.
+- ✅ **Case-study & jurisdiction matcher** (`/resources`, + a button on the AXIS
+  result) — maps an issuer's asset + jurisdiction to the right PUBLISHED Stobox
+  resources (Readiness Score, STV3/ERC-3643 learn page, Intelligence) with
+  grounded, promise-free framing. Never fabricates case studies or legal
+  conclusions; always defers to counsel + the Readiness Score.
 - **Twenty CRM** — finish the real connector so qualified leads land in pipeline
   with the conversation summary.
 - ✅ **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — opt-in,

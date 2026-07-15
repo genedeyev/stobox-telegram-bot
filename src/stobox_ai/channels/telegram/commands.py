@@ -66,6 +66,7 @@ _GUIDE_SECTIONS = {
         "🏢 <b>Tokenize an asset</b>\n\n"
         "Exploring tokenization for your company, fund, or real estate?\n"
         "• /qualify — a quick 30-second fit check (5 taps)\n"
+        "• /resources — the right guides for your asset &amp; jurisdiction\n"
         "• /compass — run the free Readiness Score (25 questions, no card)\n"
         "• Tell me about your asset and I'll point you to the right path\n"
         "• /contact — reach the Stobox team\n\n"
@@ -331,6 +332,24 @@ async def leaderboard_cmd(update, context) -> None:
 async def qualify_cmd(update, context) -> None:
     """Start the in-chat fit check (issuer pre-qualifier)."""
     await _adapter(context).start_axis(update.effective_message, update.effective_user)
+
+
+async def resources_cmd(update, context) -> None:
+    """Official resources. `/resources <asset> <jurisdiction>` tailors them."""
+    from ...leads import matcher
+
+    args = [a.lower().strip() for a in (context.args or [])]
+    if args:
+        alias = {"realestate": "real_estate", "re": "real_estate", "property": "real_estate",
+                 "pe": "fund", "equity": "equity", "debt": "credit", "rwa": ""}
+        asset = alias.get(args[0], args[0])
+        juris = args[1] if len(args) > 1 else ""
+        text = matcher.match(asset, juris, update.effective_user.first_name or "")
+    else:
+        text = matcher.resources_overview()
+    await update.effective_message.reply_text(
+        text, parse_mode="HTML", disable_web_page_preview=True
+    )
 
 
 async def check_cmd(update, context) -> None:
@@ -1264,6 +1283,8 @@ def registry() -> dict:
         "qualify": qualify_cmd,
         "fit": qualify_cmd,
         "readiness": qualify_cmd,
+        "resources": resources_cmd,
+        "match": resources_cmd,
         "rank": rank_cmd,
         "leaderboard": leaderboard_cmd,
         "top": leaderboard_cmd,
