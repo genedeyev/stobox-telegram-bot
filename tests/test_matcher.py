@@ -9,6 +9,7 @@ def test_match_uses_real_urls_and_disclaimer():
     text = matcher.match("real_estate", "us", "Gene")
     assert matcher.READINESS_URL in text
     assert matcher.LEARN_STV3_URL in text
+    assert matcher.APP_URL in text and matcher.CONTACT_URL in text
     assert "Gene" in text and "real estate" in text and "the US" in text
     assert "not legal or investment advice" in text.lower()
 

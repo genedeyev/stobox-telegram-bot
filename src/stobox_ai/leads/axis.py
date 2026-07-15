@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 READINESS_URL = "https://www.stobox.io/compass"
+APP_URL = "https://app.stobox.io"
+CONTACT_URL = "https://www.stobox.io/contact"
 
 
 @dataclass(slots=True)
@@ -101,9 +103,12 @@ def result_text(session: Session, first_name: str = "") -> str:
         ),
     }[b]
     cta = (
-        f"\n\n<b>Your next step:</b> run the free <b>Readiness Score</b> — 25 questions, no "
-        f"card, the same methodology Compass uses: {READINESS_URL}\n\n"
-        "Want the team to take a look and reach out? Share your email with "
-        "<code>/email you@address.com</code> and I'll pass along the details."
+        "\n\n<b>Where to go next</b>\n"
+        f"• 📊 <b>See where you stand</b> — the free <b>Readiness Score</b> (25 Q, no "
+        f"card, same methodology as Compass): {READINESS_URL}\n"
+        f"• 🚀 <b>Ready to start</b> — create your account: {APP_URL}\n"
+        f"• 📬 <b>Talk to the team</b> — the contact form: {CONTACT_URL}\n\n"
+        "Prefer I pass your details to the team directly? Share your email with "
+        "<code>/email you@address.com</code>."
     )
     return f"{hi}{cta}\n\n<i>This is information, not investment advice.</i>"

@@ -17,6 +17,8 @@ from __future__ import annotations
 READINESS_URL = "https://www.stobox.io/compass"
 LEARN_STV3_URL = "https://www.stobox.io/learn/erc-3643-vs-stv3-transfer-restriction-models"
 INTELLIGENCE_URL = "https://www.stobox.io/intelligence"
+APP_URL = "https://app.stobox.io"
+CONTACT_URL = "https://www.stobox.io/contact"
 
 # General, promise-free education per asset type. Keyed by AXIS asset values.
 _ASSET = {
@@ -68,11 +70,11 @@ def match(asset: str = "", jurisdiction: str = "", first_name: str = "") -> str:
         "<b>Best next steps</b>\n"
         f"1. Free <b>Readiness Score</b> — 25 questions, no card, the methodology Compass "
         f"uses: {READINESS_URL}\n"
-        f"2. How Stobox keeps tokens compliant (STV3 / ERC-3643 transfer rules): "
-        f"{LEARN_STV3_URL}\n"
-        f"3. Organize your data room first with Intelligence: {INTELLIGENCE_URL}\n\n"
-        "Want the team to look at your specific case? Share your email with "
-        "<code>/email you@address.com</code>.\n\n"
+        f"2. <b>Start in the product</b> — create your account: {APP_URL}\n"
+        f"3. How Stobox keeps tokens compliant (STV3 / ERC-3643 transfer rules): "
+        f"{LEARN_STV3_URL}\n\n"
+        f"Prefer to talk to a human? The contact form: {CONTACT_URL} — or share your "
+        "email with <code>/email you@address.com</code> and I'll pass your details along.\n\n"
         "<i>General information, not legal or investment advice — your counsel and the "
         "Readiness Score confirm what actually fits.</i>"
     )

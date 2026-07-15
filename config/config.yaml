@@ -167,8 +167,10 @@ guardrails:
 leads:
   enabled: true
   qualify_on_intent: true
-  # Website contact flow posts to the Twenty CRM connector; mirror it with
-  # source=telegram-bot. Set CRM_WEBHOOK_URL to that endpoint.
+  # Until the CRM is connected, qualified MQLs are emailed here (needs SMTP_*).
+  mql_inbox: info@stobox.io
+  # Optional: set CRM_WEBHOOK_URL when the Twenty CRM connector is ready; the same
+  # MQL is then also POSTed there. source=telegram-bot mirrors the website flow.
   crm_webhook: ${CRM_WEBHOOK_URL:-}
   crm_source: telegram-bot
 

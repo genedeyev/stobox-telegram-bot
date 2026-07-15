@@ -62,8 +62,12 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   resources (Readiness Score, STV3/ERC-3643 learn page, Intelligence) with
   grounded, promise-free framing. Never fabricates case studies or legal
   conclusions; always defers to counsel + the Readiness Score.
-- **Twenty CRM** — finish the real connector so qualified leads land in pipeline
-  with the conversation summary.
+- 🟡 **Lead handoff** — until the CRM is connected, qualified MQLs are emailed as
+  a summary to <b>info@stobox.io</b> (needs SMTP_*), and users are routed to
+  self-serve: product registration (app.stobox.io), the contact form
+  (stobox.io/contact), and the free Readiness Score (stobox.io/compass).
+  **Twenty CRM**: set `CRM_WEBHOOK_URL` when ready — the same MQL then also POSTs
+  there (one-line switch, kept for the testing phase).
 - ✅ **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — opt-in,
   DM-only, toggle-button UI; new blog posts are keyword-routed to a topic and
   DM-pushed only to that topic's subscribers, each with a one-tap way out.
