@@ -534,6 +534,16 @@ class TelegramChannel(Channel):
         if response.meta.get("mql_summary"):
             await self._dm_admins(context, "🟢 New MQL from Telegram\n\n"
                                   + response.meta["mql_summary"])
+        # Benign impersonation flag (name mimics team) → post the mod-log for admins
+        # to pardon/act on, but DON'T swallow the reply — keep helping the person.
+        if response.meta.get("mod_alert"):
+            try:
+                await self._post_modlog(
+                    context, update.effective_chat, response.meta["mod_alert"],
+                    ModerationAction.NONE,
+                )
+            except Exception:  # noqa: BLE001
+                pass
         # Moderation verdict → apply action, DM the offender, post the mod-log.
         if response.moderation != ModerationAction.NONE or response.meta.get("alert_admin"):
             await self._handle_moderation(update, context, response)

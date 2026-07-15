@@ -149,6 +149,23 @@ async def test_mql_summary_emitted_once(config):
     assert r2 is not None and not r2.meta.get("mql_summary")    # already notified
 
 
+@pytest.mark.asyncio
+async def test_benign_impersonation_still_answers(config):
+    """A team member whose name mimics 'Stobox' gets answered, not silently flagged."""
+    from stobox_ai.core.types import ModerationAction
+
+    engine = await AgentEngine.create(config)
+    m = IncomingMessage(
+        author=Author(external_id="99", display_name="Arevik | Support @ Stobox"),
+        text="how does the STBU migration work?", chat_id="g", chat_type=ChatType.GROUP,
+        message_id="1", raw={"addressed": True},
+    )
+    r = await engine.handle(m)
+    assert r is not None and r.text.strip()          # answered — NOT blocked
+    assert r.meta.get("mod_alert")                    # admins still get the heads-up
+    assert r.moderation == ModerationAction.NONE      # no public sanction
+
+
 def test_looks_like_question_backstop():
     from stobox_ai.core.engine import _looks_like_question
     assert _looks_like_question("how does migration work?")

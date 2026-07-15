@@ -38,6 +38,7 @@ from .types import (
     Confidence,
     IncomingMessage,
     Mode,
+    ModerationAction,
 )
 
 log = get_logger(__name__)
@@ -478,10 +479,21 @@ class AgentEngine:
         user_key = f"{msg.channel}:{msg.author.external_id}"
 
         # 1) Moderation (skip in private chats and for admins).
+        mod_alert = None
         if not msg.is_private:
             verdict = await self.moderator.evaluate(msg)
-            if verdict.flagged:
+            # Real sanction (delete/mute/ban) or active scam → block and handle.
+            if verdict.action != ModerationAction.NONE or verdict.category == "scam":
                 return await self._moderation_response(msg, verdict, thread_key, started)
+            # Benign alert-only (e.g. a team member's display name mimics "Stobox"):
+            # tell admins, but KEEP HELPING — never go silent on someone over a name.
+            if verdict.alert_admin:
+                mod_alert = {
+                    "category": verdict.category, "reason": verdict.reason,
+                    "offender_user_key": user_key,
+                    "offender_name": msg.author.display_name,
+                    "offender_id": msg.author.external_id,
+                }
 
         # 2) Working memory + long-term profile.
         self.memory.add_turn(thread_key, "user", msg.text)
@@ -512,13 +524,15 @@ class AgentEngine:
         # 5) Decide whether to speak (avoid group spam).
         if not self._should_engage(msg, routing):
             await self.memory.save_profile(profile)
-            if fud_alert:
+            if fud_alert or mod_alert:
                 # Nothing to say publicly, but admins still get the heads-up
                 # (empty text ⇒ should_reply False ⇒ no public message).
-                return AgentResponse(
-                    text="", language=routing.language,
-                    meta={"fud_alert": fud_alert, "fud_excerpt": msg.text[:200]},
-                )
+                meta: dict = {}
+                if fud_alert:
+                    meta.update(fud_alert=fud_alert, fud_excerpt=msg.text[:200])
+                if mod_alert:
+                    meta["mod_alert"] = mod_alert
+                return AgentResponse(text="", language=routing.language, meta=meta)
             return None
 
         # 4b) Deterministic compliance pre-intercepts (seed phrase, prompt
@@ -568,6 +582,8 @@ class AgentEngine:
         if fud_alert:
             response.meta["fud_alert"] = fud_alert
             response.meta["fud_excerpt"] = msg.text[:200]
+        if mod_alert:
+            response.meta["mod_alert"] = mod_alert
 
         # 7b) Share-with-a-friend cadence: after every 4th genuinely helpful
         #     answer (confident, not gated/blocked/escalated, in a DM), flag a
