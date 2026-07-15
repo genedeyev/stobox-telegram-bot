@@ -113,6 +113,10 @@ class AgentEngine:
         from ..ops.winback import WinBackBook
 
         self.winback = WinBackBook(config.get("winback.state_path", "data/winback.json"))
+        # Per-user retention controls (privacy): whether to keep verbatim question
+        # text on the profile, and how many to keep.
+        self._retain_questions = bool(config.get("memory.retain_questions", True))
+        self._max_recent_q = int(config.get("memory.max_recent_questions", 8))
         # Real-time FUD spike detector (immediate admin alert on coordinated FUD).
         from ..moderation.fud_alarm import FudAlarm
 
@@ -468,8 +472,8 @@ class AgentEngine:
             profile.technical_level = routing.technical_level
         for t in routing.topics:
             profile.add_interest(t)
-        if routing.is_question:
-            profile.record_question(msg.text)
+        if routing.is_question and self._retain_questions:
+            profile.record_question(msg.text, cap=self._max_recent_q)
 
         # 4) FUD spike detection — recorded BEFORE the engage decision so a silent
         #    FUD wave (messages we wouldn't otherwise answer) still alerts admins.

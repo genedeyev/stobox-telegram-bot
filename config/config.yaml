@@ -88,6 +88,10 @@ memory:
   conversation_window: 12          # recent turns kept in working context
   long_term: true                  # per-user durable profile
   summarize_after_turns: 20
+  # Per-user retention (privacy). Turn retain_questions off to stop keeping any
+  # verbatim question text on profiles; lower the cap to keep fewer.
+  retain_questions: true
+  max_recent_questions: 8          # was 15 — tightened
 
 # --- Agent behaviour / modes -------------------------------------------------
 agent:
@@ -121,6 +125,8 @@ proactive:
     inactivity_minutes: 180        # after N min of silence, surface a blog post /
                                    # fact (skips 00:00–07:00). Dial 120 for more
                                    # presence, 240 for less.
+    max_unanswered_revivals: 2     # after N nudges nobody answers, go dormant
+                                   # until a human speaks again (don't talk to a wall)
   blog_announcements:
     enabled: true                  # announce every newly published blog post
     interval_minutes: 10           # how often to check for new posts (cheap diff)

@@ -78,6 +78,9 @@ class ProactiveScheduler:
         # Per-chat rotation of blog posts already surfaced during quiet times.
         self._blog_shared: dict[str, set[str]] = {}
         self._blog_i = 0
+        # Per-chat revival state: consecutive unanswered nudges + our last nudge's
+        # activity timestamp, so we back off from a room nobody's engaging with.
+        self._revival_state: dict[str, dict] = {}
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -399,17 +402,27 @@ class ProactiveScheduler:
             return
         cfg = self.engine.config
         minutes = int(cfg.get("proactive.growth.inactivity_minutes", 240))
+        max_unanswered = int(cfg.get("proactive.growth.max_unanswered_revivals", 2))
         now = datetime.now(UTC)
         for chat_id in self._known_chats():
             thread_key = f"telegram:{chat_id}:main"
             last = self.engine.memory.last_activity(thread_key)
             if last and (now - last).total_seconds() < minutes * 60:
                 continue
+            # Back-off: if our last nudge got no human reply, count it. After
+            # max_unanswered silent nudges, stay dormant until someone speaks
+            # (a human turn moves last_activity past our nudge → streak resets).
+            st = self._revival_state.setdefault(chat_id, {"streak": 0, "at": None})
+            ignored = st["at"] is not None and last is not None and last <= st["at"]
+            st["streak"] = st["streak"] + 1 if ignored else 0
+            if st["streak"] >= max_unanswered:
+                continue
             revived = await self._share_blog(context, chat_id)
             if not revived:
                 revived = await self._share_fact(context, chat_id)
             if revived:
                 self.engine.memory.add_turn(thread_key, "assistant", "[revival]")
+                st["at"] = self.engine.memory.last_activity(thread_key)
 
     async def _share_blog(self, context, chat_id) -> bool:
         """Surface an existing blog post the chat hasn't seen yet (rotates)."""

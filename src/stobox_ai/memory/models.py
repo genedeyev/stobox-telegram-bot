@@ -55,6 +55,6 @@ class UserProfile:
         if item and item not in self.products_discussed:
             self.products_discussed.append(item)
 
-    def record_question(self, q: str) -> None:
+    def record_question(self, q: str, cap: int = 15) -> None:
         self.recent_questions.append(q.strip()[:300])
-        self.recent_questions = self.recent_questions[-15:]
+        self.recent_questions = self.recent_questions[-cap:]

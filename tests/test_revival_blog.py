@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from stobox_ai.channels.telegram import proactive as pro
@@ -66,3 +68,56 @@ async def test_blog_share_includes_link_and_title(monkeypatch):
     _, text = ctx.bot.sent[0]
     assert "Tokenizing Real Estate" in text and "https://stobox.io/blog/re" in text
     assert text.count("http") == 1                   # link discipline: one link
+
+
+class _Mem:
+    def __init__(self):
+        self.t = datetime(2026, 7, 15, tzinfo=UTC)
+        self.last: dict[str, datetime] = {}
+
+    def last_activity(self, tk):
+        return self.last.get(tk)
+
+    def add_turn(self, tk, role, text):
+        self.t += timedelta(minutes=1)
+        self.last[tk] = self.t
+
+
+class _Cfg:
+    def get(self, k, d=None):
+        return {"proactive.growth.inactivity_minutes": 0,
+                "proactive.growth.max_unanswered_revivals": 2}.get(k, d)
+
+
+class _RevivalEngine:
+    def __init__(self, posts):
+        self._posts = posts
+        self.memory = _Mem()
+        self.config = _Cfg()
+
+    def all_blog_posts(self):
+        return list(self._posts)
+
+
+@pytest.mark.asyncio
+async def test_revival_backs_off_then_resumes_after_human(monkeypatch):
+    async def fake_og(url, timeout=15.0):
+        return {}
+    monkeypatch.setattr(pro, "fetch_og_meta", fake_og)
+
+    eng = _RevivalEngine([{"url": "https://stobox.io/blog/a", "title": "A"}])
+    sched = pro.ProactiveScheduler(eng, app=None)
+    sched._known_chats = lambda: {"c1"}
+    sched._in_quiet_hours = lambda: False
+    ctx = _Ctx()
+
+    # max_unanswered=2 → nudges on cycles 1 & 2, then dormant on cycle 3.
+    await sched._revival_job(ctx)
+    await sched._revival_job(ctx)
+    await sched._revival_job(ctx)
+    assert len(ctx.bot.sent) == 2                     # backed off, didn't spam
+
+    # A human speaks → streak resets → Stoby engages again.
+    eng.memory.add_turn("telegram:c1:main", "user", "hi")
+    await sched._revival_job(ctx)
+    assert len(ctx.bot.sent) == 3
