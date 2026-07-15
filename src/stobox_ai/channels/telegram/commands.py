@@ -56,6 +56,8 @@ async def start_cmd(update, context) -> None:
                 referrer = await engine.memory.get_profile(f"telegram:{payload[4:]}")
                 referrer.referrals += 1
                 await engine.memory.save_profile(referrer)
+                engine.xp.award(f"telegram:{payload[4:]}", 25, "referral",
+                                referrer.display_name or "")
         except Exception:  # noqa: BLE001 - attribution must never break /start
             pass
     await update.effective_message.reply_text(
@@ -94,6 +96,53 @@ async def remindme_cmd(update, context) -> None:
         + f"Current status: {phase_text}\n\nStop anytime with /stopreminders.",
         disable_web_page_preview=True,
     )
+
+
+async def rank_cmd(update, context) -> None:
+    """A member's own XP, level, streak, and rank."""
+    from ...engagement import level_for
+
+    engine = _engine(context)
+    user = update.effective_user
+    rec = engine.xp.get(f"telegram:{user.id}")
+    if not rec or rec.xp == 0:
+        await update.effective_message.reply_text(
+            "You're just getting started! 🌱 Ask questions, answer quizzes (/quiz-time in the "
+            "group), and keep a daily streak to climb the leaderboard. /leaderboard to see the top."
+        )
+        return
+    _, title = level_for(rec.xp)
+    rank = engine.xp.rank(f"telegram:{user.id}")
+    await update.effective_message.reply_text(
+        f"🏅 <b>{user.first_name}</b> — {title}\n"
+        f"XP: <b>{rec.xp}</b> (#{rank}) · this week: {rec.xp_week}\n"
+        f"🔥 Streak: {rec.streak} day(s) (best {rec.best_streak})\n\n"
+        "Earn XP: helpful questions, quiz wins, referrals, daily activity. /leaderboard",
+        parse_mode="HTML",
+    )
+
+
+async def leaderboard_cmd(update, context) -> None:
+    from ...engagement import level_for
+
+    engine = _engine(context)
+    weekly = engine.xp.top(10, weekly=True)
+    board = weekly if weekly else engine.xp.top(10)
+    if not board:
+        await update.effective_message.reply_text(
+            "The leaderboard is wide open — be the first to score. Ask a question or catch the "
+            "next quiz! 🏆"
+        )
+        return
+    medals = ["🥇", "🥈", "🥉"]
+    lines = ["🏆 <b>This week's top community members</b>"]
+    for i, u in enumerate(board):
+        tag = medals[i] if i < 3 else f"{i+1}."
+        _, title = level_for(u.xp)
+        name = u.display_name or u.user_key.split(":")[-1]
+        lines.append(f"{tag} <b>{name}</b> — {u.xp_week} XP ({title})")
+    lines.append("\nCheck your own standing with /rank.")
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def check_cmd(update, context) -> None:
@@ -195,6 +244,7 @@ async def help_cmd(update, context) -> None:
         "/valuation – company valuation (not a token price)\n"
         "/blog – latest posts + the weekly RWA digest\n"
         "/sources – official links to verify me\n"
+        "/rank – your XP, level &amp; streak · /leaderboard – top members\n"
         "/contact – reach the team / support\n"
         "/search &lt;query&gt; – search the knowledge base\n"
         "/report &lt;text&gt; · /feedback &lt;text&gt; · /about\n\n"
@@ -759,6 +809,16 @@ async def _finalize_answer(update, context, qid: int, text: str) -> None:
     )
 
 
+async def quiz_cmd(update, context) -> None:
+    """Fire a quiz in the current chat now (admin). Correct answers award XP."""
+    if not _is_admin(update, context):
+        return
+    await update.effective_message.reply_text("🧠 Quiz time! Generating…")
+    ok = await _adapter(context).send_quiz(context, update.effective_chat.id)
+    if not ok:
+        await update.effective_message.reply_text("Couldn't build a quiz right now — try /sync first.")
+
+
 async def pause_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -815,7 +875,7 @@ async def admin_cmd(update, context) -> None:
         await update.effective_message.reply_text("Not authorized.")
         return
     await update.effective_message.reply_text(
-        "🔐 Admin: /pending /answer /pause /resume /sync /reindex /stats /health "
+        "🔐 Admin: /quiz /pending /answer /pause /resume /sync /reindex /stats /health "
         "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users\n"
         "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
         "/unban &lt;id&gt; /strikes /clearstrikes /modstats"
@@ -864,10 +924,14 @@ def registry() -> dict:
         "pending": pending_cmd,
         "answer": answer_cmd,
         "approve": approve_cmd,
+        "quiz": quiz_cmd,
         "remindme": remindme_cmd,
         "stopreminders": stopreminders_cmd,
         "email": email_cmd,
         "check": check_cmd,
+        "rank": rank_cmd,
+        "leaderboard": leaderboard_cmd,
+        "top": leaderboard_cmd,
         # moderation
         "strikes": strikes_cmd,
         "warn": warn_cmd,

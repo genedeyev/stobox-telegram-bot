@@ -38,8 +38,10 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   never touches keys; a pasted private key triggers a compromise warning.
 - **AMA collector** — gather questions all month, dedupe, community-vote, hand
   Gene a ranked list. Zero-effort AMA prep.
-- **Quiz nights + XP / streaks / leaderboard** — auto-run from the knowledge
-  base; badges ("Tokenization Scholar").
+- ✅ **Quiz nights + XP / streaks / leaderboard** — SHIPPED. Native Telegram quiz
+  polls (auto-scored via PollAnswer, +10 XP for correct), XP for helpful
+  questions/referrals/daily streaks, levels (Newcomer→Community OG), /rank +
+  /leaderboard (weekly), admin /quiz. `engagement/xp.py`.
 - **Referral leaderboard** — monthly recognition on top of the existing ref
   tracking; measurable K-factor.
 

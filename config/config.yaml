@@ -144,6 +144,10 @@ moderation:
   impersonation_allowlist: []      # numeric user ids that legitimately use these terms
   blocklist_path: ""               # optional file of extra slur/hate terms (one per line)
 
+# --- Engagement (XP / streaks / leaderboard / quizzes) -----------------------
+engagement:
+  xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
+
 # --- On-chain reads (STBU wallet migration checker, /check) ------------------
 chain:
   rpc:                             # public endpoints (no key); override if rate-limited

@@ -63,6 +63,8 @@ class TelegramChannel(Channel):
         # Follow-up state: token→question (for buttons) and pending email topics.
         self._q_cache: dict[str, str] = {}
         self._email_pending: dict[int, str] = {}
+        # Active quiz polls: poll_id → correct_option_id (for XP scoring).
+        self._quiz_polls: dict[str, int] = {}
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -71,6 +73,7 @@ class TelegramChannel(Channel):
             CommandHandler,
             InlineQueryHandler,
             MessageHandler,
+            PollAnswerHandler,
             filters,
         )
 
@@ -112,6 +115,8 @@ class TelegramChannel(Channel):
         self.app.add_handler(
             CallbackQueryHandler(self._on_followup_callback, pattern=r"^(more|email):")
         )
+        # Quiz scoring: award XP when a member answers a quiz poll correctly.
+        self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
@@ -516,6 +521,43 @@ class TelegramChannel(Channel):
                 "I'll never share your address, and you can ignore this if you'd rather not.",
                 parse_mode="HTML",
             )
+
+    async def send_quiz(self, context, chat_id) -> bool:
+        """Generate + post a native Telegram quiz poll; track it for XP scoring."""
+        quiz = await self.engine.generate_quiz()
+        if not quiz:
+            return False
+        try:
+            msg = await context.bot.send_poll(
+                chat_id, quiz["question"], quiz["options"],
+                type="quiz", correct_option_id=quiz["correct_index"],
+                explanation=quiz["explanation"] or None, is_anonymous=False,
+            )
+            self._quiz_polls[msg.poll.id] = quiz["correct_index"]
+            if len(self._quiz_polls) > 200:
+                self._quiz_polls.pop(next(iter(self._quiz_polls)))
+            log.info("quiz.posted", chat=chat_id)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("quiz.post_failed", error=str(exc))
+            return False
+
+    async def _on_poll_answer(self, update, context) -> None:
+        ans = update.poll_answer
+        correct = self._quiz_polls.get(ans.poll_id)
+        if correct is None or not ans.option_ids:
+            return
+        user = ans.user
+        uk = f"telegram:{user.id}"
+        self.engine.xp.touch(uk, user.full_name)
+        if ans.option_ids[0] == correct:
+            self.engine.xp.award(uk, 10, "quiz_correct", user.full_name)
+            try:
+                await context.bot.send_message(
+                    user.id, "🎉 Correct! +10 XP. Nice one. Check your standing with /rank."
+                )
+            except Exception:  # noqa: BLE001 - user hasn't opened a DM; that's fine
+                pass
 
     async def _on_mod_callback(self, update, context) -> None:
         """Admin taps Pardon / Ban in the mod-log."""

@@ -107,6 +107,10 @@ class AgentEngine:
         from ..ops.email import EmailSender
 
         self.email = EmailSender()
+        # Engagement: XP / streaks / leaderboard.
+        from ..engagement import XPBook
+
+        self.xp = XPBook(config.get("engagement.xp_path", "data/xp.json"))
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
@@ -224,6 +228,37 @@ class AgentEngine:
         )
         resp = await self.handle(msg)
         return resp or AgentResponse(text="I don't have more detail on that yet.")
+
+    async def generate_quiz(self) -> dict | None:
+        """Produce a grounded multiple-choice quiz: {question, options,
+        correct_index, explanation}. Never about price/investment. Returns None
+        on any doubt (never posts junk)."""
+        from ..util import extract_json
+
+        retrieved = await self.retriever.retrieve("tokenization RWA STV3 compliance education")
+        ctx = "\n\n".join(rc.chunk.text[:250] for rc in retrieved[:4])
+        prompt = (
+            "Create ONE multiple-choice quiz question about RWA tokenization or Stobox, "
+            "grounded ONLY in this context. Educational and fun — NEVER about price, "
+            "investment, or predictions. Return ONLY minified JSON: "
+            '{"question":"...max 250 chars","options":["..","..","..","..],'
+            '"correct_index":0,"explanation":"one sentence, max 180 chars"}. '
+            "Exactly 4 options (max 90 chars each), one clearly correct.\n\n"
+            f"Context:\n{ctx}"
+        )
+        try:
+            raw = await self.reasoner.complete_json([ChatMessage("user", prompt)], max_tokens=350)
+            q = extract_json(raw)
+            question = str(q["question"])[:250]
+            options = [str(o)[:100] for o in q["options"]][:4]
+            ci = int(q["correct_index"])
+            explanation = str(q.get("explanation", ""))[:190]
+            if len(options) == 4 and 0 <= ci < 4:
+                return {"question": question, "options": options,
+                        "correct_index": ci, "explanation": explanation}
+        except Exception as exc:  # noqa: BLE001
+            log.warning("quiz.generate_failed", error=str(exc))
+        return None
 
     async def check_wallet(self, address: str) -> str:
         """Read STBU balances for a PUBLIC address across the eligible chains and
@@ -466,6 +501,14 @@ class AgentEngine:
             profile.helpful_answers += 1
             if profile.helpful_answers % 4 == 0:
                 response.meta["share_nudge"] = True
+            # Engagement: daily streak + XP for a substantive interaction.
+            try:
+                streak, new_day = self.xp.touch(user_key, msg.author.display_name or "")
+                self.xp.award(user_key, 5, "helpful_answer", msg.author.display_name or "")
+                if new_day and streak in (3, 7, 14, 30):
+                    response.meta["streak_milestone"] = streak
+            except Exception as exc:  # noqa: BLE001 - XP must never break a reply
+                log.warning("xp.touch_failed", error=str(exc))
 
         # 8) Leads.
         await self._handle_leads(msg, routing, profile, response)

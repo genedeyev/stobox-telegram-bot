@@ -254,40 +254,16 @@ class ProactiveScheduler:
         log.info("proactive.evangelist_posted", format=fmt, chats=len(self._known_chats()))
 
     async def _post_poll(self, context) -> None:
-        """Post a native Telegram poll — an education question, never anything
-        price/investment-adjacent. Grounded in the docs via the LLM, validated,
-        and skipped entirely on any doubt."""
-        from ...util import extract_json
-
-        retrieved = await self.engine.retriever.retrieve("tokenization education basics")
-        context_text = "\n\n".join(rc.chunk.text[:250] for rc in retrieved[:3])
-        prompt = (
-            "Create ONE light community-poll question about RWA tokenization or Stobox "
-            "education, grounded in this context. NEVER about price, investment, or "
-            "predictions. Return ONLY minified JSON: "
-            '{"question":"...max 250 chars...","options":["...","..."]} '
-            "with 2-4 short options (max 90 chars each). Make it genuinely fun to answer.\n\n"
-            f"Context:\n{context_text}"
-        )
-        try:
-            raw = await self.engine.reasoner.complete_json(
-                [ChatMessage("user", prompt)], max_tokens=250
-            )
-            data = extract_json(raw)
-            question = str(data["question"])[:250]
-            options = [str(o)[:90] for o in data["options"]][:4]
-            assert len(options) >= 2
-        except Exception as exc:  # noqa: BLE001 - skip the tick, never post junk
-            log.warning("proactive.poll_failed", error=str(exc))
+        """Quiz night — post a native Telegram quiz poll to active groups. Correct
+        answers auto-award XP (adapter PollAnswerHandler). Never price/investment."""
+        adapter = self.app.bot_data.get("adapter")
+        if not adapter:
             return
+        posted = 0
         for chat_id in self._known_chats():
-            try:
-                await context.bot.send_poll(
-                    chat_id, question, options, is_anonymous=True,
-                )
-            except Exception:  # noqa: BLE001
-                pass
-        log.info("proactive.poll_posted", q=question[:80], chats=len(self._known_chats()))
+            if await adapter.send_quiz(context, chat_id):
+                posted += 1
+        log.info("proactive.quiz_posted", chats=posted)
 
     async def _revival_job(self, context) -> None:
         cfg = self.engine.config
