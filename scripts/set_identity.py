@@ -14,7 +14,7 @@ import asyncio
 import os
 import sys
 
-NAME = "Stoby"
+NAME = "Stoby | AI Assistant"
 DESCRIPTION = (
     "Stoby — the resident AI of the Stobox community. "
     "Part monster, part mind, fully awake. Ask me anything about tokenization."
