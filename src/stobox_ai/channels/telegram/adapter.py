@@ -23,6 +23,7 @@ from ...core.types import (
     ModerationAction,
 )
 from ...logging import get_logger
+from ...moderation.deleted import is_deleted_account
 from ..base import Channel
 from . import commands as cmd
 from .proactive import ProactiveScheduler
@@ -67,11 +68,14 @@ class TelegramChannel(Channel):
         self._quiz_polls: dict[str, int] = {}
         # AXIS pre-qualifier sessions: user_id → Session.
         self._axis_sessions: dict = {}
+        # Running count of deleted (ghost) accounts removed, for /modstats.
+        self.deleted_removed: int = 0
 
     async def start(self) -> None:
         from telegram.ext import (
             ApplicationBuilder,
             CallbackQueryHandler,
+            ChatMemberHandler,
             CommandHandler,
             InlineQueryHandler,
             MessageHandler,
@@ -127,6 +131,10 @@ class TelegramChannel(Channel):
         self.app.add_handler(CallbackQueryHandler(self._on_sub_callback, pattern=r"^sub:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
+        # Group hygiene: auto-remove deleted accounts as their membership surfaces.
+        self.app.add_handler(
+            ChatMemberHandler(self._on_chat_member, ChatMemberHandler.CHAT_MEMBER)
+        )
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
@@ -139,7 +147,13 @@ class TelegramChannel(Channel):
         self.proactive.schedule()
 
         await self.app.start()
-        await self.app.updater.start_polling(drop_pending_updates=True)
+        # ALL_TYPES so we also receive chat_member updates (used to auto-remove
+        # deleted accounts as their membership surfaces).
+        from telegram import Update
+
+        await self.app.updater.start_polling(
+            drop_pending_updates=True, allowed_updates=Update.ALL_TYPES
+        )
 
     async def _get_me_with_retry(self, attempts: int = 4):
         """Retry startup handshake — transient TimedOut must not kill the boot."""
@@ -231,10 +245,15 @@ class TelegramChannel(Channel):
         """Greet new group members by name. Skips bots; a mass-join (>5 at
         once) is treated as a possible raid — no welcome, admins pinged."""
         message = update.effective_message
-        humans = [m for m in (message.new_chat_members or []) if not m.is_bot]
+        chat = update.effective_chat
+        joined = message.new_chat_members or []
+        # A joining ghost account gets removed, not welcomed.
+        for m in joined:
+            if is_deleted_account(m):
+                await self._remove_deleted_account(context, chat, m)
+        humans = [m for m in joined if not m.is_bot and not is_deleted_account(m)]
         if not humans:
             return
-        chat = update.effective_chat
         if chat:
             self.known_chats.add(str(chat.id))
         if len(humans) > 5:
@@ -263,6 +282,43 @@ class TelegramChannel(Channel):
             await message.reply_text(variants[len(names) % len(variants)])
         except Exception as exc:  # noqa: BLE001
             log.warning("telegram.welcome_failed", error=str(exc))
+
+    def _remove_deleted_enabled(self) -> bool:
+        return bool(self.engine.config.get("moderation.remove_deleted_accounts", True))
+
+    async def _remove_deleted_account(self, context, chat, user) -> bool:
+        """Kick a deleted (ghost) account from a group. Ban-then-unban so it's a
+        removal, not a standing ban. No-op unless enabled and we're in a group.
+        Tolerates missing admin rights (logs and moves on)."""
+        if not self._remove_deleted_enabled() or chat is None:
+            return False
+        if getattr(chat, "type", None) not in ("group", "supergroup"):
+            return False
+        try:
+            await context.bot.ban_chat_member(chat.id, user.id)
+            await context.bot.unban_chat_member(chat.id, user.id, only_if_banned=True)
+        except Exception as exc:  # noqa: BLE001 - usually: not admin / lacking ban rights
+            log.warning("telegram.deleted_remove_failed", chat=str(chat.id),
+                        user=user.id, error=str(exc))
+            return False
+        self.deleted_removed += 1
+        log.info("telegram.deleted_removed", chat=str(chat.id), user=user.id,
+                 total=self.deleted_removed)
+        return True
+
+    async def _on_chat_member(self, update, context) -> None:
+        """A member's status changed — if it surfaces a deleted account that's
+        still in the group, remove it (group hygiene)."""
+        cm = update.chat_member
+        if cm is None:
+            return
+        new = cm.new_chat_member
+        # Only act on members still present (member/restricted), not those who
+        # already left/were kicked/banned.
+        if new.status not in ("member", "restricted"):
+            return
+        if is_deleted_account(new.user):
+            await self._remove_deleted_account(context, update.effective_chat, new.user)
 
     async def _on_inline_query(self, update, context) -> None:
         """Answer @bot <query> from any chat, via the full compliance pipeline."""

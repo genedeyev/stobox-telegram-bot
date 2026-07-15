@@ -77,6 +77,14 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   immediate admin alert on FUD spikes (not just the daily digest).
 - **Analytics dashboard UI** (data already served at `/insights/*`).
 
+### Group hygiene (live)
+- ✅ **Deleted-account removal** — Stoby auto-kicks ghost "Deleted Account"
+  members the moment they surface (join / status change), and admins can
+  `/cleanup` (reply to a ghost) to remove one on the spot. Count shows in
+  `/modstats`. Detection is conservative (empty name + no username/last-name,
+  never a bot). Note: the Bot API can't list all members, so there's no bulk
+  one-shot sweep of pre-existing ghosts — they're cleared as they surface.
+
 ### Rational, humanized engagement (live)
 - Stoby decides per message whether to **answer**, **calm the room**, or **stay
   out** — untagged, it engages on questions/Stobox-relevant messages and on

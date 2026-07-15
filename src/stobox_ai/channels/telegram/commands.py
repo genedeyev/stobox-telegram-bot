@@ -964,6 +964,44 @@ async def clearstrikes_cmd(update, context) -> None:
     await update.effective_message.reply_text(f"🧹 Cleared record for {uid}.")
 
 
+async def cleanup_cmd(update, context) -> None:
+    """Remove deleted (ghost) accounts. Reply to one to remove it now; otherwise
+    explain the auto-cleanup + Telegram's bulk-listing limit."""
+    if not _is_admin(update, context):
+        return
+    from ...moderation.deleted import is_deleted_account
+
+    adapter = _adapter(context)
+    chat = update.effective_chat
+    target = _reply_target(update)
+    if target is not None:
+        if not is_deleted_account(target):
+            await update.effective_message.reply_text(
+                "That account looks active (it has a name or username), so I won't "
+                "remove it. Reply to a *deleted* account's message with /cleanup."
+            )
+            return
+        ok = await adapter._remove_deleted_account(context, chat, target)
+        await update.effective_message.reply_text(
+            "🧹 Removed a deleted account." if ok else
+            "Couldn't remove it — make sure I'm an admin with ban rights here."
+        )
+        return
+    removed = getattr(adapter, "deleted_removed", 0)
+    await update.effective_message.reply_text(
+        "🧹 <b>Deleted-account cleanup</b>\n"
+        f"I auto-remove ghost accounts the moment I see them join or change status "
+        f"(removed so far: <b>{removed}</b>). Make sure I'm an <b>admin with ban "
+        "rights</b> so I can act.\n\n"
+        "To remove one right now, <b>reply to a message from that deleted account</b> "
+        "with /cleanup.\n\n"
+        "⚠️ Telegram doesn't let bots list every member, so I can't sweep all "
+        "existing ghosts in one shot — I clear them as they surface. For a full "
+        "one-time purge of old ones, use a Telegram desktop client's member view.",
+        parse_mode="HTML",
+    )
+
+
 async def modstats_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -974,6 +1012,7 @@ async def modstats_cmd(update, context) -> None:
     if s["by_category"]:
         lines.append("by category: " + ", ".join(f"{k}={v}" for k, v in
                      sorted(s["by_category"].items(), key=lambda x: -x[1])))
+    lines.append(f"deleted accounts removed: {getattr(_adapter(context), 'deleted_removed', 0)}")
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
@@ -1166,7 +1205,7 @@ async def admin_cmd(update, context) -> None:
         "/resume /sync /reindex /stats /health "
         "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users\n"
         "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
-        "/unban &lt;id&gt; /strikes /clearstrikes /modstats"
+        "/unban &lt;id&gt; /strikes /clearstrikes /cleanup /modstats"
     )
 
 
@@ -1241,6 +1280,9 @@ def registry() -> dict:
         "ban": ban_cmd,
         "unban": unban_cmd,
         "clearstrikes": clearstrikes_cmd,
+        "cleanup": cleanup_cmd,
+        "removedeleted": cleanup_cmd,
+        "purgedeleted": cleanup_cmd,
         "modstats": modstats_cmd,
         "appeal": appeal_cmd,
         "admin": admin_cmd,
