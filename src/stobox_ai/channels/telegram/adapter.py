@@ -95,6 +95,10 @@ class TelegramChannel(Channel):
         self.app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
         )
+        # Welcome new community members (first 60 seconds decide retention).
+        self.app.add_handler(
+            MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, self._on_new_members)
+        )
         # Inline mode — @bot <query> callable in ANY chat (enable via BotFather
         # /setinline). Answers go through the same compliance pipeline.
         self.app.add_handler(InlineQueryHandler(self._on_inline_query))
@@ -184,6 +188,43 @@ class TelegramChannel(Channel):
             return
         await self._render(update, context, response, placeholder=placeholder)
 
+    async def _on_new_members(self, update, context) -> None:
+        """Greet new group members by name. Skips bots; a mass-join (>5 at
+        once) is treated as a possible raid — no welcome, admins pinged."""
+        message = update.effective_message
+        humans = [m for m in (message.new_chat_members or []) if not m.is_bot]
+        if not humans:
+            return
+        chat = update.effective_chat
+        if chat:
+            self.known_chats.add(str(chat.id))
+        if len(humans) > 5:
+            log.warning("telegram.mass_join", count=len(humans), chat=str(chat.id))
+            for admin_id in self.admins:
+                try:
+                    await context.bot.send_message(
+                        admin_id, f"⚠️ Mass join in {chat.title or chat.id}: "
+                                  f"{len(humans)} accounts at once — possible raid."
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            return
+        names = ", ".join(m.first_name for m in humans[:5])
+        variants = [
+            f"👋 Welcome, {names}! I'm the official Stobox assistant — ask me anything "
+            f"about tokenization, Compass, or STBU right here, or DM me for a 1:1. "
+            f"Verify me anytime with /sources.",
+            f"👋 {names}, good to have you! Questions about Stobox, the STBU migration, "
+            f"or RWA tokenization? Just ask — I answer from the official docs, with "
+            f"sources. (And remember: Stobox staff never DM you first.)",
+            f"👋 Welcome aboard, {names}! I'm here 24/7 for anything Stobox — try asking "
+            f"a question, or /help for what I can do. Verify me with /sources.",
+        ]
+        try:
+            await message.reply_text(variants[len(names) % len(variants)])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("telegram.welcome_failed", error=str(exc))
+
     async def _on_inline_query(self, update, context) -> None:
         """Answer @bot <query> from any chat, via the full compliance pipeline."""
         inline = update.inline_query
@@ -227,7 +268,7 @@ class TelegramChannel(Channel):
         # is_personal so per-user rate limits / rails aren't cached across users.
         await inline.answer([result], cache_time=30, is_personal=True)
 
-    async def reply_html(self, message, text: str) -> None:
+    async def reply_html(self, message, text: str, reply_markup=None) -> None:
         """Send with Telegram HTML parse mode; fall back to stripped plain text
         if the model produced HTML Telegram won't accept (one bad tag would
         otherwise kill the whole message)."""
@@ -236,11 +277,26 @@ class TelegramChannel(Channel):
 
         try:
             await message.reply_text(
-                text[:4096], parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                text[:4096], parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True, reply_markup=reply_markup,
             )
         except BadRequest as exc:
             log.warning("telegram.html_fallback", error=str(exc))
-            await message.reply_text(strip_html(text)[:4096], disable_web_page_preview=True)
+            await message.reply_text(
+                strip_html(text)[:4096], disable_web_page_preview=True,
+                reply_markup=reply_markup,
+            )
+
+    def _share_button(self, response, question: str):
+        """One-tap 'share this answer': opens the chat picker and pre-fills
+        '@bot <question>' so the recipient chat gets the same grounded answer."""
+        if not (response.meta.get("shareable") and self.bot_username):
+            return None
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("↗️ Share this answer", switch_inline_query=question[:180])
+        ]])
 
     async def process_query(self, update, context, query: str) -> None:
         """Run arbitrary text (e.g. from a slash command) through the full
@@ -279,6 +335,7 @@ class TelegramChannel(Channel):
                 "\n\n🙌 Finding this useful? Share Stobox with a friend — "
                 f"https://stobox.io — or just send them my way: @{self.bot_username}"
             )
+        markup = self._share_button(response, update.effective_message.text or "")
         if placeholder:
             # Morph the "checking…" message into the answer (no second bubble).
             from telegram.constants import ParseMode
@@ -286,17 +343,19 @@ class TelegramChannel(Channel):
 
             try:
                 await placeholder.edit_text(
-                    text[:4096], parse_mode=ParseMode.HTML, disable_web_page_preview=True
+                    text[:4096], parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True, reply_markup=markup,
                 )
             except BadRequest:
                 try:
                     await placeholder.edit_text(
-                        strip_html(text)[:4096], disable_web_page_preview=True
+                        strip_html(text)[:4096], disable_web_page_preview=True,
+                        reply_markup=markup,
                     )
                 except Exception:  # noqa: BLE001
-                    await self.reply_html(update.effective_message, text)
+                    await self.reply_html(update.effective_message, text, markup)
         else:
-            await self.reply_html(update.effective_message, text)
+            await self.reply_html(update.effective_message, text, markup)
 
     async def _apply_moderation(self, update, context, response) -> None:
         chat = update.effective_chat
@@ -335,12 +394,33 @@ class TelegramChannel(Channel):
             if number:
                 entry.register_number = number
                 self.engine.qa._save()
+        # Propose a draft so the admin reviews instead of writing from scratch.
+        draft = ""
+        if entry and not entry.draft:
+            try:
+                draft = await self.engine.draft_answer(entry.question)
+            except Exception:  # noqa: BLE001
+                draft = ""
+            if draft:
+                entry.draft = draft
+                self.engine.qa._save()
+        elif entry:
+            draft = entry.draft
         text = (
             f"❓ <b>New unanswered question #{qid}</b>\n\n"
             f"“{qa_meta['question']}”\n\n"
-            f"Reply with:\n<code>/answer {qid} your answer here</code>\n"
-            f"I'll save it to the Community QA register, start using it, and "
-            f"follow up with everyone who asked. /pending lists open questions."
+        )
+        if draft:
+            text += (
+                f"🤖 <b>Proposed draft</b> (not sent to anyone):\n{draft[:1200]}\n\n"
+                f"✅ <code>/approve {qid}</code> — use this draft as-is\n"
+                f"✏️ <code>/answer {qid} your better answer</code> — replace it\n"
+            )
+        else:
+            text += f"Reply with:\n<code>/answer {qid} your answer here</code>\n"
+        text += (
+            "I'll save it to the Community QA register, start using it, and "
+            "follow up with everyone who asked. /pending lists open questions."
         )
         for admin_id in self.admins:
             try:

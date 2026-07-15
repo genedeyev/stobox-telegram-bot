@@ -91,7 +91,64 @@ class ProactiveScheduler:
         if blog.get("enabled", True):
             minutes = float(blog.get("interval_minutes", 10))
             jq.run_repeating(self._blog_announce_job, interval=minutes * 60, first=120)
+        # Opt-in migration reminders: hourly check against canonical dates;
+        # per-threshold dedupe means each blast fires exactly once.
+        if cfg.get("proactive.reminders.enabled", True):
+            jq.run_repeating(self._reminder_job, interval=3600, first=300)
         log.info("proactive.scheduled")
+
+    async def _reminder_job(self, context) -> None:
+        from ...guardrails.canonicals import _as_date
+        from ...guardrails.rails import IMPERSONATION_WARNING
+        from ...ops.reminders import THRESHOLDS
+
+        book = self.engine.reminders
+        if not book.subscribers or self._in_quiet_hours():
+            return
+        canon = self.engine.assembler.canonicals if self.engine.assembler else None
+        if canon is None:
+            return
+        m = canon.get("tokens.stbu.migration", {}) or {}
+        deadline = _as_date(m.get("burn_deadline"))
+        claims = _as_date(m.get("claim_opens"))
+        today = datetime.now(UTC).date()
+
+        blast: tuple[str, str] | None = None   # (tag, message)
+        if deadline and today <= deadline:
+            days_left = (deadline - today).days
+            if days_left in THRESHOLDS and not book.was_sent(f"burn-{days_left}"):
+                when = "TODAY" if days_left == 0 else (
+                    "tomorrow" if days_left == 1 else f"in {days_left} days")
+                blast = (
+                    f"burn-{days_left}",
+                    f"⏰ <b>STBU migration reminder</b> — the burn deadline is "
+                    f"<b>{when}</b> ({deadline.strftime('%d %B %Y')} 23:59 UTC).\n\n"
+                    "Burn-and-mint, 1:1, same wallet only. Consolidate all STBU into "
+                    "one wallet first. Legacy V1 tokens are not eligible. Full steps: "
+                    "/migrate\n\n" + IMPERSONATION_WARNING +
+                    "\n\nStop these reminders anytime: /stopreminders",
+                )
+        elif claims and today >= claims and not book.was_sent("claims-open"):
+            blast = (
+                "claims-open",
+                "🟢 <b>STBU claims are open</b> — if you burned before the deadline, "
+                "you can now claim on Base (same wallet). Details: /migrate or "
+                "https://stobox.io\n\n" + IMPERSONATION_WARNING +
+                "\n\nStop these reminders: /stopreminders",
+            )
+        if not blast:
+            return
+        tag, text = blast
+        sent = 0
+        for chat_id in list(book.subscribers):
+            try:
+                await context.bot.send_message(chat_id, text, parse_mode="HTML",
+                                               disable_web_page_preview=True)
+                sent += 1
+            except Exception:  # noqa: BLE001 - blocked bot etc.
+                pass
+        book.mark_sent(tag)
+        log.info("reminders.blast", tag=tag, sent=sent, subscribers=len(book.subscribers))
 
     async def _blog_announce_job(self, context) -> None:
         """Announce newly published blog posts with an OG-image card."""

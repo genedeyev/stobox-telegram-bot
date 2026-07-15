@@ -97,6 +97,10 @@ class AgentEngine:
         from ..qa import QARegister
 
         self.qa = QARegister(config.get("qa.state_path", "data/qa_register.json"))
+        # Opt-in migration reminders (/remindme).
+        from ..ops.reminders import ReminderBook
+
+        self.reminders = ReminderBook(config.get("reminders.state_path", "data/reminders.json"))
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
@@ -197,6 +201,34 @@ class AgentEngine:
             reply_to_message_id=msg.message_id,
             meta={meta_key: True},
         )
+
+    async def draft_answer(self, question: str) -> str:
+        """Best-effort PROPOSED answer for an unanswered question, for admin
+        review only (never sent to users). Grounded in retrieval + canonicals;
+        returns "" when there's nothing solid to draft from."""
+        retrieved = await self.retriever.retrieve(question)
+        context, _ = self._format_context(retrieved)
+        system = self.system_prompt() or ""
+        prompt = (
+            "An admin will REVIEW this — it is NOT sent to users. Draft the best "
+            "canonical answer to the community question below, grounded ONLY in "
+            "your [CANONICALS] facts and the documentation context. Match the "
+            "register's tone: professional, calm, factual, correct false premises "
+            "politely. 2-6 sentences. If the grounding is insufficient for a "
+            "defensible draft, output exactly NO_DRAFT.\n\n"
+            f"Question: {question}\n\n"
+            f"Documentation context:\n{context or '(none retrieved)'}"
+        )
+        try:
+            result = await self.reasoner.complete(
+                [ChatMessage("system", system), ChatMessage("user", prompt)],
+                max_tokens=400,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("qa.draft_failed", error=str(exc))
+            return ""
+        text = result.text.strip()
+        return "" if ("NO_DRAFT" in text or len(text) < 20) else text
 
     async def sync_knowledge(self) -> dict[str, int]:
         """Crawl stobox.io + ingest the GitHub repos into the live index."""
@@ -498,6 +530,14 @@ class AgentEngine:
             "blocked": rail.blocked,
             "violations": rail.violations,
         }
+        # Cited, confident answers are worth spreading — channels may attach a
+        # one-tap "share this answer" affordance.
+        response.meta["shareable"] = bool(
+            response.citations
+            and response.confidence != Confidence.LOW
+            and not response.meta.get("gated")
+            and not rail.blocked
+        )
         return response
 
     async def _handle_leads(

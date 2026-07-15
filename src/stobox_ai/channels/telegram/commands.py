@@ -40,6 +40,24 @@ def _is_admin(update, context) -> bool:
 # User commands
 # --------------------------------------------------------------------------- #
 async def start_cmd(update, context) -> None:
+    # Deep-link attribution: t.me/bot?start=<source> — first touch wins.
+    # ref_<userid> payloads additionally credit the referrer.
+    if context.args:
+        payload = context.args[0][:64]
+        engine = _engine(context)
+        user = update.effective_user
+        try:
+            profile = await engine.memory.get_profile(f"telegram:{user.id}", user.full_name)
+            if not profile.source:
+                profile.source = payload
+                await engine.memory.save_profile(profile)
+            if payload.startswith("ref_") and payload[4:].isdigit() \
+                    and payload[4:] != str(user.id):
+                referrer = await engine.memory.get_profile(f"telegram:{payload[4:]}")
+                referrer.referrals += 1
+                await engine.memory.save_profile(referrer)
+        except Exception:  # noqa: BLE001 - attribution must never break /start
+            pass
     await update.effective_message.reply_text(
         "👋 I'm the official Stobox assistant. Stobox is a tokenization infrastructure "
         "company that helps businesses issue and manage tokenized real-world assets and "
@@ -47,10 +65,42 @@ async def start_cmd(update, context) -> None:
         "How can I help?\n"
         "• <b>Tokenize an asset</b> — tell me about it and I'll point you to the readiness "
         "check (/compass) and the team.\n"
-        "• <b>STBU / STBX holder</b> — try /migrate, /valuation, or just ask.\n"
+        "• <b>STBU / STBX holder</b> — try /migrate, /valuation, or /remindme for "
+        "migration-deadline reminders.\n"
         "• <b>Learn about Stobox</b> — ask me anything; I answer from stobox.io.\n\n"
         "I share information, not investment advice. Verify me with /sources.",
         parse_mode="HTML", disable_web_page_preview=True,
+    )
+
+
+async def remindme_cmd(update, context) -> None:
+    """Opt in to STBU migration deadline reminders (DM only)."""
+    engine = _engine(context)
+    chat = update.effective_chat
+    if chat.type != "private":
+        await update.effective_message.reply_text(
+            "Reminders are personal — DM me /remindme and I'll keep you posted. 👍"
+        )
+        return
+    from ...guardrails.freshness import compute_migration_phase
+
+    canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
+    phase_text = compute_migration_phase(canon)[1] if canon else "See stobox.io for status."
+    new = engine.reminders.subscribe(str(chat.id))
+    await update.effective_message.reply_text(
+        ("✅ You're on the list — I'll remind you before the STBU migration deadline "
+         "(and when claims open), right here.\n\n" if new else
+         "You're already subscribed — I've got you. 👍\n\n")
+        + f"Current status: {phase_text}\n\nStop anytime with /stopreminders.",
+        disable_web_page_preview=True,
+    )
+
+
+async def stopreminders_cmd(update, context) -> None:
+    removed = _engine(context).reminders.unsubscribe(str(update.effective_chat.id))
+    await update.effective_message.reply_text(
+        "Done — no more reminders. You can rejoin anytime with /remindme."
+        if removed else "You weren't subscribed — nothing to stop. 🙂"
     )
 
 
@@ -287,8 +337,22 @@ async def reindex_cmd(update, context) -> None:
 async def stats_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
-    snap = _engine(context).decisions.snapshot()
+    from collections import Counter
+
+    engine = _engine(context)
+    snap = engine.decisions.snapshot()
     lines = [f"{k}: {v}" for k, v in snap.items()]
+    # Growth: acquisition sources (deep links) + top referrers + reminder opt-ins.
+    profiles = list(getattr(engine.memory, "_profiles", {}).values())
+    sources = Counter(p.source for p in profiles if p.source)
+    if sources:
+        lines.append("acquisition_sources: " + ", ".join(f"{s}={n}" for s, n in sources.most_common(8)))
+    referrers = [(p.display_name or p.user_key, p.referrals) for p in profiles if p.referrals]
+    if referrers:
+        top = sorted(referrers, key=lambda x: x[1], reverse=True)[:5]
+        lines.append("top_referrers: " + ", ".join(f"{n}({c})" for n, c in top))
+    lines.append(f"reminder_subscribers: {len(engine.reminders.subscribers)}")
+    lines.append(f"open_questions: {len(engine.qa.pending())}")
     await update.effective_message.reply_text("📊 Stats\n" + "\n".join(lines))
 
 
@@ -376,17 +440,38 @@ async def answer_cmd(update, context) -> None:
     the answer to everyone who asked."""
     if not _is_admin(update, context):
         return
+    if len(context.args) < 2 or not context.args[0].isdigit():
+        await update.effective_message.reply_text("Usage: /answer <id> <answer text>")
+        return
+    await _finalize_answer(update, context, int(context.args[0]),
+                           " ".join(context.args[1:]).strip())
+
+
+async def approve_cmd(update, context) -> None:
+    """One-tap approval of the bot's proposed draft: /approve <id>."""
+    if not _is_admin(update, context):
+        return
+    if not context.args or not context.args[0].isdigit():
+        await update.effective_message.reply_text("Usage: /approve <id>")
+        return
+    qid = int(context.args[0])
+    entry = _engine(context).qa.get(qid)
+    if not entry or not entry.draft:
+        await update.effective_message.reply_text(
+            f"#{qid} has no draft to approve — use /answer {qid} <text>."
+        )
+        return
+    await _finalize_answer(update, context, qid, entry.draft)
+
+
+async def _finalize_answer(update, context, qid: int, text: str) -> None:
+    """Shared /answer + /approve flow: register → knowledge → deliver."""
     import asyncio as _asyncio
     from pathlib import Path
 
     from ...qa import mirror
 
     engine = _engine(context)
-    if len(context.args) < 2 or not context.args[0].isdigit():
-        await update.effective_message.reply_text("Usage: /answer <id> <answer text>")
-        return
-    qid = int(context.args[0])
-    text = " ".join(context.args[1:]).strip()
     entry = engine.qa.get(qid)
     if not entry:
         await update.effective_message.reply_text(f"No question #{qid}. See /pending.")
@@ -537,6 +622,9 @@ def registry() -> dict:
         "resume": resume_cmd,
         "pending": pending_cmd,
         "answer": answer_cmd,
+        "approve": approve_cmd,
+        "remindme": remindme_cmd,
+        "stopreminders": stopreminders_cmd,
         "admin": admin_cmd,
     }
     for topic in _TOPIC_QUERIES:

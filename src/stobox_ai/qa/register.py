@@ -40,6 +40,7 @@ class QAEntry:
     question: str
     status: str = "pending"                 # pending | answered
     answer: str = ""
+    draft: str = ""                         # bot-proposed answer awaiting admin review
     language: str = "en"
     created: str = ""
     answered_at: str = ""
