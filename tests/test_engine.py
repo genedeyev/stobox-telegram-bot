@@ -105,3 +105,25 @@ async def test_should_engage_calms_relevant_fud_without_question(config):
     # Same heat but NOT about Stobox (no topics) → stay out of it.
     r2 = Routing(is_question=False, needs_docs=False, topics=[], sentiment="angry")
     assert engine._should_engage(msg, r2) is False
+
+
+@pytest.mark.asyncio
+async def test_fud_spike_raises_admin_alert(config):
+    """Three FUD messages in a group trip the alert meta on the third."""
+    engine = await AgentEngine.create(config)
+    engine.fud_alarm.threshold = 3      # explicit
+
+    def fud_msg(i):
+        return IncomingMessage(
+            author=Author(external_id=f"u{i}", display_name=f"U{i}"),
+            text="honestly this looks like a total scam and a rugpull",
+            chat_id="grp-fud", chat_type=ChatType.GROUP, message_id=str(i),
+            raw={"addressed": False},
+        )
+
+    r1 = await engine.handle(fud_msg(1))
+    r2 = await engine.handle(fud_msg(2))
+    r3 = await engine.handle(fud_msg(3))
+    assert not (r1 and r1.meta.get("fud_alert"))
+    assert not (r2 and r2.meta.get("fud_alert"))
+    assert r3 is not None and r3.meta.get("fud_alert") == 3

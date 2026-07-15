@@ -113,6 +113,14 @@ class AgentEngine:
         from ..ops.winback import WinBackBook
 
         self.winback = WinBackBook(config.get("winback.state_path", "data/winback.json"))
+        # Real-time FUD spike detector (immediate admin alert on coordinated FUD).
+        from ..moderation.fud_alarm import FudAlarm
+
+        self.fud_alarm = FudAlarm(
+            threshold=int(config.get("moderation.fud_alert.threshold", 3)),
+            window_min=int(config.get("moderation.fud_alert.window_min", 10)),
+            cooldown_min=int(config.get("moderation.fud_alert.cooldown_min", 30)),
+        )
         # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
         from ..ops.email import EmailSender
 
@@ -448,9 +456,25 @@ class AgentEngine:
         if routing.is_question:
             profile.record_question(msg.text)
 
-        # 4) Decide whether to speak (avoid group spam).
+        # 4) FUD spike detection — recorded BEFORE the engage decision so a silent
+        #    FUD wave (messages we wouldn't otherwise answer) still alerts admins.
+        #    Single skeptics never fire; only a coordinated spike does.
+        fud_alert = 0
+        if not msg.is_private and routing.sentiment == "fud":
+            fired, count = self.fud_alarm.record(msg.chat_id, datetime.now(UTC))
+            if fired:
+                fud_alert = count
+
+        # 5) Decide whether to speak (avoid group spam).
         if not self._should_engage(msg, routing):
             await self.memory.save_profile(profile)
+            if fud_alert:
+                # Nothing to say publicly, but admins still get the heads-up
+                # (empty text ⇒ should_reply False ⇒ no public message).
+                return AgentResponse(
+                    text="", language=routing.language,
+                    meta={"fud_alert": fud_alert, "fud_excerpt": msg.text[:200]},
+                )
             return None
 
         # 4b) Deterministic compliance pre-intercepts (seed phrase, prompt
@@ -497,6 +521,9 @@ class AgentEngine:
 
         # 6) Synthesize + 7) confidence gate.
         response = await self._answer(msg, routing, retrieved, profile, thread_key)
+        if fud_alert:
+            response.meta["fud_alert"] = fud_alert
+            response.meta["fud_excerpt"] = msg.text[:200]
 
         # 7b) Share-with-a-friend cadence: after every 4th genuinely helpful
         #     answer (confident, not gated/blocked/escalated, in a DM), flag a

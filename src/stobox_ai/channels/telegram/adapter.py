@@ -433,7 +433,33 @@ class TelegramChannel(Channel):
             footer = self.render_citations(response)
             await self.reply_html(update.effective_message, response.text + footer)
 
+    async def _alert_fud(self, context, update, response) -> None:
+        """DM admins on a coordinated-FUD spike so they can step in fast."""
+        chat = update.effective_chat
+        count = response.meta.get("fud_alert", 0)
+        excerpt = response.meta.get("fud_excerpt", "")
+        where = getattr(chat, "title", None) or (chat.id if chat else "?")
+        link = ""
+        if getattr(chat, "username", None):
+            link = f"\nJump in: https://t.me/{chat.username}"
+        text = (
+            f"🚨 <b>FUD spike</b> in <b>{where}</b>\n"
+            f"{count} FUD-flagged messages in a short window. Latest:\n"
+            f"“{excerpt}”\n\n"
+            f"I'm already replying calmly with facts — a human touch may help.{link}"
+        )
+        for admin_id in self.admins:
+            try:
+                await context.bot.send_message(admin_id, text, parse_mode="HTML",
+                                               disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001
+                pass
+        log.info("fud.alert_sent", chat=str(getattr(chat, "id", "?")), count=count)
+
     async def _render(self, update, context, response, placeholder=None) -> None:
+        # Coordinated-FUD spike → ping admins immediately (independent of the reply).
+        if response.meta.get("fud_alert"):
+            await self._alert_fud(context, update, response)
         # Moderation verdict → apply action, DM the offender, post the mod-log.
         if response.moderation != ModerationAction.NONE or response.meta.get("alert_admin"):
             await self._handle_moderation(update, context, response)
