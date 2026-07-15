@@ -69,3 +69,39 @@ async def test_engine_answers_untagged_group_question(config):
     )
     resp = await engine.handle(msg)
     assert resp is not None and resp.text
+
+
+@pytest.mark.asyncio
+async def test_engine_engages_untagged_fud_to_calm(config):
+    """Untagged FUD about Stobox is engaged (to calm/correct), not ignored."""
+    engine = await AgentEngine.create(config)
+    msg = IncomingMessage(
+        author=Author(external_id="9", display_name="Skeptic"),
+        text="honestly Stobox is a total scam, is this a rugpull?",
+        chat_id="grp-3",
+        chat_type=ChatType.GROUP,
+        message_id="11",
+        raw={"addressed": False},
+    )
+    resp = await engine.handle(msg)
+    assert resp is not None and resp.text
+
+
+@pytest.mark.asyncio
+async def test_should_engage_calms_relevant_fud_without_question(config):
+    """A non-question FUD statement about Stobox engages via the sentiment clause."""
+    from stobox_ai.agents.router import Routing
+
+    engine = await AgentEngine.create(config)
+    msg = IncomingMessage(
+        author=Author(external_id="1", display_name="X"),
+        text="stobox rug incoming",
+        chat_id="g", chat_type=ChatType.GROUP, message_id="1",
+        raw={"addressed": False},
+    )
+    # Not a question, no docs needed, but FUD about a Stobox topic → engage to calm.
+    r = Routing(is_question=False, needs_docs=False, topics=["stobox"], sentiment="fud")
+    assert engine._should_engage(msg, r) is True
+    # Same heat but NOT about Stobox (no topics) → stay out of it.
+    r2 = Routing(is_question=False, needs_docs=False, topics=[], sentiment="angry")
+    assert engine._should_engage(msg, r2) is False

@@ -1,9 +1,9 @@
 id: intent_router
-description: One cheap classifier call that routes a message (mode, persona, language, intent).
-active: v1
+description: One cheap classifier call that routes a message (mode, persona, language, intent, sentiment).
+active: v2
 versions:
   v1:
-    weight: 1
+    weight: 0
     template: |
       Classify the user's message for a Stobox community bot. Return ONLY minified
       JSON with this exact shape:
@@ -22,6 +22,40 @@ versions:
       - needs_docs=true for any factual/product/technical/legal/pricing question.
       - mode=moderator only for spam/scam/abuse; otherwise pick a helpful mode.
       - Infer persona from wording; use "unknown" if unclear.
+
+      Message: {text}
+      Reply-to (if any): {reply_to}
+  v2:
+    weight: 1
+    template: |
+      Classify one message in a Stobox community chat so the assistant can decide
+      whether to answer, calm the room, or step back. Return ONLY minified JSON:
+      {{"mode":"community_manager|technical_expert|sales_assistant|moderator|small_talk",
+        "persona":"developer|investor|founder|lawyer|enterprise|retail|beginner|journalist|partner|regulator|unknown",
+        "language":"ISO 639-1 code",
+        "technical_level":"beginner|intermediate|expert|unknown",
+        "buying_intent":true|false,
+        "is_question":true|false,
+        "topics":["short topic tags"],
+        "needs_docs":true|false,
+        "sentiment":"neutral|positive|frustrated|angry|anxious|fud|toxic"}}
+
+      Guidance:
+      - buying_intent=true when they ask about pricing, demos, onboarding, using
+        Stobox for their asset/company, or "how do I get started" commercially.
+      - needs_docs=true for any factual/product/technical/legal/pricing question.
+      - mode=moderator only for spam/scam/abuse; otherwise pick a helpful mode.
+      - Infer persona from wording; use "unknown" if unclear.
+      - sentiment: read the emotional temperature.
+        · "frustrated" = stuck, confused, waiting, something's not working.
+        · "angry" = hostile, insulting, cursing at the project or people.
+        · "anxious" = worried/scared (funds, deadlines, "did I lose my tokens?").
+        · "fud" = spreading doubt or unverified claims that Stobox is a scam / dying /
+          a rug — whether sincere or trolling.
+        · "toxic" = rude or provocative but not a bannable violation.
+        · "positive" = happy, thankful, hyped. Otherwise "neutral".
+      - topics: include "stobox" or the relevant product when the message is about
+        the project, even if it's a complaint rather than a question.
 
       Message: {text}
       Reply-to (if any): {reply_to}

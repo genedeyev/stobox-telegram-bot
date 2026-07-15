@@ -70,8 +70,19 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
 ### Wave 4 — ops polish
 - **Content flywheel** — top unanswered themes → auto-drafted blog outlines as
   stobox-v15 issues.
-- **Real-time FUD/sentiment alarm** (immediate, not just the daily digest).
+- 🟡 **Real-time FUD/sentiment alarm** — detection + de-escalation shipped: the
+  router tags every message's sentiment (frustrated / angry / anxious / fud /
+  toxic) and Stoby switches to a calm, human de-escalation reply that leads with
+  empathy then corrects FUD with published facts only. Still to do: push an
+  immediate admin alert on FUD spikes (not just the daily digest).
 - **Analytics dashboard UI** (data already served at `/insights/*`).
+
+### Rational, humanized engagement (live)
+- Stoby decides per message whether to **answer**, **calm the room**, or **stay
+  out** — untagged, it engages on questions/Stobox-relevant messages and on
+  Stobox-directed FUD/heat, but stays quiet on pure chatter and unrelated spats.
+- Moderation still runs first (spam/scam/slurs); mild rudeness that isn't
+  bannable gets a calm boundary instead of a doc-dump or silence.
 
 ### Requested backlog (this session)
 - ✅ Shorter answers + ask-if-more + DM offer + email offer — **shipped**.

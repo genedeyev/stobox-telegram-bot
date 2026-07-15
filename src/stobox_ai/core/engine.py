@@ -533,15 +533,24 @@ class AgentEngine:
 
     # ------------------------------------------------------------------ #
     def _should_engage(self, msg: IncomingMessage, routing: Routing) -> bool:
+        from ..agents.router import HOT_SENTIMENTS
+
         if msg.is_private:
             return True
         # In a group, always engage when directly addressed (@mention or reply).
         if msg.raw.get("addressed"):
             return True
         # Untagged: jump in on any question, or a clearly Stobox-relevant message
-        # (the router tags topics / needs_docs for those) — but stay quiet on pure
-        # chatter ("hey", "gm", "lol"), which carries no question, docs, or topics.
-        return routing.is_question or routing.needs_docs or bool(routing.topics)
+        # (the router tags topics / needs_docs for those).
+        if routing.is_question or routing.needs_docs or routing.topics:
+            return True
+        # Step in to calm Stobox-directed heat or FUD even when it isn't phrased as
+        # a question — but only when it's about the project, so we don't wade into
+        # unrelated venting or interpersonal spats.
+        if routing.sentiment in HOT_SENTIMENTS and routing.topics:
+            return True
+        # Otherwise stay quiet — pure chatter ("hey", "gm", "lol") isn't ours.
+        return False
 
     async def _answer(
         self,
@@ -560,7 +569,23 @@ class AgentEngine:
             "system_base", persona=profile.persona, mode=routing.mode.value
         )
 
-        if routing.mode == Mode.SALES_ASSISTANT and self.leads.enabled:
+        from ..agents.router import HOT_SENTIMENTS
+
+        if routing.sentiment in HOT_SENTIMENTS:
+            # Heated / frustrated / anxious / FUD → calm the room first, then help
+            # or set the record straight. Takes precedence over the doc/small-talk
+            # paths so tone leads; grounding stays just as strict.
+            user_prompt = self.prompts.render(
+                "de_escalation",
+                question=msg.text,
+                history=history,
+                language=routing.language,
+                user_context=user_context,
+                context=context or "(no documentation retrieved)",
+                sentiment=routing.sentiment,
+                bucket=profile.user_key,
+            )
+        elif routing.mode == Mode.SALES_ASSISTANT and self.leads.enabled:
             user_prompt = self.prompts.render(
                 "lead_qualification",
                 user_summary=user_context,
@@ -598,8 +623,14 @@ class AgentEngine:
 
         # Short answers by default; the full version only on explicit request.
         detail = bool(msg.raw.get("detail"))
-        reply_cap = 700 if (routing.needs_docs and not detail) else (
-            1600 if detail else 220)
+        if detail:
+            reply_cap = 1600
+        elif routing.sentiment in HOT_SENTIMENTS:
+            reply_cap = 500          # calm + room for one grounding fact
+        elif routing.needs_docs:
+            reply_cap = 700
+        else:
+            reply_cap = 220
         result = await self.reasoner.complete(
             [ChatMessage("system", system), ChatMessage("user", user_prompt)],
             max_tokens=reply_cap,

@@ -25,6 +25,28 @@ _BUY_HINTS = re.compile(
     re.I,
 )
 _QUESTION = re.compile(r"\?|\b(how|what|why|when|where|which|can|does|is|are|do)\b", re.I)
+# Cheap emotional-temperature markers for the heuristic fallback (the LLM router
+# gives finer labels). Order matters: FUD/anger checked before generic negativity.
+_FUD = re.compile(
+    r"\b(scam|fraud|ponzi|rug\s?pull|rugpull|exit\s?scam|dump(ing|ed)?|"
+    r"dead\s?(coin|project)|honeypot|fake|shill)\b",
+    re.I,
+)
+_ANGER = re.compile(
+    r"\b(wtf|f[\*u]ck|bullshit|garbage|useless|trash|scammers?|liars?|"
+    r"pissed|furious|hate|worst|ridiculous)\b|!!+",
+    re.I,
+)
+_FRUSTRATION = re.compile(
+    r"\b(still (not|don'?t|can'?t)|not working|broken|stuck|confused|"
+    r"no (one|body) (answer|help)|been waiting|why is this so|frustrat)\b",
+    re.I,
+)
+
+# Emotional states that call for a calm, de-escalating reply rather than a
+# neutral doc answer. Engine reads this set (see _answer / _should_engage).
+HOT_SENTIMENTS = {"frustrated", "angry", "anxious", "fud", "toxic"}
+_SENTIMENTS = {"neutral", "positive"} | HOT_SENTIMENTS
 
 
 @dataclass(slots=True)
@@ -37,6 +59,8 @@ class Routing:
     is_question: bool = False
     needs_docs: bool = False
     topics: list[str] = field(default_factory=list)
+    # neutral | positive | frustrated | angry | anxious | fud | toxic
+    sentiment: str = "neutral"
 
 
 class IntentRouter:
@@ -49,12 +73,15 @@ class IntentRouter:
         prompt = self.prompts.render("intent_router", text=text[:1500], reply_to=reply_to or "—")
         try:
             raw = await self.classifier.complete_json(
-                [ChatMessage("user", prompt)], max_tokens=200
+                [ChatMessage("user", prompt)], max_tokens=240
             )
             data = extract_json(raw)
             if not isinstance(data, dict):
                 raise ValueError("router: no JSON in classifier output")
             lang = str(data.get("language", heuristic.language)).lower()[:2]
+            sentiment = str(data.get("sentiment", heuristic.sentiment)).lower()
+            if sentiment not in _SENTIMENTS:
+                sentiment = heuristic.sentiment
             return Routing(
                 mode=self._mode(data.get("mode")),
                 persona=str(data.get("persona", "unknown")),
@@ -64,6 +91,7 @@ class IntentRouter:
                 is_question=bool(data.get("is_question", heuristic.is_question)),
                 needs_docs=bool(data.get("needs_docs", heuristic.needs_docs)),
                 topics=[str(t) for t in data.get("topics", [])][:6],
+                sentiment=sentiment,
             )
         except Exception as exc:  # noqa: BLE001
             log.warning("router.fallback_heuristic", error=str(exc))
@@ -88,10 +116,19 @@ class IntentRouter:
             pass
         buying = bool(_BUY_HINTS.search(text))
         is_q = bool(_QUESTION.search(text))
+        if _FUD.search(text):
+            sentiment = "fud"
+        elif _ANGER.search(text):
+            sentiment = "angry"
+        elif _FRUSTRATION.search(text):
+            sentiment = "frustrated"
+        else:
+            sentiment = "neutral"
         return Routing(
             mode=Mode.SALES_ASSISTANT if buying else Mode.COMMUNITY_MANAGER,
             language=lang,
             buying_intent=buying,
             is_question=is_q,
             needs_docs=is_q or buying,
+            sentiment=sentiment,
         )
