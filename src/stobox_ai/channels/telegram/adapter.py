@@ -65,6 +65,8 @@ class TelegramChannel(Channel):
         self._email_pending: dict[int, str] = {}
         # Active quiz polls: poll_id → correct_option_id (for XP scoring).
         self._quiz_polls: dict[str, int] = {}
+        # AXIS pre-qualifier sessions: user_id → Session.
+        self._axis_sessions: dict = {}
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -119,6 +121,8 @@ class TelegramChannel(Channel):
         self.app.add_handler(CallbackQueryHandler(self._on_ama_callback, pattern=r"^ama:"))
         # Interactive /guide navigation.
         self.app.add_handler(CallbackQueryHandler(self._on_guide_callback, pattern=r"^guide:"))
+        # AXIS pre-qualifier flow.
+        self.app.add_handler(CallbackQueryHandler(self._on_axis_callback, pattern=r"^axis:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         self.app.add_error_handler(self._on_error)
@@ -525,6 +529,81 @@ class TelegramChannel(Channel):
                 "I'll never share your address, and you can ignore this if you'd rather not.",
                 parse_mode="HTML",
             )
+
+    def _axis_question_markup(self, step: int):
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        from ...leads.axis import QUESTIONS
+        q = QUESTIONS[step]
+        rows, row = [], []
+        for i, (label, _v, _p) in enumerate(q.options):
+            row.append(InlineKeyboardButton(label, callback_data=f"axis:{step}:{i}"))
+            if len(row) == 2:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+        return q.prompt, InlineKeyboardMarkup(rows)
+
+    async def start_axis(self, message, user) -> None:
+        from ...leads.axis import Session
+        self._axis_sessions[user.id] = Session()
+        prompt, markup = self._axis_question_markup(0)
+        await message.reply_text(
+            "Let's do a quick <b>fit check</b> — 5 taps, ~30 seconds. It points you to the "
+            "right next step (it's a light indicator, not the full Readiness Score).\n\n" + prompt,
+            parse_mode="HTML", reply_markup=markup,
+        )
+
+    async def _on_axis_callback(self, update, context) -> None:
+        from ...leads import axis as ax
+
+        query = update.callback_query
+        parts = (query.data or "").split(":")
+        if len(parts) != 3:
+            await query.answer()
+            return
+        session = self._axis_sessions.get(query.from_user.id)
+        step, idx = int(parts[1]), int(parts[2])
+        if not session or session.step != step or idx >= len(ax.QUESTIONS[step].options):
+            await query.answer("This check expired — send /qualify to start again.")
+            return
+        session.record(ax.QUESTIONS[step], idx)
+        await query.answer()
+        if not session.done:
+            prompt, markup = self._axis_question_markup(session.step)
+            try:
+                await query.edit_message_text(prompt, parse_mode="HTML", reply_markup=markup)
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        # Done → result + warm-lead capture.
+        self._axis_sessions.pop(query.from_user.id, None)
+        text = ax.result_text(session, query.from_user.first_name or "")
+        try:
+            await query.edit_message_text(text, parse_mode="HTML", disable_web_page_preview=True)
+        except Exception:  # noqa: BLE001
+            await context.bot.send_message(query.message.chat.id, text, parse_mode="HTML")
+        await self._capture_axis_lead(query.from_user, session)
+
+    async def _capture_axis_lead(self, user, session) -> None:
+        try:
+            uk = f"telegram:{user.id}"
+            profile = await self.engine.memory.get_profile(uk, user.full_name)
+            profile.customer_stage = "evaluating"
+            for k, v in session.answers.items():
+                profile.notes = (profile.notes + f" {k}={v};").strip()
+                if k == "asset":
+                    profile.add_product(v)
+            self.engine.leads.update_score(profile, buying_intent=True, has_email=bool(profile.email))
+            await self.engine.leads.handoff(profile)
+            await self.engine.memory.save_profile(profile)
+            self.engine.xp.award(uk, 5, "qualified", user.full_name)
+            from ...leads.axis import band
+            log.info("axis.qualified", user=uk, score=session.score, band=band(session.score),
+                     answers=session.answers)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("axis.capture_failed", error=str(exc))
 
     async def _on_guide_callback(self, update, context) -> None:
         """Navigate the interactive /guide (menu ⇄ sections)."""

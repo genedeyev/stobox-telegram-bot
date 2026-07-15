@@ -53,8 +53,10 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   tracking; measurable K-factor.
 
 ### Wave 3 — revenue & retention depth
-- **AXIS pre-qualifier in chat** — 5 readiness questions → mini-score → warm
-  lead → discovery-call link.
+- ✅ **AXIS pre-qualifier in chat** (`/qualify`) — 5-tap fit check → banded signal
+  (strong / promising / early) → routes to the real free Readiness Score at
+  stobox.io/compass, captures a scored warm lead + optional `/email` handoff.
+  It's a light indicator, never a fabricated AXIS result or pricing promise.
 - **Case-study & jurisdiction matcher** — match the asker's profile to the right
   guide + case studies.
 - **Twenty CRM** — finish the real connector so qualified leads land in pipeline

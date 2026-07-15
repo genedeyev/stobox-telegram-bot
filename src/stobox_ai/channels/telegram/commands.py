@@ -65,6 +65,7 @@ _GUIDE_SECTIONS = {
     "tokenize": (
         "🏢 <b>Tokenize an asset</b>\n\n"
         "Exploring tokenization for your company, fund, or real estate?\n"
+        "• /qualify — a quick 30-second fit check (5 taps)\n"
         "• /compass — run the free Readiness Score (25 questions, no card)\n"
         "• Tell me about your asset and I'll point you to the right path\n"
         "• /contact — reach the Stobox team\n\n"
@@ -323,6 +324,11 @@ async def leaderboard_cmd(update, context) -> None:
         lines.append(f"{tag} <b>{name}</b> — {u.xp_week} XP ({title})")
     lines.append("\nCheck your own standing with /rank.")
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def qualify_cmd(update, context) -> None:
+    """Start the in-chat fit check (issuer pre-qualifier)."""
+    await _adapter(context).start_axis(update.effective_message, update.effective_user)
 
 
 async def check_cmd(update, context) -> None:
@@ -1113,6 +1119,9 @@ def registry() -> dict:
         "stopreminders": stopreminders_cmd,
         "email": email_cmd,
         "check": check_cmd,
+        "qualify": qualify_cmd,
+        "fit": qualify_cmd,
+        "readiness": qualify_cmd,
         "rank": rank_cmd,
         "leaderboard": leaderboard_cmd,
         "top": leaderboard_cmd,
