@@ -258,7 +258,12 @@ class TelegramChannel(Channel):
         # Moderation actions first.
         if response.moderation != ModerationAction.NONE:
             await self._apply_moderation(update, context, response)
-        if response.escalate:
+        # New unanswered question captured → mirror DRAFT to the register and
+        # ping admins with ready-to-use /answer instructions.
+        qa_meta = response.meta.get("qa")
+        if qa_meta and qa_meta.get("new"):
+            await self._notify_new_question(context, qa_meta)
+        elif response.escalate:
             await self._escalate(update, context, response)
         if not response.should_reply:
             if placeholder:
@@ -316,6 +321,32 @@ class TelegramChannel(Channel):
             log.info("telegram.moderation_applied", action=action.value, user=user.id)
         except Exception as exc:  # noqa: BLE001 - lacking admin rights, etc.
             log.warning("telegram.moderation_failed", action=action.value, error=str(exc))
+
+    async def _notify_new_question(self, context, qa_meta: dict) -> None:
+        """Mirror the DRAFT into the stobox-v15 register and DM the admins."""
+        import asyncio as _asyncio
+
+        from ...qa import mirror
+
+        qid = qa_meta["qid"]
+        entry = self.engine.qa.get(qid)
+        if entry and entry.register_number is None:
+            number = await _asyncio.to_thread(mirror.push_draft, entry)
+            if number:
+                entry.register_number = number
+                self.engine.qa._save()
+        text = (
+            f"❓ <b>New unanswered question #{qid}</b>\n\n"
+            f"“{qa_meta['question']}”\n\n"
+            f"Reply with:\n<code>/answer {qid} your answer here</code>\n"
+            f"I'll save it to the Community QA register, start using it, and "
+            f"follow up with everyone who asked. /pending lists open questions."
+        )
+        for admin_id in self.admins:
+            try:
+                await context.bot.send_message(admin_id, text, parse_mode="HTML")
+            except Exception:  # noqa: BLE001
+                pass
 
     async def _escalate(self, update, context, response) -> None:
         """Notify admins of scams/low-confidence escalations."""

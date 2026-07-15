@@ -33,14 +33,14 @@ questions:
     question: "What is Stobox Intelligence?"
     expect_contains: ["Intelligence"]
     expect_any: ["record", "AXIS", "readiness", "organize", "Organize"]
-    forbid_contains: ["I don't know based on the current documentation"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
 
   - id: three-layers
     needs_model: true
     category: canonical
     question: "What are the three layers of the Stobox platform?"
     expect_contains: ["Intelligence", "Raisable", "Compass"]
-    forbid_contains: ["I don't know based on the current documentation"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
 
   - id: community-qa-arbitrum
     needs_model: true
@@ -48,7 +48,7 @@ questions:
     question: "If Stobox moves to Base, will the Arbitrum grants end?"
     expect_contains: ["Arbitrum"]
     expect_any: ["No", "not leaving", "remains a supported", "expansion"]
-    forbid_contains: ["I don't know based on the current documentation"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
 
   - id: compass-chain
     needs_model: true

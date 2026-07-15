@@ -356,6 +356,85 @@ async def faq_cmd(update, context) -> None:
     await update.effective_message.reply_text(md[:4096])
 
 
+async def pending_cmd(update, context) -> None:
+    if not _is_admin(update, context):
+        return
+    entries = _engine(context).qa.pending()
+    if not entries:
+        await update.effective_message.reply_text("✅ No open community questions.")
+        return
+    lines = ["❓ <b>Open community questions</b>"]
+    for e in entries[:15]:
+        lines.append(f"\n<b>#{e.qid}</b> ({e.ask_count}× · {e.created})\n“{e.question[:200]}”")
+    lines.append("\nAnswer with: <code>/answer &lt;id&gt; &lt;text&gt;</code>")
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
+async def answer_cmd(update, context) -> None:
+    """Admin provides the canonical answer: /answer <id> <text>.
+    Saves APPROVED to the register, hot-loads it into knowledge, and delivers
+    the answer to everyone who asked."""
+    if not _is_admin(update, context):
+        return
+    import asyncio as _asyncio
+    from pathlib import Path
+
+    from ...qa import mirror
+
+    engine = _engine(context)
+    if len(context.args) < 2 or not context.args[0].isdigit():
+        await update.effective_message.reply_text("Usage: /answer <id> <answer text>")
+        return
+    qid = int(context.args[0])
+    text = " ".join(context.args[1:]).strip()
+    entry = engine.qa.get(qid)
+    if not entry:
+        await update.effective_message.reply_text(f"No question #{qid}. See /pending.")
+        return
+    if entry.status == "answered":
+        await update.effective_message.reply_text(f"#{qid} was already answered.")
+        return
+
+    entry = engine.qa.answer(qid, text)
+
+    # 1) APPROVED into the stobox-v15 register (source of truth, best-effort).
+    number = await _asyncio.to_thread(mirror.push_approved, entry)
+    if number:
+        entry.register_number = number
+        engine.qa._save()
+
+    # 2) Into local knowledge NOW — the docs watcher hot-reloads it, so the bot
+    #    starts answering with Gene's wording immediately.
+    try:
+        qa_file = Path(engine.config.get("knowledge.docs_path", "docs")) / "community-qa.md"
+        section = f"\n## {number or ('T' + str(qid))}. {entry.question}\n\n**Answer:**\n\n{text}\n"
+        with qa_file.open("a", encoding="utf-8") as f:
+            f.write(section)
+    except Exception as exc:  # noqa: BLE001
+        await update.effective_message.reply_text(f"⚠️ Local knowledge append failed: {exc}")
+
+    # 3) Deliver to everyone who asked (their own conversation — not cold contact).
+    delivered = 0
+    for asker in entry.askers:
+        chat_id = asker["chat_id"]
+        if chat_id.startswith("inline:"):
+            chat_id = chat_id.split(":", 1)[1]   # DM the inline user directly
+        followup = (
+            f"👋 Earlier you asked:\n“{entry.question}”\n\n"
+            f"Here's the confirmed answer from the Stobox team:\n\n{text}"
+        )
+        try:
+            await context.bot.send_message(chat_id, followup[:4096])
+            delivered += 1
+        except Exception:  # noqa: BLE001 - user may have blocked the bot etc.
+            pass
+
+    await update.effective_message.reply_text(
+        f"✅ #{qid} saved{' to register §' + str(number) if number else ' (register mirror failed — kept locally)'}, "
+        f"knowledge updated, delivered to {delivered}/{len(entry.askers)} asker(s)."
+    )
+
+
 async def pause_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -412,8 +491,8 @@ async def admin_cmd(update, context) -> None:
         await update.effective_message.reply_text("Not authorized.")
         return
     await update.effective_message.reply_text(
-        "🔐 Admin: /pause /resume /sync /reindex /stats /health /digest /faq /gaps "
-        "/prompts /reload /memory /export /logs /debug /test /cache /users"
+        "🔐 Admin: /pending /answer /pause /resume /sync /reindex /stats /health "
+        "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users"
     )
 
 
@@ -456,6 +535,8 @@ def registry() -> dict:
         "resync": sync_cmd,
         "pause": pause_cmd,
         "resume": resume_cmd,
+        "pending": pending_cmd,
+        "answer": answer_cmd,
         "admin": admin_cmd,
     }
     for topic in _TOPIC_QUERIES:

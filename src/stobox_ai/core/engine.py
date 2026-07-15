@@ -41,9 +41,15 @@ from .types import (
 log = get_logger(__name__)
 
 _IDK = {
-    "en": "I don't know based on the current documentation. Let me connect you with the Stobox team — you can also reach support via /support.",
-    "ru": "Я не могу ответить на основе текущей документации. Свяжу вас с командой Stobox — также доступна поддержка через /support.",
-    "uk": "Я не можу відповісти на основі поточної документації. З'єднаю вас із командою Stobox — також доступна підтримка через /support.",
+    "en": "Honestly? I don't have a solid answer to that yet — and I'd rather flag it "
+          "to the Stobox team than guess. I've done exactly that, and I'll follow up "
+          "right here as soon as they confirm the answer. 🙌",
+    "ru": "Честно? У меня пока нет надёжного ответа — и я лучше передам вопрос команде "
+          "Stobox, чем буду гадать. Уже передал(а) — вернусь сюда с ответом, как только "
+          "команда подтвердит. 🙌",
+    "uk": "Чесно? У мене поки немає надійної відповіді — і я краще передам питання команді "
+          "Stobox, ніж гадатиму. Вже передав — повернуся сюди з відповіддю, щойно команда "
+          "підтвердить. 🙌",
 }
 
 
@@ -87,6 +93,10 @@ class AgentEngine:
         )
         self.paused = False
         self.pause_reason = ""
+        # Unanswered-question loop: capture → notify admins → /answer → deliver.
+        from ..qa import QARegister
+
+        self.qa = QARegister(config.get("qa.state_path", "data/qa_register.json"))
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
@@ -450,13 +460,28 @@ class AgentEngine:
             },
         )
 
-        # Anti-hallucination gate.
-        if routing.needs_docs and self.confidence.below_threshold(score):
+        # Anti-hallucination gate — and the unanswered-question loop: capture
+        # the question, so admins can /answer it and the asker gets a follow-up.
+        # Fires on low confidence OR when the model itself declares it doesn't
+        # know (an "unclear answer" is an unanswered question too).
+        model_idk = "don't know based on the current documentation" in clean.lower()
+        if routing.needs_docs and (self.confidence.below_threshold(score) or model_idk):
             response.text = _IDK.get(routing.language, _IDK["en"])
             response.confidence = Confidence.LOW
             response.citations = []
             response.escalate = True
             response.meta["gated"] = True
+            try:
+                entry, is_new = self.qa.capture(
+                    msg.text, channel=msg.channel, chat_id=msg.chat_id,
+                    message_id=msg.message_id,
+                    user_key=f"{msg.channel}:{msg.author.external_id}",
+                    language=routing.language,
+                )
+                response.meta["qa"] = {"qid": entry.qid, "new": is_new,
+                                       "question": entry.question}
+            except Exception as exc:  # noqa: BLE001 - capture must never break replies
+                log.error("qa.capture_failed", error=str(exc))
 
         # Deterministic compliance post-processing (blocks forbidden claims,
         # appends disclaimer / anti-impersonation warning where required).
