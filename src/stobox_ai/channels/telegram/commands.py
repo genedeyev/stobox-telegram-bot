@@ -96,6 +96,23 @@ async def remindme_cmd(update, context) -> None:
     )
 
 
+async def check_cmd(update, context) -> None:
+    """Check STBU balances for a public wallet address across eligible chains."""
+    addr = context.args[0].strip() if context.args else ""
+    if not addr:
+        await update.effective_message.reply_text(
+            "Send your <b>public</b> wallet address and I'll check your STBU across all "
+            "eligible chains:\n<code>/check 0xYourAddress</code>\n\n"
+            "🔒 I only read public balances — never share your seed phrase or private key.",
+            parse_mode="HTML",
+        )
+        return
+    await update.effective_message.reply_text("🔎 Checking the chains…")
+    report = await _engine(context).check_wallet(addr)
+    await update.effective_message.reply_text(report, parse_mode="HTML",
+                                              disable_web_page_preview=True)
+
+
 async def email_cmd(update, context) -> None:
     """Email the user a full write-up of their last topic: /email you@addr.com."""
     import asyncio as _asyncio
@@ -173,6 +190,7 @@ async def help_cmd(update, context) -> None:
     await update.effective_message.reply_text(
         "<b>Stoby — commands</b>\n"
         "/migrate – STBU→Base migration explainer\n"
+        "/check – check your STBU across chains (paste a public address)\n"
         "/compass – Stobox Compass + readiness check\n"
         "/valuation – company valuation (not a token price)\n"
         "/blog – latest posts + the weekly RWA digest\n"
@@ -849,6 +867,7 @@ def registry() -> dict:
         "remindme": remindme_cmd,
         "stopreminders": stopreminders_cmd,
         "email": email_cmd,
+        "check": check_cmd,
         # moderation
         "strikes": strikes_cmd,
         "warn": warn_cmd,

@@ -144,6 +144,14 @@ moderation:
   impersonation_allowlist: []      # numeric user ids that legitimately use these terms
   blocklist_path: ""               # optional file of extra slur/hate terms (one per line)
 
+# --- On-chain reads (STBU wallet migration checker, /check) ------------------
+chain:
+  rpc:                             # public endpoints (no key); override if rate-limited
+    ethereum: https://eth.llamarpc.com
+    bnb_chain: https://bsc-dataseed.binance.org
+    polygon: https://polygon-rpc.com
+    arbitrum: https://arb1.arbitrum.io/rpc
+
 # --- Compliance guardrails (three-block prompt + canonicals) -----------------
 guardrails:
   system_prompt: SYSTEM-PROMPT.md       # [CORE] behavior — changed only via PR

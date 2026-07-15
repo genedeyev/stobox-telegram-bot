@@ -225,6 +225,58 @@ class AgentEngine:
         resp = await self.handle(msg)
         return resp or AgentResponse(text="I don't have more detail on that yet.")
 
+    async def check_wallet(self, address: str) -> str:
+        """Read STBU balances for a PUBLIC address across the eligible chains and
+        return a ready-to-send migration report (HTML). Read-only, no keys."""
+        from ..chain import WalletChecker, is_address, is_private_key
+        from ..guardrails.freshness import compute_migration_phase
+        from ..guardrails.rails import IMPERSONATION_WARNING
+
+        if is_private_key(address):
+            return (
+                "🚨 That looks like a <b>private key</b>, not a wallet address — never share "
+                "it with anyone, including me. If you've posted it, consider that wallet "
+                "compromised and move your funds to a new wallet immediately."
+            )
+        if not is_address(address):
+            return ("That doesn't look like a wallet address. Paste a public address that "
+                    "starts with <code>0x</code> (42 characters) and I'll check it.")
+        canon = self.assembler.canonicals if self.assembler else None
+        contracts = canon.get("tokens.stbu.migration.eligible_contracts", {}) if canon else {}
+        if not contracts:
+            return "I can't check balances right now — please see stobox.io for migration help."
+        rpc = self.config.section("chain.rpc").raw or {}
+        checker = WalletChecker(contracts, rpc=rpc)
+        try:
+            holdings = await checker.check(address)
+        except Exception as exc:  # noqa: BLE001
+            log.error("chain.check_failed", error=str(exc))
+            return "I couldn't reach the chains just now — please try again shortly."
+
+        held = [h for h in holdings if h.ok and h.balance > 0]
+        errored = [h for h in holdings if not h.ok]
+        short = f"{address[:6]}…{address[-4:]}"
+        lines = [f"🔎 <b>STBU check for {short}</b>"]
+        if held:
+            for h in sorted(held, key=lambda x: -x.balance):
+                lines.append(f"• {h.label}: <b>{h.balance:,.2f} STBU</b>")
+            phase = compute_migration_phase(canon)[1] if canon else ""
+            lines.append("")
+            lines.append("<b>Your migration path:</b>")
+            lines.append("1. Consolidate all STBU into ONE wallet you control (self-custody).")
+            lines.append("2. Burn-and-mint 1:1 to <b>Base</b>, same wallet — steps: /migrate")
+            if phase:
+                lines.append(f"3. {phase}")
+            lines.append("\nLegacy V1 tokens are not eligible.")
+            lines.append("\n" + IMPERSONATION_WARNING)
+        else:
+            lines.append("No STBU found on the eligible chains for this address.")
+            lines.append("If you hold STBU on an exchange (e.g. MEXC), withdraw it to a "
+                         "self-custody wallet first, then migrate. Full steps: /migrate")
+        if errored:
+            lines.append(f"\n(Couldn't reach: {', '.join(h.label for h in errored)} — try again.)")
+        return "\n".join(lines)
+
     async def draft_answer(self, question: str) -> str:
         """Best-effort PROPOSED answer for an unanswered question, for admin
         review only (never sent to users). Grounded in retrieval + canonicals;

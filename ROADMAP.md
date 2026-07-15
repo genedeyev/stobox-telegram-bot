@@ -32,9 +32,10 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
 ## 🔜 Planned
 
 ### Wave 2 — the Stobox-specific engagement engine
-- **On-chain wallet migration checker** — user pastes a public address → Stoby
-  reads the 4 eligible STBU contracts via RPC → "you hold X on Polygon, not yet
-  burned; here's your exact path." Kills the #1 repetitive support thread.
+- ✅ **On-chain wallet migration checker** — SHIPPED. `/check 0x…` (or just paste
+  an address) reads the 4 eligible STBU contracts across Ethereum/BNB/Polygon/
+  Arbitrum via public RPC → per-chain balances + exact migration path. Read-only,
+  never touches keys; a pasted private key triggers a compromise warning.
 - **AMA collector** — gather questions all month, dedupe, community-vote, hand
   Gene a ranked list. Zero-effort AMA prep.
 - **Quiz nights + XP / streaks / leaderboard** — auto-run from the knowledge

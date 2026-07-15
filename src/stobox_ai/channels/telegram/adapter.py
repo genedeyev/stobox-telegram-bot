@@ -160,6 +160,20 @@ class TelegramChannel(Channel):
             self.known_chats.add(str(chat.id))
         incoming = self._to_incoming(update)
 
+        # Wallet address / private key pasted → the migration checker (read-only)
+        # or an immediate compromise warning. Runs in DMs or when addressed.
+        stripped = (message.text or "").strip()
+        if incoming.is_private or incoming.raw.get("addressed"):
+            from ...chain import is_address, is_private_key
+
+            if is_address(stripped) or is_private_key(stripped):
+                try:
+                    report = await self.engine.check_wallet(stripped)
+                    await self.reply_html(message, report)
+                except Exception as exc:  # noqa: BLE001
+                    log.error("telegram.wallet_check_failed", error=str(exc))
+                return
+
         # Immediate feedback: for question-like messages we'll answer, post a
         # "checking the docs" placeholder right away, then EDIT it into the
         # final answer — the user is never left staring at silence.
