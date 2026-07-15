@@ -57,6 +57,18 @@ def _looks_like_question(text: str) -> bool:
     return bool(text and _QUESTION_RE.search(text.strip()))
 
 
+# A message that's essentially a greeting → Stoby greets back like a person.
+_GREETING_RE = re.compile(
+    r"^\s*(hi+|hey+|hello+|hiya|howdy|yo|sup|wassup|gm|gn|greetings|"
+    r"good\s+(morning|afternoon|evening|day))\b",
+    re.I,
+)
+
+
+def _is_greeting(text: str) -> bool:
+    return bool(text and _GREETING_RE.match(text.strip()))
+
+
 _IDK = {
     "en": "Honestly? I don't have a solid answer to that yet — and I'd rather flag it "
           "to the Stobox team than guess. I've done exactly that, and I'll follow up "
@@ -630,6 +642,9 @@ class AgentEngine:
         # Deterministic backstop so a clear question is NEVER missed to classifier
         # variance: a trailing '?' (or an opening question word) always engages.
         if _looks_like_question(msg.text):
+            return True
+        # Greet back like a person — a bare "hi"/"hey"/"gm" gets a warm reply.
+        if _is_greeting(msg.text):
             return True
         # Untagged: jump in on any question, or a clearly Stobox-relevant message
         # (the router tags topics / needs_docs for those).

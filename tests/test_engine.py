@@ -166,6 +166,27 @@ async def test_benign_impersonation_still_answers(config):
     assert r.moderation == ModerationAction.NONE      # no public sanction
 
 
+def test_is_greeting():
+    from stobox_ai.core.engine import _is_greeting
+    for t in ["hi", "hey man", "hello there", "gm everyone", "yo", "good morning", "sup"]:
+        assert _is_greeting(t), t
+    for t in ["history of tokens", "highly volatile", "gmail is down", "what's up with STBU"]:
+        assert not _is_greeting(t), t
+
+
+@pytest.mark.asyncio
+async def test_untagged_greeting_engages(config):
+    """A bare greeting in a group now gets a warm reply."""
+    engine = await AgentEngine.create(config)
+    msg = IncomingMessage(
+        author=Author(external_id="1", display_name="Gene"),
+        text="hi", chat_id="g", chat_type=ChatType.GROUP, message_id="1",
+        raw={"addressed": False},
+    )
+    r = await engine.handle(msg)
+    assert r is not None and r.text.strip()
+
+
 def test_looks_like_question_backstop():
     from stobox_ai.core.engine import _looks_like_question
     assert _looks_like_question("how does migration work?")
