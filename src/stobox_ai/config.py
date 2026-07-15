@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -73,8 +74,19 @@ class Secrets:
 
     @property
     def admin_user_ids(self) -> set[int]:
-        raw = os.environ.get("TELEGRAM_ADMIN_USER_IDS", "")
-        return {int(x) for x in raw.replace(" ", "").split(",") if x}
+        # Tolerant parse: a bad/placeholder value (e.g. "<gene_id>") must NEVER
+        # crash the bot on boot — skip anything that isn't a plain integer.
+        ids: set[int] = set()
+        for x in os.environ.get("TELEGRAM_ADMIN_USER_IDS", "").replace(" ", "").split(","):
+            if not x:
+                continue
+            try:
+                ids.add(int(x))
+            except ValueError:
+                sys.stderr.write(
+                    f"[config] ignoring invalid TELEGRAM_ADMIN_USER_IDS entry: {x!r}\n"
+                )
+        return ids
 
     @property
     def admin_usernames(self) -> set[str]:
