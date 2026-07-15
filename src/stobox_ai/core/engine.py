@@ -103,6 +103,12 @@ class AgentEngine:
         from ..ops.reminders import ReminderBook
 
         self.reminders = ReminderBook(config.get("reminders.state_path", "data/reminders.json"))
+        # Opt-in topic subscriptions (/subscribe migration|rwa-news|product).
+        from ..ops.subscriptions import SubscriptionBook
+
+        self.subscriptions = SubscriptionBook(
+            config.get("subscriptions.state_path", "data/subscriptions.json")
+        )
         # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
         from ..ops.email import EmailSender
 

@@ -61,8 +61,10 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   guide + case studies.
 - **Twenty CRM** — finish the real connector so qualified leads land in pipeline
   with the conversation summary.
-- **Topic subscriptions** (`/subscribe migration|rwa-news|product`),
-  **win-back** DMs (14-day inactive, opt-in only).
+- ✅ **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — opt-in,
+  DM-only, toggle-button UI; new blog posts are keyword-routed to a topic and
+  DM-pushed only to that topic's subscribers, each with a one-tap way out.
+- **Win-back** DMs (14-day inactive, opt-in only).
 
 ### Wave 4 — ops polish
 - **Content flywheel** — top unanswered themes → auto-drafted blog outlines as

@@ -196,6 +196,37 @@ class ProactiveScheduler:
             if delivered:
                 self.engine.mark_blog_announced(post["url"])
                 log.info("blog.announced", url=post["url"], chats=len(chats))
+            await self._push_to_subscribers(context, title, teaser, post["url"])
+
+    async def _push_to_subscribers(self, context, title, teaser, url) -> None:
+        """DM a new post to opted-in topic subscribers (never-initiate: opt-in only)."""
+        book = getattr(self.engine, "subscriptions", None)
+        if not book:
+            return
+        from ...ops.subscriptions import TOPICS, classify_topic
+
+        topic = classify_topic(title, teaser)
+        if not topic:
+            return  # unroutable → group announcement only, no DMs
+        recipients = book.subscribers_for(topic)
+        if not recipients:
+            return
+        label = TOPICS[topic]["label"]
+        body = f"<b>{title}</b>"
+        if teaser:
+            body += f"\n{teaser[:220]}"
+        dm = (f"{label} — new from Stobox 👇\n\n{body}\n\n🔗 {url}"
+              f"\n\n<i>You're subscribed to {label}. Manage or stop with /subscribe.</i>")
+        sent = 0
+        for chat_id, _lang in recipients:
+            try:
+                await context.bot.send_message(
+                    chat_id, dm[:4096], parse_mode="HTML", disable_web_page_preview=False
+                )
+                sent += 1
+            except Exception as exc:  # noqa: BLE001 - user may have blocked the bot
+                log.warning("subs.push_failed", chat=chat_id, error=str(exc))
+        log.info("subs.pushed", topic=topic, url=url, sent=sent)
 
     async def _resync_job(self, context) -> None:
         try:

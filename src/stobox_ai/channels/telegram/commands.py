@@ -78,6 +78,8 @@ _GUIDE_SECTIONS = {
         "• /rank — your XP, level &amp; streak\n"
         "• /leaderboard — this week's top members\n"
         "• /ama — submit a question for the next community AMA\n"
+        "• /subscribe — pick topics (migration · RWA news · product) and I'll DM you "
+        "the moment something ships\n"
         "• Answer quiz nights for bonus XP · keep a daily streak!\n\n"
         "Share a good answer with the ↗️ button to help the community grow."
     ),
@@ -418,6 +420,103 @@ async def stopreminders_cmd(update, context) -> None:
     await update.effective_message.reply_text(
         "Done — no more reminders. You can rejoin anytime with /remindme."
         if removed else "You weren't subscribed — nothing to stop. 🙂"
+    )
+
+
+def _subs_markup(chat_id: str, book):
+    """Toggle keyboard: one row per topic, ✅/⬜ reflecting current state."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from ...ops.subscriptions import TOPICS
+
+    active = set(book.topics_for(chat_id))
+    rows = [
+        [InlineKeyboardButton(
+            f"{'✅' if key in active else '⬜'} {meta['label']}",
+            callback_data=f"sub:{key}",
+        )]
+        for key, meta in TOPICS.items()
+    ]
+    if active:
+        rows.append([InlineKeyboardButton("🔕 Turn all off", callback_data="sub:__all_off")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _subs_summary(chat_id: str, book) -> str:
+    from ...ops.subscriptions import TOPICS
+
+    active = book.topics_for(chat_id)
+    if not active:
+        return ("🔔 <b>Topic subscriptions</b>\nYou're not subscribed to anything yet. "
+                "Tap a topic below and I'll DM you the moment something in that lane ships "
+                "— nothing else. Opt out any time.")
+    labels = ", ".join(TOPICS[t]["label"] for t in active if t in TOPICS)
+    return (f"🔔 <b>Topic subscriptions</b>\nYou're getting: {labels}.\n"
+            "Tap to toggle. I only DM when there's real news, and every message has a way out.")
+
+
+async def subscribe_cmd(update, context) -> None:
+    """Manage opt-in topic subscriptions (DM only). /subscribe [topic] or a menu."""
+    chat = update.effective_chat
+    if chat.type != "private":
+        await update.effective_message.reply_text(
+            "Subscriptions are personal — DM me /subscribe and pick your topics. 👍"
+        )
+        return
+    from ...ops.subscriptions import TOPICS, valid_topic
+
+    book = _engine(context).subscriptions
+    chat_id = str(chat.id)
+    args = context.args or []
+    if args:
+        topic = args[0].lower().strip().lstrip("#")
+        aliases = {"rwa": "rwa-news", "news": "rwa-news", "product-updates": "product",
+                   "migrate": "migration"}
+        topic = aliases.get(topic, topic)
+        if not valid_topic(topic):
+            valid = ", ".join(TOPICS)
+            await update.effective_message.reply_text(
+                f"I don't have a “{args[0]}” topic. Pick one of: {valid}.\n"
+                "Or just send /subscribe for the menu."
+            )
+            return
+        added = book.subscribe(chat_id, topic)
+        meta = TOPICS[topic]
+        head = (f"✅ Subscribed to {meta['label']} — {meta['blurb']}"
+                if added else f"You're already on {meta['label']}. 👍")
+        await update.effective_message.reply_text(
+            head + "\n\nTap to adjust:", reply_markup=_subs_markup(chat_id, book)
+        )
+        return
+    await update.effective_message.reply_text(
+        _subs_summary(chat_id, book), parse_mode="HTML",
+        reply_markup=_subs_markup(chat_id, book), disable_web_page_preview=True,
+    )
+
+
+async def subscriptions_cmd(update, context) -> None:
+    """Show current subscriptions (works in DM)."""
+    await subscribe_cmd(update, context)
+
+
+async def unsubscribe_cmd(update, context) -> None:
+    chat = update.effective_chat
+    book = _engine(context).subscriptions
+    chat_id = str(chat.id)
+    args = context.args or []
+    from ...ops.subscriptions import TOPICS, valid_topic
+
+    if args:
+        topic = args[0].lower().strip().lstrip("#")
+        if valid_topic(topic) and book.unsubscribe(chat_id, topic):
+            await update.effective_message.reply_text(
+                f"Done — you're off {TOPICS[topic]['label']}. Re-join anytime with /subscribe."
+            )
+            return
+    removed = book.unsubscribe_all(chat_id)
+    await update.effective_message.reply_text(
+        "Done — all topic subscriptions off. You can re-pick anytime with /subscribe."
+        if removed else "You weren't subscribed to any topics. 🙂"
     )
 
 
@@ -1117,6 +1216,10 @@ def registry() -> dict:
         "quiz": quiz_cmd,
         "remindme": remindme_cmd,
         "stopreminders": stopreminders_cmd,
+        "subscribe": subscribe_cmd,
+        "subscriptions": subscriptions_cmd,
+        "mysubs": subscriptions_cmd,
+        "unsubscribe": unsubscribe_cmd,
         "email": email_cmd,
         "check": check_cmd,
         "qualify": qualify_cmd,

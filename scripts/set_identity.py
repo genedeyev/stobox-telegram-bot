@@ -34,6 +34,7 @@ COMMANDS = [
     ("rank", "Your XP, level & streak"),
     ("leaderboard", "Top community members"),
     ("ama", "Submit a question for the AMA"),
+    ("subscribe", "Pick topics to get DM'd about"),
     ("remindme", "Migration deadline reminders"),
     ("sources", "Official links to verify me"),
     ("contact", "Reach the team"),

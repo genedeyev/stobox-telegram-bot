@@ -123,6 +123,8 @@ class TelegramChannel(Channel):
         self.app.add_handler(CallbackQueryHandler(self._on_guide_callback, pattern=r"^guide:"))
         # AXIS pre-qualifier flow.
         self.app.add_handler(CallbackQueryHandler(self._on_axis_callback, pattern=r"^axis:"))
+        # Topic-subscription toggle buttons.
+        self.app.add_handler(CallbackQueryHandler(self._on_sub_callback, pattern=r"^sub:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         self.app.add_error_handler(self._on_error)
@@ -619,6 +621,34 @@ class TelegramChannel(Channel):
         except Exception:  # noqa: BLE001 - identical content / too old to edit
             pass
         await query.answer()
+
+    async def _on_sub_callback(self, update, context) -> None:
+        """A member toggles a topic subscription from the /subscribe menu."""
+        from ...ops.subscriptions import TOPICS, valid_topic
+        from . import commands as cmd
+
+        query = update.callback_query
+        topic = (query.data or "sub:").split(":", 1)[1]
+        book = self.engine.subscriptions
+        chat_id = str(query.from_user.id)
+        if topic == "__all_off":
+            book.unsubscribe_all(chat_id)
+            note = "All topics off. 🔕"
+        elif valid_topic(topic):
+            now_on = book.toggle(chat_id, topic)
+            note = f"{'On' if now_on else 'Off'}: {TOPICS[topic]['label']}"
+        else:
+            await query.answer()
+            return
+        try:
+            await query.edit_message_text(
+                cmd._subs_summary(chat_id, book), parse_mode="HTML",
+                reply_markup=cmd._subs_markup(chat_id, book),
+                disable_web_page_preview=True,
+            )
+        except Exception:  # noqa: BLE001 - identical content / too old to edit
+            pass
+        await query.answer(note)
 
     async def _on_ama_callback(self, update, context) -> None:
         """A member taps 👍 to upvote an AMA question."""
