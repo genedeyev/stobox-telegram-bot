@@ -706,12 +706,9 @@ async def blog_cmd(update, context) -> None:
 
 async def contact_cmd(update, context) -> None:
     await update.effective_message.reply_text(
-        "📬 <b>Get in touch</b>\n"
-        "• Support (holders): support@stobox.io\n"
-        "• Talk to the team — contact form: https://www.stobox.io/contact\n"
-        "• Start in the product: https://app.stobox.io\n"
-        "• Not sure yet? Run the free Readiness Score: https://www.stobox.io/compass\n\n"
-        "Or just ask me here and I'll point you the right way.",
+        "Happy to connect you. Holders can reach support at support@stobox.io; if you're "
+        "exploring tokenization, the team's right here: https://www.stobox.io/contact. "
+        "Or just ask me and I'll point you the right way.",
         parse_mode="HTML", disable_web_page_preview=True,
     )
 

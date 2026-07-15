@@ -5,13 +5,18 @@ from __future__ import annotations
 from stobox_ai.leads import matcher
 
 
-def test_match_uses_real_urls_and_disclaimer():
+def _link_count(text: str) -> int:
+    return text.count("http://") + text.count("https://")
+
+
+def test_match_is_short_single_link_and_disclaimer():
     text = matcher.match("real_estate", "us", "Gene")
     assert matcher.READINESS_URL in text
-    assert matcher.LEARN_STV3_URL in text
-    assert matcher.APP_URL in text and matcher.CONTACT_URL in text
     assert "Gene" in text and "real estate" in text and "the US" in text
     assert "not legal or investment advice" in text.lower()
+    # Link discipline: at most 2, and no bulleted menu.
+    assert _link_count(text) <= 2
+    assert "•" not in text and "1." not in text
 
 
 def test_match_unknown_asset_and_jurisdiction_fall_back():

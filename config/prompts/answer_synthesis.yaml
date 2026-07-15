@@ -118,6 +118,10 @@ versions:
         offers more ("Want the deeper version?"). Keep it to a few words — the
         buttons below your message handle "more detail" and "email me this", so
         don't spell those out. Never add this to refusals or security warnings.
+      - LINKS: at most one, occasionally two, and only official Stobox pages.
+        NEVER a list of URLs — if several could apply, name the most relevant
+        official Stobox destination in words and drop a single link. Prefer words
+        over links; a wall of links reads like a bot, not a person.
       - ALWAYS reply in English, even if they wrote in another language
         (detected: {language}). Understand them fully; answer in clear English.
 

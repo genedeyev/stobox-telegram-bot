@@ -13,12 +13,8 @@ append a retrieved link — but the deterministic core here stays fabrication-fr
 
 from __future__ import annotations
 
-# Real, official URLs only (mirrors canonicals.yaml official links).
+# The single official destination we point issuers to (keep it to one link).
 READINESS_URL = "https://www.stobox.io/compass"
-LEARN_STV3_URL = "https://www.stobox.io/learn/erc-3643-vs-stv3-transfer-restriction-models"
-INTELLIGENCE_URL = "https://www.stobox.io/intelligence"
-APP_URL = "https://app.stobox.io"
-CONTACT_URL = "https://www.stobox.io/contact"
 
 # General, promise-free education per asset type. Keyed by AXIS asset values.
 _ASSET = {
@@ -58,36 +54,33 @@ _JURISDICTION = {
 _JURISDICTION_DEFAULT = _JURISDICTION["other"]
 
 
+def _cap(s: str) -> str:
+    return (s[:1].upper() + s[1:]) if s else s
+
+
 def match(asset: str = "", jurisdiction: str = "", first_name: str = "") -> str:
-    """A tailored, compliance-safe resource pack for an issuer profile (HTML)."""
+    """A tailored, compliance-safe resource nudge for an issuer profile (HTML)."""
     a_label, a_note = _ASSET.get(asset, _ASSET_DEFAULT)
     j_label, j_note = _JURISDICTION.get(jurisdiction, _JURISDICTION_DEFAULT)
-    hi = f"{first_name}, here's" if first_name else "Here's"
+    name = f"{first_name}, " if first_name else ""
     return (
-        f"📚 <b>{hi} a tailored path for {a_label} in {j_label}</b>\n\n"
-        f"• <b>Asset:</b> {a_note}\n"
-        f"• <b>Jurisdiction:</b> {j_note}\n\n"
-        "<b>Best next steps</b>\n"
-        f"1. Free <b>Readiness Score</b> — 25 questions, no card, the methodology Compass "
-        f"uses: {READINESS_URL}\n"
-        f"2. <b>Start in the product</b> — create your account: {APP_URL}\n"
-        f"3. How Stobox keeps tokens compliant (STV3 / ERC-3643 transfer rules): "
-        f"{LEARN_STV3_URL}\n\n"
-        f"Prefer to talk to a human? The contact form: {CONTACT_URL} — or share your "
-        "email with <code>/email you@address.com</code> and I'll pass your details along.\n\n"
-        "<i>General information, not legal or investment advice — your counsel and the "
-        "Readiness Score confirm what actually fits.</i>"
+        f"{name}here's the short version for {a_label} in {j_label}. "
+        f"{_cap(a_note)} {_cap(j_note)}\n\n"
+        f"Honestly, the best first move is the free Readiness Score — it runs the same "
+        f"methodology Compass uses and shows you exactly where you stand: {READINESS_URL}. "
+        "Want the team to look at your specific case? Just share your email with "
+        "<code>/email</code>.\n\n"
+        "<i>General info, not legal or investment advice — your counsel and the Readiness "
+        "Score confirm what actually fits.</i>"
     )
 
 
 def resources_overview() -> str:
-    """A general resource menu for /resources when we don't yet know their profile."""
+    """A short, human resources pointer for /resources when we don't know the profile."""
     return (
-        "📚 <b>Stobox resources</b>\n\n"
-        f"• <b>Free Readiness Score</b> (25 Q, no card): {READINESS_URL}\n"
-        f"• <b>How compliant tokens work</b> (STV3 / ERC-3643): {LEARN_STV3_URL}\n"
-        f"• <b>Organize your data room</b> (Intelligence): {INTELLIGENCE_URL}\n\n"
-        "Want a path tailored to <b>your</b> asset &amp; jurisdiction? Run a quick "
-        "30-second fit check with /qualify and I'll match resources to your case.\n\n"
-        "<i>General information, not legal or investment advice.</i>"
+        "Happy to point you the right way. If you're exploring tokenization, the best "
+        f"starting point is the free Readiness Score — 25 quick questions, no card: "
+        f"{READINESS_URL}. Want it tailored to your asset and jurisdiction? Run a quick "
+        "fit check with /qualify and I'll match it to your case.\n\n"
+        "<i>General info, not legal or investment advice.</i>"
     )
