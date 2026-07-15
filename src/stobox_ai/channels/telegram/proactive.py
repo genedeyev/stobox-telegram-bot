@@ -36,6 +36,15 @@ _BLOG_OPENERS = [
     "✍️ The Stobox team just published something new:",
 ]
 
+# Quieter, low-key openers for surfacing an EXISTING post when a chat goes still.
+_QUIET_BLOG_OPENERS = [
+    "Quiet in here — here's a good read from our blog while it's calm:",
+    "In case it's useful, one from the archive worth a look:",
+    "Bit slow today — here's a piece some folks found handy:",
+    "While things are quiet, a read that comes up a lot:",
+    "No rush, but this one's worth bookmarking:",
+]
+
 
 async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
     """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
@@ -66,6 +75,9 @@ class ProactiveScheduler:
         self.app = app
         self._recent_posts: list[str] = []
         self._opener_i = 0
+        # Per-chat rotation of blog posts already surfaced during quiet times.
+        self._blog_shared: dict[str, set[str]] = {}
+        self._blog_i = 0
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -380,6 +392,11 @@ class ProactiveScheduler:
         log.info("proactive.quiz_posted", chats=posted)
 
     async def _revival_job(self, context) -> None:
+        """When a chat goes quiet, surface a real blog post (preferred) or an
+        interesting fact — never at night, and marked as activity so the same
+        chat isn't revived again until it's quiet for another full window."""
+        if self._in_quiet_hours():
+            return
         cfg = self.engine.config
         minutes = int(cfg.get("proactive.growth.inactivity_minutes", 240))
         now = datetime.now(UTC)
@@ -388,17 +405,55 @@ class ProactiveScheduler:
             last = self.engine.memory.last_activity(thread_key)
             if last and (now - last).total_seconds() < minutes * 60:
                 continue
-            retrieved = await self.engine.retriever.retrieve("interesting Stobox fact")
-            snippet = retrieved[0].chunk.text[:200] if retrieved else ""
-            if not snippet:
-                continue
-            try:
-                await context.bot.send_message(
-                    chat_id, f"💡 Did you know? {snippet}\n\nAny questions about this? Ask away!"
-                )
+            revived = await self._share_blog(context, chat_id)
+            if not revived:
+                revived = await self._share_fact(context, chat_id)
+            if revived:
                 self.engine.memory.add_turn(thread_key, "assistant", "[revival]")
-            except Exception:  # noqa: BLE001
-                pass
+
+    async def _share_blog(self, context, chat_id) -> bool:
+        """Surface an existing blog post the chat hasn't seen yet (rotates)."""
+        posts = self.engine.all_blog_posts()
+        if not posts:
+            return False
+        seen = self._blog_shared.setdefault(chat_id, set())
+        fresh = [p for p in posts if p["url"] not in seen]
+        if not fresh:                       # cycled through them all → start over
+            seen.clear()
+            fresh = posts
+        post = fresh[self._blog_i % len(fresh)]
+        self._blog_i += 1
+        og = await fetch_og_meta(post["url"])
+        title = og.get("title") or post["title"]
+        teaser = (og.get("description") or "").strip()
+        opener = _QUIET_BLOG_OPENERS[self._opener_i % len(_QUIET_BLOG_OPENERS)]
+        self._opener_i += 1
+        caption = f"{opener}\n\n<b>{title}</b>"
+        if teaser:
+            caption += f"\n{teaser[:180]}"
+        caption += f"\n\n{post['url']}"
+        try:
+            await context.bot.send_message(chat_id, caption[:1024], parse_mode="HTML")
+            seen.add(post["url"])
+            log.info("revival.blog_shared", chat=chat_id, url=post["url"])
+            return True
+        except Exception as exc:  # noqa: BLE001 - blocked / no rights
+            log.warning("revival.blog_failed", chat=chat_id, error=str(exc))
+            return False
+
+    async def _share_fact(self, context, chat_id) -> bool:
+        """Fallback when there are no blog posts yet: a grounded 'did you know'."""
+        retrieved = await self.engine.retriever.retrieve("interesting Stobox fact")
+        snippet = retrieved[0].chunk.text[:200] if retrieved else ""
+        if not snippet:
+            return False
+        try:
+            await context.bot.send_message(
+                chat_id, f"💡 Did you know? {snippet}\n\nAny questions about this? Ask away!"
+            )
+            return True
+        except Exception:  # noqa: BLE001
+            return False
 
     async def _digest_job(self, context) -> None:
         digest_builder = self.engine.daily_digest()

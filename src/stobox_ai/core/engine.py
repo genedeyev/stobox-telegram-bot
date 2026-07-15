@@ -409,6 +409,11 @@ class AgentEngine:
         new = [u for u in current if u not in self._announced_blog]
         return [{"url": u, "title": current[u]} for u in new]
 
+    def all_blog_posts(self) -> list[dict]:
+        """Every blog/learn post known from the index — the archive to draw on
+        for quiet-time sharing (not just the freshest few)."""
+        return [{"url": u, "title": t} for u, t in self._blog_index.items()]
+
     def mark_blog_announced(self, url: str) -> None:
         if self._announced_blog is None:
             self._announced_blog = set()
