@@ -26,6 +26,7 @@ SHORT_DESCRIPTION = (   # ≤120 chars (shown on the profile / empty-chat screen
 COMMANDS = [
     ("guide", "What Stoby can do (quick tour)"),
     ("qualify", "Quick tokenization fit check (30s)"),
+    ("resources", "Guides for your asset & jurisdiction"),
     ("migrate", "STBU → Base migration"),
     ("check", "Check your STBU across chains"),
     ("compass", "Stobox Compass + readiness check"),

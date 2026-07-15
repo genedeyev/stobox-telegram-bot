@@ -220,7 +220,8 @@
       <div class="step"><div class="num">4</div><div>
         <p class="name">Decide to speak</p>
         <p>In groups Stoby is rational about when to jump in: it answers questions and Stobox-relevant
-          messages, steps in to calm Stobox-directed FUD, and stays quiet on pure chatter.</p></div></div>
+          messages, steps in to calm Stobox-directed FUD, and stays quiet on pure chatter. A
+          deterministic backstop means a clear question is <b>never</b> missed to classifier variance.</p></div></div>
       <div class="step"><div class="num">5</div><div>
         <p class="name">Compliance intercept <b>deterministic</b></p>
         <p>Hard rails fire before the LLM — seed-phrase requests, price speculation, prompt-injection.
@@ -319,6 +320,7 @@
           <li><b>Reasoning models</b> — a frontier model for answers, a fast model for routing.</li>
           <li><b>Embeddings</b> — to search the knowledge base by meaning.</li>
           <li><b>Postgres + pgvector</b> — the knowledge index and long-term memory.</li>
+          <li><b>Message log</b> — a ~90-day group transcript for recall &amp; audit.</li>
           <li><b>Telegram Bot API</b> — read group messages (privacy off), reply, moderate.</li>
           <li><b>Public chain reads</b> — STBU balances via read-only JSON-RPC.</li>
           <li><b>GitHub</b> — ingest official repos; file blog-outline issues.</li>
@@ -336,16 +338,21 @@
         </ul>
       </div>
     </div>
-    <h3 style="margin:34px 0 10px">What he remembers about a person</h3>
+    <h3 style="margin:34px 0 10px">What he remembers</h3>
     <div class="chips">
       <span class="chip"><b>Language</b> &amp; expertise</span>
       <span class="chip"><b>Interests</b> / topics</span>
       <span class="chip"><b>Products</b> discussed</span>
       <span class="chip"><b>Customer stage</b> &amp; lead score</span>
-      <span class="chip"><b>Recent questions</b></span>
+      <span class="chip"><b>Recent questions</b> (capped, opt-out)</span>
       <span class="chip"><b>Email</b> (only if shared)</span>
       <span class="chip">XP · streak · referrals</span>
+      <span class="chip"><b>Group transcript</b> ~90 days</span>
     </div>
+    <p class="note">A per-group <b>message log</b> keeps ~3 months of what's said, so Stoby can
+      recall relevant older messages when he answers (and admins can audit with <span class="ic">/log</span>
+      and <span class="ic">/whosaid</span>). Per-user question retention is capped and can be
+      switched off entirely — logging and profiles are separate, both config-gated.</p>
   </div>
 </section>
 
@@ -404,6 +411,8 @@
             <tr><td><code>/cleanup</code></td><td class="d">Remove deleted ghost accounts</td></tr>
             <tr><td><code>/strikes /modstats</code></td><td class="d">Record &amp; moderation stats</td></tr>
             <tr><td><code>/gaps /content</code></td><td class="d">Doc gaps · draft blog outlines</td></tr>
+            <tr><td><code>/log /whosaid</code></td><td class="d">Message log · search who said what</td></tr>
+            <tr><td><code>/userid</code></td><td class="d">Get a numeric ID (reply)</td></tr>
             <tr><td><code>/digest /faq</code></td><td class="d">Analytics digest · weekly FAQ</td></tr>
             <tr><td><code>/pending /answer</code></td><td class="d">Unanswered-question queue</td></tr>
             <tr><td><code>/sync /reindex</code></td><td class="d">Refresh the knowledge base</td></tr>

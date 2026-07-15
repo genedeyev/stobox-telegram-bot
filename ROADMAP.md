@@ -105,7 +105,26 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
 - Moderation still runs first (spam/scam/slurs); mild rudeness that isn't
   bannable gets a calm boundary instead of a doc-dump or silence.
 
-### Requested backlog (this session)
+### Context, memory & control (live)
+- ✅ **Internal message log** — every group message Stoby sees is recorded
+  (append-only JSONL, age-pruned to ~90 days + per-chat ceiling, compacted on
+  load). Admin audit via `/log [N]` and `/whosaid <term|@user|reply>`.
+- ✅ **Long-term recall** — when answering a group question Stoby pulls up to 4
+  relevant older messages (keyword overlap, beyond the working window) so he can
+  reference things said weeks ago. Config `message_log.recall`.
+- ✅ **Never-miss questions** — deterministic backstop: a trailing `?` or opening
+  interrogative always engages, independent of classifier variance.
+- ✅ **Admin by @username** — `TELEGRAM_ADMIN_USERNAMES` (plus the secure
+  `TELEGRAM_ADMIN_USER_IDS`); `/userid` grabs a numeric ID for the ID-based route.
+- ✅ **Quiet-chat blog sharing + back-off** — surfaces a rotated real blog post
+  when a chat goes still (~3h), goes dormant after unanswered nudges, skips night.
+- ✅ **Link discipline + human voice** — max 1–2 official links, no URL menus;
+  the `/qualify`, `/resources`, `/contact` messages de-menued to conversational.
+- ✅ **Privacy/retention controls** — `memory.retain_questions` /
+  `max_recent_questions` bound per-user retention.
+
+### Requested backlog
 - ✅ Shorter answers + ask-if-more + DM offer + email offer — **shipped**.
+- Semantic recall (embeddings over the message log) — sharper than keyword recall.
 - Multimodal ingestion of inbound images/voice.
 - Discord / Slack adapters (interface ready).

@@ -33,7 +33,12 @@ production** (Railway + Supabase), no human in the loop for day-to-day operation
   prompt/index change ships; runs in CI.
 - **English-only, human, adaptive** — understands any language, always replies in English;
   short answers with **📖 More detail** / **📩 Email me this** progressive disclosure; adapts
-  depth to the user; warm and expressive, sober on compliance topics.
+  depth to the user; warm and expressive, sober on compliance topics. Link discipline: at most
+  1–2 official links, never a menu of URLs.
+- **Never misses a question** — a deterministic backstop (trailing `?` or an opening
+  interrogative) guarantees a clear question is engaged even if the classifier waffles.
+- **Long-term recall** — references relevant older group messages (up to ~3 months back) from
+  the message log, not just the ~12-turn working window.
 
 ### 📚 Knowledge that updates itself
 - Ingests **stobox.io `llms.txt`/`llms-full.txt`**, crawls the site, and pulls the
@@ -82,6 +87,12 @@ production** (Railway + Supabase), no human in the loop for day-to-day operation
   briefs filed as GitHub issues (dedup'd; weekly preview DM'd to admins).
 - **Analytics dashboard** — a self-contained, theme-aware HTML view at `GET /insights`
   (community health, top questions, doc gaps, potential leads, languages, moderation).
+- **Internal message log** — every group message on the record (`/log`, `/whosaid <term|@user>`),
+  age-pruned to ~90 days; powers both audit and long-term recall.
+- **Quiet-chat revival** — after ~3h of silence Stoby surfaces a real blog post (rotated) or a
+  fact, backs off after a couple of unanswered nudges, and skips quiet hours.
+- **Privacy controls** — `memory.retain_questions` / `max_recent_questions` bound per-user
+  retention; `message_log.enabled` gates the transcript.
 - **Ops safety:** per-user rate limiting + global spend cap + `/pause` kill switch.
 
 ### 🔌 Channel-agnostic core
@@ -93,16 +104,18 @@ same-engine multi-channel test).
 ## Commands
 
 **Everyone**
-`/guide` (interactive tour) · `/migrate` · `/check <address>` · `/compass` · `/valuation` ·
-`/blog` · `/sources` · `/rank` · `/leaderboard` · `/ama <question>` · `/remindme` ·
-`/email <addr>` · `/contact` · `/report` · `/feedback` · `/about` · `/help`
+`/guide` (interactive tour) · `/qualify` · `/resources` · `/migrate` · `/check <address>` ·
+`/compass` · `/valuation` · `/blog` · `/sources` · `/rank` · `/leaderboard` · `/ama <question>` ·
+`/subscribe` · `/remindme` · `/email <addr>` · `/contact` · `/report` · `/feedback` · `/about` ·
+`/help`
 
-**Admins** (allowlisted via `TELEGRAM_ADMIN_USER_IDS`)
-- Knowledge/ops: `/sync` `/reindex` `/stats` `/health` `/digest` `/faq` `/gaps` `/pause`
-  `/resume`
+**Admins** (allowlisted via `TELEGRAM_ADMIN_USER_IDS`, or `TELEGRAM_ADMIN_USERNAMES` for @handles)
+- Knowledge/ops: `/sync` `/reindex` `/stats` `/health` `/digest` `/faq` `/gaps` `/content`
+  `/pause` `/resume`
+- Message log: `/log [N]` · `/whosaid <term|@user>` · `/userid` (reply → numeric ID)
 - Unanswered-question loop: `/pending` `/answer <id> <text>` `/approve <id>`
 - Moderation (reply to a user): `/warn` `/mute [min]` `/unmute` `/ban` · `/unban <id>`
-  `/strikes` `/clearstrikes` `/modstats`
+  `/strikes` `/clearstrikes` `/cleanup` `/modstats`
 - Engagement: `/quiz` · `/amaopen [topic]` `/amaclose` `/amalist` `/amaclear`
 
 ---
@@ -134,7 +147,7 @@ state (strikes, XP, reminders, question queue) lives under `/app/data` (Railway 
 ```bash
 pip install -e ".[dev]"
 stobox-doctor          # preflight: what's configured / missing
-pytest -q              # 143 offline tests
+pytest -q              # 158 offline tests
 stobox-golden          # compliance gate (needs API keys for the full run)
 ruff check src evals tests
 ```
