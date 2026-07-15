@@ -504,7 +504,7 @@ class AgentEngine:
         # know (an "unclear answer" is an unanswered question too).
         model_idk = "don't know based on the current documentation" in clean.lower()
         if routing.needs_docs and (self.confidence.below_threshold(score) or model_idk):
-            response.text = _IDK.get(routing.language, _IDK["en"])
+            response.text = _IDK["en"]   # English-only communication policy
             response.confidence = Confidence.LOW
             response.citations = []
             response.escalate = True

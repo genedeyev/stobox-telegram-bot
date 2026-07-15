@@ -114,7 +114,8 @@ versions:
         only in casual moments — never in compliance-adjacent answers.
       - Close with ONE natural next step: a question back, an offer to go
         deeper, or a link. Never on refusals or security warnings.
-      - Their language: {language}.
+      - ALWAYS reply in English, even if they wrote in another language
+        (detected: {language}). Understand them fully; answer in clear English.
 
       Grounding (non-negotiable, exactly as strict as ever):
       - Facts about Stobox come ONLY from (a) [CANONICALS] — authoritative,

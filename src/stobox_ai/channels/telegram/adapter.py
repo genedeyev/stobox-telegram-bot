@@ -214,14 +214,14 @@ class TelegramChannel(Channel):
             return
         names = ", ".join(m.first_name for m in humans[:5])
         variants = [
-            f"👋 Welcome, {names}! I'm the official Stobox assistant — ask me anything "
-            f"about tokenization, Compass, or STBU right here, or DM me for a 1:1. "
-            f"Verify me anytime with /sources.",
-            f"👋 {names}, good to have you! Questions about Stobox, the STBU migration, "
-            f"or RWA tokenization? Just ask — I answer from the official docs, with "
-            f"sources. (And remember: Stobox staff never DM you first.)",
-            f"👋 Welcome aboard, {names}! I'm here 24/7 for anything Stobox — try asking "
-            f"a question, or /help for what I can do. Verify me with /sources.",
+            f"👋 Welcome, {names}! I'm Stoby, the resident AI of the Stobox community — "
+            f"part monster, part mind, fully awake. Ask me anything about tokenization, "
+            f"Compass, or STBU right here, or DM me for a 1:1. Verify me with /sources.",
+            f"👋 {names}, good to have you! I'm Stoby. Questions about Stobox, the STBU "
+            f"migration, or RWA tokenization? Just ask — I answer from the official docs, "
+            f"with sources. (And remember: Stobox staff never DM you first.)",
+            f"👋 Welcome aboard, {names}! I'm Stoby, here 24/7 for anything Stobox — ask a "
+            f"question, or /help to see what I can do. Verify me with /sources.",
         ]
         try:
             await message.reply_text(variants[len(names) % len(variants)])
@@ -259,7 +259,7 @@ class TelegramChannel(Channel):
         from telegram.constants import ParseMode
 
         body = (response.text + self.render_citations(response))[:4000]
-        title = "Stobox answer" + ("" if response.confidence.value != "low" else " (limited)")
+        title = "Stoby's answer" + ("" if response.confidence.value != "low" else " (limited)")
         result = InlineQueryResultArticle(
             id=str(inline.id),
             title=title,

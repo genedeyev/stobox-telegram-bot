@@ -19,7 +19,7 @@ versions:
         the team will tailor it and offer to connect them.
 
       Known about this user: {user_summary}
-      Language: {language}
+      Reply in English (user language detected: {language}).
 
       Question: {question}
 

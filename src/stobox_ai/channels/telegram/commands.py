@@ -59,9 +59,9 @@ async def start_cmd(update, context) -> None:
         except Exception:  # noqa: BLE001 - attribution must never break /start
             pass
     await update.effective_message.reply_text(
-        "👋 I'm the official Stobox assistant. Stobox is a tokenization infrastructure "
-        "company that helps businesses issue and manage tokenized real-world assets and "
-        "securities.\n\n"
+        "👋 I'm <b>Stoby</b> — the resident AI of the Stobox community. Part monster, part "
+        "mind, fully awake. Stobox is a tokenization infrastructure company that helps "
+        "businesses issue and manage tokenized real-world assets and securities.\n\n"
         "How can I help?\n"
         "• <b>Tokenize an asset</b> — tell me about it and I'll point you to the readiness "
         "check (/compass) and the team.\n"
@@ -106,7 +106,7 @@ async def stopreminders_cmd(update, context) -> None:
 
 async def help_cmd(update, context) -> None:
     await update.effective_message.reply_text(
-        "<b>Stobox assistant — commands</b>\n"
+        "<b>Stoby — commands</b>\n"
         "/migrate – STBU→Base migration explainer\n"
         "/compass – Stobox Compass + readiness check\n"
         "/valuation – company valuation (not a token price)\n"
@@ -125,11 +125,12 @@ async def about_cmd(update, context) -> None:
     engine = _engine(context)
     synced = engine.last_sync.strftime("%d %b %Y %H:%M UTC") if engine.last_sync else "unknown"
     await update.effective_message.reply_text(
-        "I'm an AI assistant run by Stobox, grounded in stobox.io's published content and "
-        "updated automatically when the site updates. Official pages and offering documents "
-        "always take precedence over me — I can be wrong.\n\n"
+        "I'm <b>Stoby</b>, the resident AI of the Stobox community — part monster, part mind, "
+        "fully awake. I'm grounded in stobox.io's published content and updated automatically "
+        "when the site updates. I'm an AI, not a human; official pages and offering documents "
+        "always take precedence over me, and I can be wrong.\n\n"
         f"Knowledge last synced: {synced}. I don't give financial or legal advice.",
-        disable_web_page_preview=True,
+        parse_mode="HTML", disable_web_page_preview=True,
     )
 
 
@@ -681,7 +682,7 @@ async def pause_cmd(update, context) -> None:
     reason = " ".join(context.args) if context.args else "manual"
     _engine(context).pause(reason)
     await update.effective_message.reply_text(
-        f"⏸️ Bot PAUSED ({reason}). It will answer only with static FAQ + contact info. "
+        f"⏸️ Stoby PAUSED ({reason}). It will answer only with static FAQ + contact info. "
         "Use /resume to restore."
     )
 
@@ -690,7 +691,7 @@ async def resume_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
     _engine(context).resume()
-    await update.effective_message.reply_text("▶️ Bot RESUMED. Full answering restored.")
+    await update.effective_message.reply_text("▶️ Stoby RESUMED. Full answering restored.")
 
 
 async def sync_cmd(update, context) -> None:

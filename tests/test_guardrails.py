@@ -159,5 +159,5 @@ def test_prompt_assembly_has_three_blocks_and_precedence():
     full = asm.assemble("## [FRESHNESS]\n- test", now=_dt("2026-07-14"))
     assert "[CORE]" in full and "[CANONICALS]" in full and "[FRESHNESS]" in full
     assert "CANONICALS > FRESHNESS > retrieved" in full
-    assert "official Stobox assistant" in full          # core text present
+    assert "Stoby" in full                              # core identity present
     assert "Stobox Tokenized Equities Ltd" in full      # canonicals present
