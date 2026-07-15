@@ -60,6 +60,9 @@ class TelegramChannel(Channel):
         self.proactive: ProactiveScheduler | None = None
         # Group chats the bot has seen — targets for proactive posts.
         self.known_chats: set[str] = set()
+        # Follow-up state: token→question (for buttons) and pending email topics.
+        self._q_cache: dict[str, str] = {}
+        self._email_pending: dict[int, str] = {}
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -105,6 +108,10 @@ class TelegramChannel(Channel):
         self.app.add_handler(InlineQueryHandler(self._on_inline_query))
         # Mod-log Pardon/Ban buttons.
         self.app.add_handler(CallbackQueryHandler(self._on_mod_callback, pattern=r"^mod:"))
+        # Answer follow-ups: More detail / Email me this.
+        self.app.add_handler(
+            CallbackQueryHandler(self._on_followup_callback, pattern=r"^(more|email):")
+        )
         self.app.add_error_handler(self._on_error)
 
         await self.app.initialize()
@@ -290,16 +297,42 @@ class TelegramChannel(Channel):
                 reply_markup=reply_markup,
             )
 
-    def _share_button(self, response, question: str):
-        """One-tap 'share this answer': opens the chat picker and pre-fills
-        '@bot <question>' so the recipient chat gets the same grounded answer."""
-        if not (response.meta.get("shareable") and self.bot_username):
-            return None
+    def _answer_buttons(self, response, question: str, is_private: bool):
+        """Progressive-disclosure buttons under a substantive answer: More
+        detail, Email me this / Continue in DM, and Share."""
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-        return InlineKeyboardMarkup([[
-            InlineKeyboardButton("↗️ Share this answer", switch_inline_query=question[:180])
-        ]])
+        # Only offer follow-ups on real, confident, doc-grounded answers.
+        substantive = (
+            response.confidence.value != "low"
+            and not response.meta.get("gated")
+            and not response.meta.get("rails", {}).get("blocked")
+            and response.meta.get("mode") != "moderator"
+            and bool(question.strip())
+        )
+        if not substantive or not self.bot_username:
+            return None
+        token = self._remember_question(question)
+        rows = []
+        row1 = [InlineKeyboardButton("📖 More detail", callback_data=f"more:{token}")]
+        if is_private:
+            row1.append(InlineKeyboardButton("📩 Email me this", callback_data=f"email:{token}"))
+        else:
+            row1.append(InlineKeyboardButton("💬 Continue in DM",
+                                             url=f"https://t.me/{self.bot_username}"))
+        rows.append(row1)
+        if response.meta.get("shareable"):
+            rows.append([InlineKeyboardButton("↗️ Share this answer",
+                                              switch_inline_query=question[:180])])
+        return InlineKeyboardMarkup(rows)
+
+    def _remember_question(self, question: str) -> str:
+        """Cache a question behind a short token for callback_data (64-byte cap)."""
+        token = str(abs(hash(question)) % 10_000_000)
+        self._q_cache[token] = question
+        if len(self._q_cache) > 500:            # simple bound
+            self._q_cache.pop(next(iter(self._q_cache)))
+        return token
 
     async def process_query(self, update, context, query: str) -> None:
         """Run arbitrary text (e.g. from a slash command) through the full
@@ -339,7 +372,9 @@ class TelegramChannel(Channel):
                 "\n\n🙌 Finding this useful? Share Stobox with a friend — "
                 f"https://stobox.io — or just send them my way: @{self.bot_username}"
             )
-        markup = self._share_button(response, update.effective_message.text or "")
+        markup = self._answer_buttons(
+            response, update.effective_message.text or "", update.effective_chat.type == "private"
+        )
         if placeholder:
             # Morph the "checking…" message into the answer (no second bubble).
             from telegram.constants import ParseMode
@@ -431,6 +466,42 @@ class TelegramChannel(Channel):
                 await context.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=markup)
             except Exception:  # noqa: BLE001
                 pass
+
+    async def _on_followup_callback(self, update, context) -> None:
+        """User taps 'More detail' or 'Email me this' under an answer."""
+        query = update.callback_query
+        verb, _, token = (query.data or "").partition(":")
+        question = self._q_cache.get(token)
+        if not question:
+            await query.answer("That one expired — just ask me again. 🙂", show_alert=True)
+            return
+
+        if verb == "more":
+            await query.answer("Pulling the full version…")
+            try:
+                resp = await self.engine.detailed_answer(
+                    question, user_key=f"telegram:{query.from_user.id}"
+                )
+                body = (resp.text + self.render_citations(resp))[:4096]
+                await context.bot.send_message(
+                    query.from_user.id if query.message.chat.type != "private"
+                    else query.message.chat.id,
+                    body, parse_mode="HTML", disable_web_page_preview=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.error("telegram.more_failed", error=str(exc))
+                await context.bot.send_message(query.message.chat.id,
+                                               "Sorry — couldn't expand that. Try asking directly.")
+        elif verb == "email":
+            self._email_pending[query.from_user.id] = question
+            await query.answer()
+            await context.bot.send_message(
+                query.from_user.id,
+                "📩 Happy to email you the full breakdown. Just reply with:\n"
+                "<code>/email you@example.com</code>\n\n"
+                "I'll never share your address, and you can ignore this if you'd rather not.",
+                parse_mode="HTML",
+            )
 
     async def _on_mod_callback(self, update, context) -> None:
         """Admin taps Pardon / Ban in the mod-log."""

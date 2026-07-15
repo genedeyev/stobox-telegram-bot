@@ -31,6 +31,8 @@ from ..moderation import Moderator
 from ..prompts import PromptLibrary, get_prompts
 from .types import (
     AgentResponse,
+    Author,
+    ChatType,
     Citation,
     Confidence,
     IncomingMessage,
@@ -101,6 +103,10 @@ class AgentEngine:
         from ..ops.reminders import ReminderBook
 
         self.reminders = ReminderBook(config.get("reminders.state_path", "data/reminders.json"))
+        # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
+        from ..ops.email import EmailSender
+
+        self.email = EmailSender()
         # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
@@ -207,6 +213,17 @@ class AgentEngine:
             reply_to_message_id=msg.message_id,
             meta={meta_key: True},
         )
+
+    async def detailed_answer(self, question: str, user_key: str = "followup") -> AgentResponse:
+        """Full, comprehensive answer for a topic — used by the 'More detail'
+        button and the email follow-up. Runs the normal pipeline in detail mode."""
+        msg = IncomingMessage(
+            author=Author(external_id=user_key.split(":")[-1], channel="telegram"),
+            text=question, chat_id=f"detail:{user_key}", chat_type=ChatType.PRIVATE,
+            message_id="0", channel="telegram", raw={"addressed": True, "detail": True},
+        )
+        resp = await self.handle(msg)
+        return resp or AgentResponse(text="I don't have more detail on that yet.")
 
     async def draft_answer(self, question: str) -> str:
         """Best-effort PROPOSED answer for an unanswered question, for admin
@@ -454,6 +471,13 @@ class AgentEngine:
                 user_context=user_context,
             )
         else:
+            detail = bool(msg.raw.get("detail"))
+            detail_mode = (
+                "DETAIL MODE ON: the user explicitly asked for the full version — go "
+                "comprehensive and structured (up to ~1500 characters), cover the key "
+                "angles, but stay grounded and cite sources."
+                if detail else "detail_mode: off (keep it short)."
+            )
             user_prompt = self.prompts.render(
                 "answer_synthesis",
                 question=msg.text,
@@ -461,11 +485,14 @@ class AgentEngine:
                 language=routing.language,
                 context=context or "(no documentation retrieved)",
                 user_context=user_context,
+                detail_mode=detail_mode,
                 bucket=profile.user_key,
             )
 
-        # Small talk gets a hard token cap — a paragraph back to "hi" is a bug.
-        reply_cap = None if routing.needs_docs else 220
+        # Short answers by default; the full version only on explicit request.
+        detail = bool(msg.raw.get("detail"))
+        reply_cap = 700 if (routing.needs_docs and not detail) else (
+            1600 if detail else 220)
         result = await self.reasoner.complete(
             [ChatMessage("system", system), ChatMessage("user", user_prompt)],
             max_tokens=reply_cap,

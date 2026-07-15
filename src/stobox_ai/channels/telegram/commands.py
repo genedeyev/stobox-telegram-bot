@@ -96,6 +96,71 @@ async def remindme_cmd(update, context) -> None:
     )
 
 
+async def email_cmd(update, context) -> None:
+    """Email the user a full write-up of their last topic: /email you@addr.com."""
+    import asyncio as _asyncio
+
+    from ...ops.email import valid_email
+
+    chat = update.effective_chat
+    if chat.type != "private":
+        await update.effective_message.reply_text(
+            "Let's keep your email private — DM me /email you@address.com. 👍"
+        )
+        return
+    if not context.args or not valid_email(context.args[0]):
+        await update.effective_message.reply_text("Usage: /email you@address.com")
+        return
+    engine = _engine(context)
+    adapter = _adapter(context)
+    addr = context.args[0].strip()
+    user = update.effective_user
+    uk = f"telegram:{user.id}"
+
+    profile = await engine.memory.get_profile(uk, user.full_name)
+    profile.email = addr
+    topic = (adapter._email_pending.pop(user.id, None)
+             or (profile.recent_questions[-1] if profile.recent_questions else None)
+             or "How Stobox tokenization works")
+    await engine.memory.save_profile(profile)
+
+    await update.effective_message.reply_text("📩 On it — composing your write-up…")
+    resp = await engine.detailed_answer(topic, user_key=uk)
+    from ...channels.base import Channel
+    body = (
+        f"Hi{(' ' + user.first_name) if user.first_name else ''},\n\n"
+        f"Here's the fuller answer to: “{topic}”\n\n"
+        f"{_strip_html(resp.text)}\n"
+        f"{_strip_html(Channel.render_citations(resp))}\n\n"
+        "Questions any time — just message Stoby on Telegram.\n"
+        "This is information, not investment advice.\n\n— Stoby, the Stobox community AI"
+    )
+    subject = f"Stobox — {topic[:60]}"
+    sent = False
+    if engine.email.configured:
+        sent = await _asyncio.to_thread(engine.email.send, addr, subject, body)
+    # Always capture as a warm lead (email = strong intent).
+    engine.leads.update_score(profile, buying_intent=True, has_email=True)
+    await engine.leads.handoff(profile)
+    await engine.memory.save_profile(profile)
+
+    if sent:
+        await update.effective_message.reply_text(
+            f"✅ Sent to {addr}. Check your inbox (and spam, just in case). "
+            "Anything else you'd like me to dig into?"
+        )
+    else:
+        await update.effective_message.reply_text(
+            f"✅ Got it — I've flagged your interest and the Stobox team will email {addr} "
+            "the full details. Meanwhile, I'm right here for any questions."
+        )
+
+
+def _strip_html(text: str) -> str:
+    import re
+    return re.sub(r"<[^>]+>", "", text or "")
+
+
 async def stopreminders_cmd(update, context) -> None:
     removed = _engine(context).reminders.unsubscribe(str(update.effective_chat.id))
     await update.effective_message.reply_text(
@@ -783,6 +848,7 @@ def registry() -> dict:
         "approve": approve_cmd,
         "remindme": remindme_cmd,
         "stopreminders": stopreminders_cmd,
+        "email": email_cmd,
         # moderation
         "strikes": strikes_cmd,
         "warn": warn_cmd,
