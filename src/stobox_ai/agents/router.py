@@ -32,6 +32,7 @@ class Routing:
     mode: Mode = Mode.COMMUNITY_MANAGER
     persona: str = "unknown"
     language: str = "en"
+    technical_level: str = "unknown"     # beginner | intermediate | expert
     buying_intent: bool = False
     is_question: bool = False
     needs_docs: bool = False
@@ -58,6 +59,7 @@ class IntentRouter:
                 mode=self._mode(data.get("mode")),
                 persona=str(data.get("persona", "unknown")),
                 language=lang if lang in _SUPPORTED_LANGS else heuristic.language,
+                technical_level=str(data.get("technical_level", "unknown")),
                 buying_intent=bool(data.get("buying_intent", heuristic.buying_intent)),
                 is_question=bool(data.get("is_question", heuristic.is_question)),
                 needs_docs=bool(data.get("needs_docs", heuristic.needs_docs)),

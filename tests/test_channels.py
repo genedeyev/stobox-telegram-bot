@@ -49,6 +49,33 @@ async def test_same_engine_serves_two_channels(config):
     assert engine.decisions.snapshot()["count"] >= 2
 
 
+def test_citations_never_expose_machine_files():
+    """No .txt/.xml/.json URL may ever appear in a public citation footer."""
+    from stobox_ai.channels.base import Channel, public_citation_url
+    from stobox_ai.core.types import AgentResponse, Citation
+
+    # URL sanitizer: machine files collapse to site root; pages pass through.
+    assert public_citation_url("https://www.stobox.io/llms-full.txt") == "https://www.stobox.io"
+    assert public_citation_url("https://www.stobox.io/sitemap.xml") == "https://www.stobox.io"
+    assert public_citation_url("https://www.stobox.io/compass") == "https://www.stobox.io/compass"
+    # GitHub blob pages are real pages even when the file is .md
+    gh = "https://github.com/StoboxTechnologies/Stobox_STV3_Protocol/blob/main/README.md"
+    assert public_citation_url(gh) == gh
+
+    resp = AgentResponse(
+        text="answer",
+        citations=[
+            Citation(title="Stobox — Official Website Reference",
+                     source_url="https://www.stobox.io/llms-full.txt"),
+            Citation(title="Stobox Compass", source_url="https://www.stobox.io/compass"),
+        ],
+    )
+    footer = Channel.render_citations(resp)
+    assert ".txt" not in footer
+    assert "https://www.stobox.io" in footer
+    assert "https://www.stobox.io/compass" in footer
+
+
 def test_discord_adapter_imports_without_sdk():
     # Module must import even when discord.py isn't installed (lazy import).
     from stobox_ai.channels.discord import DiscordChannel

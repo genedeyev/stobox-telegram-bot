@@ -126,10 +126,13 @@ class DecisionLog:
 async def build_decision_log(config: Config) -> DecisionLog:
     secrets = get_secrets()
     if secrets.database_url:
+        pool = None
         try:
             from psycopg_pool import AsyncConnectionPool
 
-            pool = AsyncConnectionPool(secrets.database_url, min_size=1, max_size=2, open=False)
+            pool = AsyncConnectionPool(
+                secrets.database_url, min_size=1, max_size=2, open=False, timeout=10
+            )
             await pool.open()
             async with pool.connection() as conn:
                 await conn.execute(
@@ -139,4 +142,9 @@ async def build_decision_log(config: Config) -> DecisionLog:
             return DecisionLog(pool)
         except Exception as exc:  # noqa: BLE001
             log.warning("decision.pg_failed", error=str(exc))
+            if pool is not None:
+                try:
+                    await pool.close()  # stop background reconnect spam
+                except Exception:  # noqa: BLE001
+                    pass
     return DecisionLog()

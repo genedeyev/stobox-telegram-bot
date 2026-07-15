@@ -27,12 +27,45 @@ _FORMATS = [
     "Poll (pose one question)",
 ]
 
+# Rotating friendly openers for new-blog announcements (deterministic — no LLM
+# in broadcasts). Index rotates per announcement so consecutive posts differ.
+_BLOG_OPENERS = [
+    "📰 Fresh from the Stobox blog — check out our new article:",
+    "🆕 Just published on the Stobox blog:",
+    "📚 New read for you — hot off the Stobox blog:",
+    "✍️ The Stobox team just published something new:",
+]
+
+
+async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
+    """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
+    returns {} on any failure so announcements degrade to a link card."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return {}
+            soup = BeautifulSoup(resp.text, "html.parser")
+            out = {}
+            for key in ("image", "title", "description"):
+                tag = soup.find("meta", property=f"og:{key}")
+                if tag and tag.get("content"):
+                    out[key] = tag["content"].strip()
+            return out
+    except Exception as exc:  # noqa: BLE001
+        log.warning("blog.og_fetch_failed", url=url, error=str(exc))
+        return {}
+
 
 class ProactiveScheduler:
     def __init__(self, engine, app) -> None:
         self.engine = engine
         self.app = app
         self._recent_posts: list[str] = []
+        self._opener_i = 0
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -52,7 +85,117 @@ class ProactiveScheduler:
             from datetime import time as _time
 
             jq.run_daily(self._resync_job, time=_time(4, 0, tzinfo=UTC))
+        # New-blog announcements: cheap in-memory diff, so a tight interval is
+        # fine — a post lands minutes after the sync that discovers it.
+        blog = cfg.section("proactive.blog_announcements")
+        if blog.get("enabled", True):
+            minutes = float(blog.get("interval_minutes", 10))
+            jq.run_repeating(self._blog_announce_job, interval=minutes * 60, first=120)
+        # Opt-in migration reminders: hourly check against canonical dates;
+        # per-threshold dedupe means each blast fires exactly once.
+        if cfg.get("proactive.reminders.enabled", True):
+            jq.run_repeating(self._reminder_job, interval=3600, first=300)
         log.info("proactive.scheduled")
+
+    async def _reminder_job(self, context) -> None:
+        from ...guardrails.canonicals import _as_date
+        from ...guardrails.rails import IMPERSONATION_WARNING
+        from ...ops.reminders import THRESHOLDS
+
+        book = self.engine.reminders
+        if not book.subscribers or self._in_quiet_hours():
+            return
+        canon = self.engine.assembler.canonicals if self.engine.assembler else None
+        if canon is None:
+            return
+        m = canon.get("tokens.stbu.migration", {}) or {}
+        deadline = _as_date(m.get("burn_deadline"))
+        claims = _as_date(m.get("claim_opens"))
+        today = datetime.now(UTC).date()
+
+        blast: tuple[str, str] | None = None   # (tag, message)
+        if deadline and today <= deadline:
+            days_left = (deadline - today).days
+            if days_left in THRESHOLDS and not book.was_sent(f"burn-{days_left}"):
+                when = "TODAY" if days_left == 0 else (
+                    "tomorrow" if days_left == 1 else f"in {days_left} days")
+                blast = (
+                    f"burn-{days_left}",
+                    f"⏰ <b>STBU migration reminder</b> — the burn deadline is "
+                    f"<b>{when}</b> ({deadline.strftime('%d %B %Y')} 23:59 UTC).\n\n"
+                    "Burn-and-mint, 1:1, same wallet only. Consolidate all STBU into "
+                    "one wallet first. Legacy V1 tokens are not eligible. Full steps: "
+                    "/migrate\n\n" + IMPERSONATION_WARNING +
+                    "\n\nStop these reminders anytime: /stopreminders",
+                )
+        elif claims and today >= claims and not book.was_sent("claims-open"):
+            blast = (
+                "claims-open",
+                "🟢 <b>STBU claims are open</b> — if you burned before the deadline, "
+                "you can now claim on Base (same wallet). Details: /migrate or "
+                "https://stobox.io\n\n" + IMPERSONATION_WARNING +
+                "\n\nStop these reminders: /stopreminders",
+            )
+        if not blast:
+            return
+        tag, text = blast
+        sent = 0
+        for chat_id in list(book.subscribers):
+            try:
+                await context.bot.send_message(chat_id, text, parse_mode="HTML",
+                                               disable_web_page_preview=True)
+                sent += 1
+            except Exception:  # noqa: BLE001 - blocked bot etc.
+                pass
+        book.mark_sent(tag)
+        log.info("reminders.blast", tag=tag, sent=sent, subscribers=len(book.subscribers))
+
+    async def _blog_announce_job(self, context) -> None:
+        """Announce newly published blog posts with an OG-image card."""
+        if self._in_quiet_hours():
+            return  # posts stay queued (un-marked) and go out after quiet hours
+        new_posts = self.engine.pop_new_blog_posts()
+        if not new_posts:
+            return
+        cfg = self.engine.config.section("proactive.blog_announcements")
+        chats = {str(c) for c in (cfg.get("chat_ids") or [])} | self._known_chats()
+        if not chats:
+            log.info("blog.no_chats_to_announce", posts=len(new_posts))
+            return
+
+        for post in new_posts[:3]:  # cap per tick — never flood the chat
+            og = await fetch_og_meta(post["url"])
+            title = og.get("title") or post["title"]
+            teaser = (og.get("description") or "").strip()
+            opener = _BLOG_OPENERS[self._opener_i % len(_BLOG_OPENERS)]
+            self._opener_i += 1
+            caption = f"{opener}\n\n<b>{title}</b>"
+            if teaser:
+                caption += f"\n{teaser[:220]}"
+            caption += (
+                f"\n\n🔗 {post['url']}"
+                "\n\nGive it a read — questions welcome right here. 👇"
+                "\n🔁 Know someone who'd find this useful? Forward it their way."
+            )
+            delivered = False
+            for chat_id in chats:
+                try:
+                    if og.get("image"):
+                        await context.bot.send_photo(
+                            chat_id, photo=og["image"], caption=caption[:1024],
+                            parse_mode="HTML",
+                        )
+                    else:
+                        # No OG image → let Telegram render the link-preview card.
+                        await context.bot.send_message(
+                            chat_id, caption[:4096], parse_mode="HTML",
+                        )
+                    delivered = True
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("blog.announce_failed", chat=chat_id, error=str(exc))
+            if delivered:
+                self.engine.mark_blog_announced(post["url"])
+                log.info("blog.announced", url=post["url"], chats=len(chats))
 
     async def _resync_job(self, context) -> None:
         try:
@@ -80,6 +223,9 @@ class ProactiveScheduler:
         if self._in_quiet_hours():
             return
         fmt = random.choice(_FORMATS)  # noqa: S311 - not security-sensitive
+        if fmt.startswith("Poll"):
+            await self._post_poll(context)
+            return
         retrieved = await self.engine.retriever.retrieve(fmt)
         context_text = "\n\n".join(rc.chunk.text[:300] for rc in retrieved[:3])
         prompt = self.engine.prompts.render(
@@ -106,6 +252,42 @@ class ProactiveScheduler:
             except Exception:  # noqa: BLE001
                 pass
         log.info("proactive.evangelist_posted", format=fmt, chats=len(self._known_chats()))
+
+    async def _post_poll(self, context) -> None:
+        """Post a native Telegram poll — an education question, never anything
+        price/investment-adjacent. Grounded in the docs via the LLM, validated,
+        and skipped entirely on any doubt."""
+        from ...util import extract_json
+
+        retrieved = await self.engine.retriever.retrieve("tokenization education basics")
+        context_text = "\n\n".join(rc.chunk.text[:250] for rc in retrieved[:3])
+        prompt = (
+            "Create ONE light community-poll question about RWA tokenization or Stobox "
+            "education, grounded in this context. NEVER about price, investment, or "
+            "predictions. Return ONLY minified JSON: "
+            '{"question":"...max 250 chars...","options":["...","..."]} '
+            "with 2-4 short options (max 90 chars each). Make it genuinely fun to answer.\n\n"
+            f"Context:\n{context_text}"
+        )
+        try:
+            raw = await self.engine.reasoner.complete_json(
+                [ChatMessage("user", prompt)], max_tokens=250
+            )
+            data = extract_json(raw)
+            question = str(data["question"])[:250]
+            options = [str(o)[:90] for o in data["options"]][:4]
+            assert len(options) >= 2
+        except Exception as exc:  # noqa: BLE001 - skip the tick, never post junk
+            log.warning("proactive.poll_failed", error=str(exc))
+            return
+        for chat_id in self._known_chats():
+            try:
+                await context.bot.send_poll(
+                    chat_id, question, options, is_anonymous=True,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        log.info("proactive.poll_posted", q=question[:80], chats=len(self._known_chats()))
 
     async def _revival_job(self, context) -> None:
         cfg = self.engine.config

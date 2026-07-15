@@ -41,9 +41,15 @@ from .types import (
 log = get_logger(__name__)
 
 _IDK = {
-    "en": "I don't know based on the current documentation. Let me connect you with the Stobox team — you can also reach support via /support.",
-    "ru": "Я не могу ответить на основе текущей документации. Свяжу вас с командой Stobox — также доступна поддержка через /support.",
-    "uk": "Я не можу відповісти на основі поточної документації. З'єднаю вас із командою Stobox — також доступна підтримка через /support.",
+    "en": "Honestly? I don't have a solid answer to that yet — and I'd rather flag it "
+          "to the Stobox team than guess. I've done exactly that, and I'll follow up "
+          "right here as soon as they confirm the answer. 🙌",
+    "ru": "Честно? У меня пока нет надёжного ответа — и я лучше передам вопрос команде "
+          "Stobox, чем буду гадать. Уже передал(а) — вернусь сюда с ответом, как только "
+          "команда подтвердит. 🙌",
+    "uk": "Чесно? У мене поки немає надійної відповіді — і я краще передам питання команді "
+          "Stobox, ніж гадатиму. Вже передав — повернуся сюди з відповіддю, щойно команда "
+          "підтвердить. 🙌",
 }
 
 
@@ -87,6 +93,18 @@ class AgentEngine:
         )
         self.paused = False
         self.pause_reason = ""
+        # Unanswered-question loop: capture → notify admins → /answer → deliver.
+        from ..qa import QARegister
+
+        self.qa = QARegister(config.get("qa.state_path", "data/qa_register.json"))
+        # Opt-in migration reminders (/remindme).
+        from ..ops.reminders import ReminderBook
+
+        self.reminders = ReminderBook(config.get("reminders.state_path", "data/reminders.json"))
+        # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
+        self.blog_posts: list[dict] = []
+        self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
+        self._announced_blog: set[str] | None = None   # None = not yet baselined
         # Compliance guardrails (three-block prompt + deterministic rails).
         from ..guardrails import ComplianceRails, PromptAssembler
 
@@ -133,6 +151,7 @@ class AgentEngine:
             leads, decision_log, get_prompts(), indexer,
         )
         engine.last_sync = datetime.now(UTC)
+        await engine.refresh_blog_posts()
         return engine
 
     # ------------------------------------------------------------------ #
@@ -183,13 +202,78 @@ class AgentEngine:
             meta={meta_key: True},
         )
 
+    async def draft_answer(self, question: str) -> str:
+        """Best-effort PROPOSED answer for an unanswered question, for admin
+        review only (never sent to users). Grounded in retrieval + canonicals;
+        returns "" when there's nothing solid to draft from."""
+        retrieved = await self.retriever.retrieve(question)
+        context, _ = self._format_context(retrieved)
+        system = self.system_prompt() or ""
+        prompt = (
+            "An admin will REVIEW this — it is NOT sent to users. Draft the best "
+            "canonical answer to the community question below, grounded ONLY in "
+            "your [CANONICALS] facts and the documentation context. Match the "
+            "register's tone: professional, calm, factual, correct false premises "
+            "politely. 2-6 sentences. If the grounding is insufficient for a "
+            "defensible draft, output exactly NO_DRAFT.\n\n"
+            f"Question: {question}\n\n"
+            f"Documentation context:\n{context or '(none retrieved)'}"
+        )
+        try:
+            result = await self.reasoner.complete(
+                [ChatMessage("system", system), ChatMessage("user", prompt)],
+                max_tokens=400,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("qa.draft_failed", error=str(exc))
+            return ""
+        text = result.text.strip()
+        return "" if ("NO_DRAFT" in text or len(text) < 20) else text
+
     async def sync_knowledge(self) -> dict[str, int]:
         """Crawl stobox.io + ingest the GitHub repos into the live index."""
         from ..knowledge.sync import sync_sources
 
         results = await sync_sources(self.indexer, self.config)
         self.last_sync = datetime.now(UTC)
+        await self.refresh_blog_posts()
         return results
+
+    async def refresh_blog_posts(self, limit: int = 5) -> None:
+        """Collect the freshest blog/digest URLs from the index for [FRESHNESS]
+        and /blog. Best-effort — empty until a web sync has run."""
+        try:
+            chunks = await self.retriever.store.all_chunks()
+        except Exception:  # noqa: BLE001
+            return
+        seen: dict[str, str] = {}
+        for c in chunks:
+            url = c.meta.source_url if c.meta else None
+            if url and "/blog" in url and url.rstrip("/") != "https://www.stobox.io/blog":
+                seen.setdefault(url, c.meta.title)
+        self._blog_index = seen
+        self.blog_posts = [{"title": t, "url": u} for u, t in list(seen.items())[:limit]]
+
+    def pop_new_blog_posts(self) -> list[dict]:
+        """New posts since the last check. The FIRST call after boot baselines
+        the current index and returns [] — so a restart never re-announces old
+        posts. Callers must mark_blog_announced() after a successful post."""
+        current = self._blog_index
+        if self._announced_blog is None:
+            # Don't baseline an empty index (boot sync may still be running) —
+            # wait for the first sync that actually finds posts.
+            if not current:
+                return []
+            self._announced_blog = set(current)
+            log.info("blog.baseline", known_posts=len(current))
+            return []
+        new = [u for u in current if u not in self._announced_blog]
+        return [{"url": u, "title": current[u]} for u in new]
+
+    def mark_blog_announced(self, url: str) -> None:
+        if self._announced_blog is None:
+            self._announced_blog = set()
+        self._announced_blog.add(url)
 
     def build_freshness(self) -> str:
         """Assemble the live [FRESHNESS] block for the current request."""
@@ -203,6 +287,7 @@ class AgentEngine:
             canon=canon,
             last_sync=self.last_sync,
             corpus_hash=corpus_hash,
+            blog_posts=self.blog_posts or None,
             valuation_mark=FreshnessBuilder.valuation_from_env(),
         ).build()
 
@@ -235,6 +320,8 @@ class AgentEngine:
         profile.language = routing.language
         if routing.persona != "unknown":
             profile.persona = routing.persona
+        if routing.technical_level != "unknown":
+            profile.technical_level = routing.technical_level
         for t in routing.topics:
             profile.add_interest(t)
         if routing.is_question:
@@ -290,6 +377,21 @@ class AgentEngine:
         # 6) Synthesize + 7) confidence gate.
         response = await self._answer(msg, routing, retrieved, profile, thread_key)
 
+        # 7b) Share-with-a-friend cadence: after every 4th genuinely helpful
+        #     answer (confident, not gated/blocked/escalated, in a DM), flag a
+        #     share nudge for the channel to render. Never on refusals.
+        if (
+            msg.is_private
+            and response.should_reply
+            and response.confidence != Confidence.LOW
+            and not response.escalate
+            and not response.meta.get("gated")
+            and not response.meta.get("rails", {}).get("blocked")
+        ):
+            profile.helpful_answers += 1
+            if profile.helpful_answers % 4 == 0:
+                response.meta["share_nudge"] = True
+
         # 8) Leads.
         await self._handle_leads(msg, routing, profile, response)
 
@@ -321,6 +423,7 @@ class AgentEngine:
     ) -> AgentResponse:
         history = self._format_history(thread_key)
         context, citations = self._format_context(retrieved)
+        user_context = self._user_summary(profile)
         # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt;
         # fall back to the legacy persona prompt if guardrail files are absent.
         system = self.system_prompt() or self.prompts.render(
@@ -330,7 +433,7 @@ class AgentEngine:
         if routing.mode == Mode.SALES_ASSISTANT and self.leads.enabled:
             user_prompt = self.prompts.render(
                 "lead_qualification",
-                user_summary=self._user_summary(profile),
+                user_summary=user_context,
                 language=routing.language,
                 question=msg.text,
                 context=context or "(no documentation retrieved)",
@@ -342,6 +445,7 @@ class AgentEngine:
                 question=msg.text,
                 history=history,
                 language=routing.language,
+                user_context=user_context,
             )
         else:
             user_prompt = self.prompts.render(
@@ -350,16 +454,25 @@ class AgentEngine:
                 history=history,
                 language=routing.language,
                 context=context or "(no documentation retrieved)",
+                user_context=user_context,
                 bucket=profile.user_key,
             )
 
+        # Small talk gets a hard token cap — a paragraph back to "hi" is a bug.
+        reply_cap = None if routing.needs_docs else 220
         result = await self.reasoner.complete(
-            [ChatMessage("system", system), ChatMessage("user", user_prompt)]
+            [ChatMessage("system", system), ChatMessage("user", user_prompt)],
+            max_tokens=reply_cap,
         )
         self.rate_limiter.record_spend(result.output_tokens)
-        clean, self_conf, _used = self.confidence.parse(result.text)
-        cited = bool(citations)
+        clean, self_conf, used_sources = self.confidence.parse(result.text)
+        # Canonicals are authoritative grounding: an answer the model marks as
+        # canonicals-based must not be IDK-gated for lacking retrieved chunks.
+        canonical_grounded = any("canonical" in s.lower() for s in used_sources)
+        cited = bool(citations) or canonical_grounded
         score = self.confidence.score(retrieved, self_conf, cited)
+        if canonical_grounded and self_conf is not None:
+            score = max(score, round(min(1.0, 0.2 + 0.8 * self_conf), 3))
 
         response = AgentResponse(
             text=clean[: self.max_reply],
@@ -379,13 +492,28 @@ class AgentEngine:
             },
         )
 
-        # Anti-hallucination gate.
-        if routing.needs_docs and self.confidence.below_threshold(score):
+        # Anti-hallucination gate — and the unanswered-question loop: capture
+        # the question, so admins can /answer it and the asker gets a follow-up.
+        # Fires on low confidence OR when the model itself declares it doesn't
+        # know (an "unclear answer" is an unanswered question too).
+        model_idk = "don't know based on the current documentation" in clean.lower()
+        if routing.needs_docs and (self.confidence.below_threshold(score) or model_idk):
             response.text = _IDK.get(routing.language, _IDK["en"])
             response.confidence = Confidence.LOW
             response.citations = []
             response.escalate = True
             response.meta["gated"] = True
+            try:
+                entry, is_new = self.qa.capture(
+                    msg.text, channel=msg.channel, chat_id=msg.chat_id,
+                    message_id=msg.message_id,
+                    user_key=f"{msg.channel}:{msg.author.external_id}",
+                    language=routing.language,
+                )
+                response.meta["qa"] = {"qid": entry.qid, "new": is_new,
+                                       "question": entry.question}
+            except Exception as exc:  # noqa: BLE001 - capture must never break replies
+                log.error("qa.capture_failed", error=str(exc))
 
         # Deterministic compliance post-processing (blocks forbidden claims,
         # appends disclaimer / anti-impersonation warning where required).
@@ -402,6 +530,14 @@ class AgentEngine:
             "blocked": rail.blocked,
             "violations": rail.violations,
         }
+        # Cited, confident answers are worth spreading — channels may attach a
+        # one-tap "share this answer" affordance.
+        response.meta["shareable"] = bool(
+            response.citations
+            and response.confidence != Confidence.LOW
+            and not response.meta.get("gated")
+            and not rail.blocked
+        )
         return response
 
     async def _handle_leads(
@@ -445,8 +581,11 @@ class AgentEngine:
     def _format_history(self, thread_key: str) -> str:
         turns = self.memory.history(thread_key)[:-1]  # exclude the current user turn
         if not turns:
-            return "(new conversation)"
-        return "\n".join(f"{t.role}: {t.text[:300]}" for t in turns[-6:])
+            return "(new conversation — this is their first message)"
+        labels = {"user": "User", "assistant": "You"}
+        return "\n".join(
+            f"{labels.get(t.role, t.role)}: {t.text[:400]}" for t in turns[-8:]
+        )
 
     def _format_context(self, retrieved: list[RetrievedChunk]) -> tuple[str, list[Citation]]:
         if not retrieved:
@@ -475,11 +614,18 @@ class AgentEngine:
 
     @staticmethod
     def _user_summary(p: UserProfile) -> str:
-        return (
-            f"persona={p.persona}, stage={p.customer_stage}, level={p.technical_level}, "
-            f"interests={', '.join(p.interests[:5]) or 'n/a'}, "
-            f"products={', '.join(p.products_discussed[:5]) or 'n/a'}, lead_score={p.lead_score}"
-        )
+        parts = [f"name: {p.display_name}" if p.display_name else "name: unknown"]
+        if p.persona not in ("auto", "unknown"):
+            parts.append(f"likely a {p.persona}")
+        if p.technical_level != "unknown":
+            parts.append(f"technical level: {p.technical_level}")
+        if p.interests:
+            parts.append(f"has asked about: {', '.join(p.interests[:5])}")
+        if p.customer_stage not in ("member",):
+            parts.append(f"journey stage: {p.customer_stage}")
+        if len(p.recent_questions) > 1:
+            parts.append(f"previous question: {p.recent_questions[-2][:100]}")
+        return "; ".join(parts)
 
     async def _log(
         self, msg, routing, retrieved, response, user_key, started, answered=True

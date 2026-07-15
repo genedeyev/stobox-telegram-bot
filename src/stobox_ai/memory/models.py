@@ -32,6 +32,9 @@ class UserProfile:
     customer_stage: str = "member"                  # member | curious | evaluating | lead | customer
     recent_questions: list[str] = field(default_factory=list)
     lead_score: int = 0                             # 0..100
+    helpful_answers: int = 0                        # drives the share-with-a-friend cadence
+    source: str = ""                                # first-touch attribution (/start payload)
+    referrals: int = 0                              # users who joined via this user's ref link
     email: str | None = None
     first_seen: datetime = field(default_factory=_now)
     last_interaction: datetime = field(default_factory=_now)

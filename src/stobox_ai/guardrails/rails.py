@@ -61,19 +61,38 @@ _WALLET_TOPIC = re.compile(
     re.I,
 )
 _INVESTMENT_TOPIC = re.compile(
-    r"\b(buy|sell|hold|invest|price|worth|profit|return|yield|dividend|"
-    r"valuation|token\s*price|market\s*cap|roi|apy)\b",
+    # "hold" alone is too broad ("hold assets on-chain") — only trading-context hold.
+    r"\b(buy|sell|invest|investment|price|worth\s+(buying|investing)|profit|"
+    r"return|yield|dividend|valuation|token\s*price|market\s*cap|roi|apy|"
+    r"(should|to)\s+hold|hodl)\b",
     re.I,
 )
 
-# Hard-forbidden output substrings → answer is blocked/scrubbed if present.
-# (from canonicals must_never_claim + never_say)
+# Hard-forbidden output substrings → answer is blocked/scrubbed if present,
+# UNLESS a "mitigator" shows the phrase is being correctly denied/framed
+# (e.g. the model quoting `"will reach" 250M` while explaining the maximum-
+# supply framing must NOT be blocked). (from canonicals must_never_claim)
+_SUPPLY_MITIGATORS = re.compile(
+    r"maximum|at\s+most|ceiling|not\s+necessarily|whatever\s+(amount\s+)?(actually\s+)?migrates"
+    r"|can'?t\s+(promise|predict)|cannot\s+(promise|predict)",
+    re.I,
+)
 _FORBIDDEN = [
-    (re.compile(r"class[\s-]?a\b", re.I), "Class-A share class"),
-    (re.compile(r"stobox\s+holdings", re.I), "wrong issuer entity"),
-    (re.compile(r"\$\s?500\s?m(illion)?\b|\b500m\+", re.I), "unpublished tokenized volume"),
-    (re.compile(r"will\s+reach\s+250m|expected\s+supply", re.I), "supply speculation"),
+    (re.compile(r"class[\s-]?a\b", re.I), "Class-A share class", None),
+    (re.compile(r"stobox\s+holdings", re.I), "wrong issuer entity", None),
+    (re.compile(r"\$\s?500\s?m(illion)?\b|\b500m\+", re.I), "unpublished tokenized volume", None),
+    (
+        re.compile(r"will\s+reach\s+[\"']?250\s?m|expected\s+supply", re.I),
+        "supply speculation",
+        _SUPPLY_MITIGATORS,
+    ),
 ]
+# Known impostor handles → deterministically scrubbed from output (never shown,
+# even in warnings — an official bot must not give fake accounts name recognition).
+_SCRUB = [
+    (re.compile(r"@?stobox_io\b|@?stobox_official\b", re.I), "an unofficial account"),
+]
+
 # Securities-exemption attribution to a Stobox token → block.
 _EXEMPTION_ATTR = re.compile(
     r"(offered|issued|sold|available)\s+under\s+(reg(ulation)?\s*[dscfa+]|the\s+eu\s+prospectus)"
@@ -139,10 +158,16 @@ class ComplianceRails:
     def post_process(self, answer: str, user_text: str) -> RailResult:
         result = RailResult(text=answer or "")
 
+        # 0) Deterministic scrubs — impostor handles etc. never reach the chat.
+        for pat, repl in _SCRUB:
+            result.text = pat.sub(repl, result.text)
+
         # 1) Block forbidden claims (compliance-critical): if the model asserted
         #    something it must never say, replace with a safe deflection.
-        for pat, label in _FORBIDDEN:
+        for pat, label, mitigators in _FORBIDDEN:
             if pat.search(result.text):
+                if mitigators and mitigators.search(result.text):
+                    continue  # forbidden phrase is being correctly denied/framed
                 result.violations.append(label)
         if _EXEMPTION_ATTR.search(result.text):
             result.violations.append("securities-exemption attribution")
@@ -158,8 +183,13 @@ class ComplianceRails:
             result.escalate = True
             result.category = "blocked_claim"
 
-        # 2) Anti-impersonation warning on wallet-adjacent topics.
-        if _WALLET_TOPIC.search(user_text) and "scam warning" not in result.text.lower():
+        # 2) Anti-impersonation warning on wallet-adjacent topics — unless the
+        #    answer already carries one (models often write their own; don't
+        #    stack two warnings in one message).
+        already_warned = re.search(
+            r"never\s+dm|scam|impersonat|staff\s+never", result.text, re.I
+        )
+        if _WALLET_TOPIC.search(user_text) and not already_warned:
             result.text = result.text.rstrip() + "\n\n" + IMPERSONATION_WARNING
             result.impersonation_added = True
 

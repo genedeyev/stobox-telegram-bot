@@ -10,6 +10,7 @@ versions:
       {{"mode":"community_manager|technical_expert|sales_assistant|moderator|small_talk",
         "persona":"developer|investor|founder|lawyer|enterprise|retail|beginner|journalist|partner|regulator|unknown",
         "language":"ISO 639-1 code",
+        "technical_level":"beginner|intermediate|expert|unknown",
         "buying_intent":true|false,
         "is_question":true|false,
         "topics":["short topic tags"],

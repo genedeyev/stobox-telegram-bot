@@ -143,7 +143,10 @@ async def test_llms_txt_source_ingests_full_reference():
     docs = await src.fetch(fetcher)
     assert len(docs) == 1                                  # full supersedes short
     assert docs[0].meta.extra["file"] == "llms-full.txt"
-    assert docs[0].meta.source_url == "https://www.stobox.io/llms-full.txt"
+    # Public citation = the website, NEVER the .txt machine file.
+    assert docs[0].meta.source_url == "https://www.stobox.io"
+    assert docs[0].meta.extra["fetched_from"] == "https://www.stobox.io/llms-full.txt"
+    assert ".txt" not in docs[0].meta.source_url
     assert docs[0].meta.confidence == 1.0
 
 

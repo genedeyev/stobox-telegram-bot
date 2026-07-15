@@ -22,12 +22,16 @@ def _dt(s: str) -> datetime:
 # --------------------------------------------------------------------------- #
 def test_canonicals_load_and_verbatim_injection():
     canon = load_canonicals("canonicals.yaml", now=_dt("2026-07-14"))
-    assert canon.version == "2026-07-14.1"
+    assert canon.version == "2026-07-14.2"
     block = canon.injection_block(_dt("2026-07-14"))
     # Verbatim key facts present.
     assert "Stobox Tokenized Equities Ltd" in block
     assert "Class-C" in block
     assert "burn-and-mint" in block
+    # Three-layer product lineup is canonical knowledge.
+    assert "Stobox Intelligence" in block
+    assert "Raisable" in block
+    assert "AXIS" in block
     # Not yet expired → no override section.
     assert "RUNTIME OVERRIDE" not in block
 
@@ -113,6 +117,31 @@ def test_rails_append_disclaimer_and_impersonation():
     res2 = r.post_process("Burn your STBU on the source chain, then claim on Base.",
                           "how do I migrate my wallet?")
     assert res2.impersonation_added and "scam warning" in res2.text.lower()
+
+
+def test_rails_supply_mitigation_not_blocked():
+    """The CORRECT maximum-supply framing quoting 'will reach' must pass."""
+    r = ComplianceRails()
+    good = (
+        'STBU has a fixed maximum supply of 250M. The final supply will be whatever '
+        'amount actually migrates — at most 250M. I can\'t promise it "will reach" 250M.'
+    )
+    res = r.post_process(good, "Will STBU supply reach 250M?")
+    assert not res.blocked, f"false positive: {res.violations}"
+    # But an assertive claim IS still blocked.
+    bad = r.post_process("STBU supply will reach 250M next year.", "supply?")
+    assert bad.blocked and "supply speculation" in bad.violations
+
+
+def test_rails_scrub_impostor_handles():
+    r = ComplianceRails()
+    res = r.post_process(
+        "The official account is @StoboxCompany — beware of @stobox_io and @stobox_official.",
+        "what is the official X account?",
+    )
+    assert "@stobox_io" not in res.text and "@stobox_official" not in res.text
+    assert "@StoboxCompany" in res.text          # the real handle survives
+    assert "an unofficial account" in res.text   # scrub replacement present
 
 
 def test_rails_clean_answer_untouched():

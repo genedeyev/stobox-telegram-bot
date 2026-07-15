@@ -31,7 +31,13 @@ from stobox_ai.core.engine import AgentEngine
 from stobox_ai.core.types import Author, ChatType, IncomingMessage
 from stobox_ai.logging import configure_logging
 
-REFUSAL_MARKERS = ("i don't know based on the current documentation", "connect you with", "not a licensed")
+REFUSAL_MARKERS = (
+    "i don't know based on the current documentation",
+    "don't have a solid answer",
+    "flagged it to the stobox team",
+    "connect you with",
+    "not a licensed",
+)
 
 
 def _load(path: str) -> list[dict]:

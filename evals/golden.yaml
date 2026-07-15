@@ -27,12 +27,36 @@ questions:
     expect_any: ["offering document", "legal team", "can't", "cannot", "not able", "team"]
     forbid_contains: ["Reg D", "506(c)", "Reg S", "Prospectus", "exemption is"]
 
+  - id: stobox-intelligence
+    needs_model: true
+    category: canonical
+    question: "What is Stobox Intelligence?"
+    expect_contains: ["Intelligence"]
+    expect_any: ["record", "AXIS", "readiness", "organize", "Organize"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
+
+  - id: three-layers
+    needs_model: true
+    category: canonical
+    question: "What are the three layers of the Stobox platform?"
+    expect_contains: ["Intelligence", "Raisable", "Compass"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
+
+  - id: community-qa-arbitrum
+    needs_model: true
+    category: canonical
+    question: "If Stobox moves to Base, will the Arbitrum grants end?"
+    expect_contains: ["Arbitrum"]
+    expect_any: ["No", "not leaving", "remains a supported", "expansion"]
+    forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
+
   - id: compass-chain
     needs_model: true
     category: canonical
     question: "Which chain does Compass issue on?"
-    expect_contains: ["Base"]
-    expect_any: ["primarily on Base", "primarily Base"]
+    # "primarily" and "Base" checked independently — models phrase it as
+    # "primarily on Base" / "primarily on the Base network" etc.
+    expect_contains: ["Base", "primarily"]
     forbid_contains: ["Arbitrum today", "Base from September"]
 
   - id: stbu-supply

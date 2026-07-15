@@ -11,7 +11,7 @@
 #   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
-version: 2026-07-14.1
+version: 2026-07-14.2
 
 company:
   operating_entity: "Stobox Technologies Inc."
@@ -23,9 +23,37 @@ company:
     - "Verified Member of the STO Foundation"
 
 products:
+  # The three-layer lineup as published on stobox.io (llms-full.txt):
+  # one intelligence core across the private-company lifecycle.
+  three_layers: >
+    Stobox delivers one intelligence core across three layers:
+    Intelligence (Organize) -> Raisable (Raise) -> Compass (Tokenize).
+    The best entry point for a new company is the free Readiness Score:
+    25 questions, no credit card, same methodology as Stobox Compass.
+  intelligence:
+    name: "Stobox Intelligence"
+    layer: "Organize"
+    what: >
+      Turns a private company into one canonical, verifiable record, scored
+      across the 7 AXIS readiness pillars (AXIS = Asset eXperience
+      Intelligence Score, the open methodology also used by Stobox Compass).
+    url: "https://www.stobox.io/intelligence"
+  raisable:
+    name: "Stobox Raisable"
+    layer: "Raise"
+    what: >
+      Converts that record into a broker-acceptance-grade regulated offering,
+      for a flat fee — never a percentage of the raise. The live site lists
+      the supported offering frameworks; never state which framework applies
+      to any specific offering or token.
+    url: "https://www.stobox.io/raisable"
   compass:
     name: "Stobox Compass"
-    what: "Tokenization readiness platform / screener"
+    layer: "Tokenize"
+    what: >
+      Tokenization readiness platform / screener; issues a live, compliant
+      tokenized security with an on-chain registry and Asset Passport,
+      non-custodial.
     urls: ["https://stobox.io/compass", "https://app.stobox.io"]
     chains_phrasing: >
       Stobox Compass issues security tokens primarily on Base, with Arbitrum
@@ -33,9 +61,10 @@ products:
     never_say:
       - "Arbitrum today / Base from September 2026"   # superseded wrong framing
   lineup_rule: >
-    Describe the product lineup ONLY as the live stobox.io describes it at
-    answer time (retrieved chunks). Internal product names and unreleased
-    tiers must never be mentioned.
+    The lineup above matches the live stobox.io. For details beyond it,
+    describe products ONLY as the live site describes them at answer time
+    (retrieved chunks). Internal product names and unreleased tiers must
+    never be mentioned.
 
 tokens:
   stbx:
@@ -86,7 +115,7 @@ valuation:
 official_links:
   website: "https://stobox.io"
   app: "https://app.stobox.io"
-  x: "https://x.com/StoboxCompany"        # NOT @stobox_io, NOT @stobox_official
+  x: "https://x.com/StoboxCompany"        # the ONLY official X handle; never name impostor handles — say "anything else is not us"
   linkedin: "https://www.linkedin.com/company/stobox/"
   telegram: "https://t.me/stobox_community"
   youtube: "https://www.youtube.com/@stobox"

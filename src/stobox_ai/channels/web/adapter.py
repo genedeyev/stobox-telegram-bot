@@ -17,7 +17,7 @@ from typing import Any
 from ...core.engine import AgentEngine
 from ...core.types import AgentResponse, Author, ChatType, IncomingMessage
 from ...logging import get_logger
-from ..base import Channel
+from ..base import Channel, public_citation_url
 
 log = get_logger(__name__)
 
@@ -76,7 +76,7 @@ class WebChannel(Channel):
                     "title": c.title,
                     "section": c.section,
                     "version": c.version,
-                    "source_url": c.source_url,
+                    "source_url": public_citation_url(c.source_url),
                     "label": c.render(),
                 }
                 for c in response.citations
@@ -210,9 +210,11 @@ def main() -> None:  # pragma: no cover - launches a server
 
     import uvicorn
 
+    # Honor the platform-injected $PORT (Railway/Render/Heroku/Fly) first.
+    port = int(os.environ.get("WEB_PORT") or os.environ.get("PORT") or "8080")
     uvicorn.run(
         "stobox_ai.channels.web.adapter:create_app_from_config",
         factory=True,
         host=os.environ.get("WEB_HOST", "0.0.0.0"),
-        port=int(os.environ.get("WEB_PORT", "8080")),
+        port=port,
     )
