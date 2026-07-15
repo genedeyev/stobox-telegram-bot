@@ -117,6 +117,8 @@ class TelegramChannel(Channel):
         )
         # AMA upvote buttons.
         self.app.add_handler(CallbackQueryHandler(self._on_ama_callback, pattern=r"^ama:"))
+        # Interactive /guide navigation.
+        self.app.add_handler(CallbackQueryHandler(self._on_guide_callback, pattern=r"^guide:"))
         # Quiz scoring: award XP when a member answers a quiz poll correctly.
         self.app.add_handler(PollAnswerHandler(self._on_poll_answer))
         self.app.add_error_handler(self._on_error)
@@ -523,6 +525,21 @@ class TelegramChannel(Channel):
                 "I'll never share your address, and you can ignore this if you'd rather not.",
                 parse_mode="HTML",
             )
+
+    async def _on_guide_callback(self, update, context) -> None:
+        """Navigate the interactive /guide (menu ⇄ sections)."""
+        from . import commands as cmd
+
+        query = update.callback_query
+        section = (query.data or "guide:menu").split(":", 1)[1]
+        text, markup = cmd.guide_view(section)
+        try:
+            await query.edit_message_text(
+                text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True
+            )
+        except Exception:  # noqa: BLE001 - identical content / too old to edit
+            pass
+        await query.answer()
 
     async def _on_ama_callback(self, update, context) -> None:
         """A member taps 👍 to upvote an AMA question."""

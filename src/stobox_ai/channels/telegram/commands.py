@@ -37,6 +37,86 @@ def _is_admin(update, context) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# Interactive user guide (/guide) — button-navigated "what can Stoby do"
+# --------------------------------------------------------------------------- #
+_GUIDE_MENU = (
+    "🧭 <b>Stoby — quick guide</b>\n\n"
+    "I'm the resident AI of the Stobox community. Tap a topic to see what I can do:"
+)
+_GUIDE_SECTIONS = {
+    "ask": (
+        "💬 <b>Ask me anything</b>\n\n"
+        "Just type your question — Stobox, tokenization, RWAs, Compass, STV3, ERC-3643, "
+        "jurisdictions, anything. I answer from the official docs and show my sources.\n\n"
+        "• Short answers by default — tap <b>📖 More detail</b> for the deep dive\n"
+        "• Tap <b>📩 Email me this</b> to get a full write-up by email\n"
+        "• In groups, @mention me or reply to my message\n\n"
+        "Try: <i>“What is Stobox Compass?”</i>"
+    ),
+    "migration": (
+        "🪙 <b>STBU &amp; migration</b>\n\n"
+        "• /migrate — the STBU→Base migration, step by step\n"
+        "• /check — paste your <b>public</b> wallet address and I'll show your STBU across "
+        "every chain + your exact path (read-only, I never ask for keys)\n"
+        "• /remindme — reminders before the migration deadline\n"
+        "• /valuation — the company valuation (not a token price)\n\n"
+        "⚠️ Stobox staff never DM you first. Never share your seed phrase or private key."
+    ),
+    "tokenize": (
+        "🏢 <b>Tokenize an asset</b>\n\n"
+        "Exploring tokenization for your company, fund, or real estate?\n"
+        "• /compass — run the free Readiness Score (25 questions, no card)\n"
+        "• Tell me about your asset and I'll point you to the right path\n"
+        "• /contact — reach the Stobox team\n\n"
+        "Stobox's three layers: <b>Intelligence</b> (organize) → <b>Raisable</b> (raise) → "
+        "<b>Compass</b> (tokenize)."
+    ),
+    "community": (
+        "🏆 <b>Community &amp; rewards</b>\n\n"
+        "Take part, earn XP, climb the leaderboard:\n"
+        "• /rank — your XP, level &amp; streak\n"
+        "• /leaderboard — this week's top members\n"
+        "• /ama — submit a question for the next community AMA\n"
+        "• Answer quiz nights for bonus XP · keep a daily streak!\n\n"
+        "Share a good answer with the ↗️ button to help the community grow."
+    ),
+    "verify": (
+        "🔗 <b>Verify &amp; get help</b>\n\n"
+        "• /sources — the official Stobox links (verify I'm the real me)\n"
+        "• /contact — reach support / the team\n"
+        "• /help — the full command list\n"
+        "• /report — report an issue · /feedback — send feedback\n\n"
+        "I'm an AI — I can be wrong. Official pages and offering documents always take "
+        "precedence, and I don't give financial or legal advice."
+    ),
+}
+
+
+def guide_view(section: str = "menu"):
+    """Return (text, InlineKeyboardMarkup) for the guide menu or a section."""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    if section == "menu" or section not in _GUIDE_SECTIONS:
+        rows = [
+            [InlineKeyboardButton("💬 Ask me anything", callback_data="guide:ask"),
+             InlineKeyboardButton("🪙 STBU & migration", callback_data="guide:migration")],
+            [InlineKeyboardButton("🏢 Tokenize an asset", callback_data="guide:tokenize"),
+             InlineKeyboardButton("🏆 Community & rewards", callback_data="guide:community")],
+            [InlineKeyboardButton("🔗 Verify & get help", callback_data="guide:verify")],
+        ]
+        return _GUIDE_MENU, InlineKeyboardMarkup(rows)
+    back = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to guide", callback_data="guide:menu")]])
+    return _GUIDE_SECTIONS[section], back
+
+
+async def guide_cmd(update, context) -> None:
+    text, markup = guide_view("menu")
+    await update.effective_message.reply_text(
+        text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True
+    )
+
+
+# --------------------------------------------------------------------------- #
 # User commands
 # --------------------------------------------------------------------------- #
 async def start_cmd(update, context) -> None:
@@ -70,7 +150,8 @@ async def start_cmd(update, context) -> None:
         "• <b>STBU / STBX holder</b> — try /migrate, /valuation, or /remindme for "
         "migration-deadline reminders.\n"
         "• <b>Learn about Stobox</b> — ask me anything; I answer from stobox.io.\n\n"
-        "I share information, not investment advice. Verify me with /sources.",
+        "New here? Tap /guide for a quick tour. I share information, not investment "
+        "advice — verify me with /sources.",
         parse_mode="HTML", disable_web_page_preview=True,
     )
 
@@ -337,6 +418,7 @@ async def stopreminders_cmd(update, context) -> None:
 async def help_cmd(update, context) -> None:
     await update.effective_message.reply_text(
         "<b>Stoby — commands</b>\n"
+        "/guide – interactive tour of what I can do\n"
         "/migrate – STBU→Base migration explainer\n"
         "/check – check your STBU across chains (paste a public address)\n"
         "/compass – Stobox Compass + readiness check\n"
@@ -993,6 +1075,7 @@ def registry() -> dict:
     handlers = {
         "help": help_cmd,
         "start": start_cmd,
+        "guide": guide_cmd,
         "about": about_cmd,
         "docs": docs_cmd,
         "search": search_cmd,

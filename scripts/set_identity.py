@@ -24,6 +24,7 @@ SHORT_DESCRIPTION = (   # ≤120 chars (shown on the profile / empty-chat screen
     "Ask me anything about tokenization."
 )
 COMMANDS = [
+    ("guide", "What Stoby can do (quick tour)"),
     ("migrate", "STBU → Base migration"),
     ("check", "Check your STBU across chains"),
     ("compass", "Stobox Compass + readiness check"),

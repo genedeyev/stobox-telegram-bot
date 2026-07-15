@@ -3,6 +3,10 @@
 Stoby is the resident AI of the Stobox community. This tracks what's shipped and
 what's planned. "Shipped" = in `main`, tested, golden-gated.
 
+> **🟢 LIVE in production** — Railway (worker) + Supabase (pgvector), running
+> 24/7. Handle `@stobox_assistant_bot`, display name "Stoby | AI Assistant".
+> Persisted state on an `/app/data` volume. Waves 1 & 2 complete.
+
 ## ✅ Shipped
 
 **Core** — grounded RAG with citations, 3-block compliance prompt (CORE +
@@ -13,7 +17,8 @@ GitHub), hot-reload docs watcher.
 **Conversation** — human/emotional v3 answers, English-only, adaptive depth,
 **short answers with progressive disclosure** (📖 More detail / 📩 Email me this
 / 💬 Continue in DM buttons), instant "checking the docs…" placeholder, share
-buttons, community-QA canonical answers.
+buttons, community-QA canonical answers, **interactive /guide** (button-navigated
+user tour), Stoby identity (name/description/command-menu set via Bot API).
 
 **Community & growth** — new-member welcome, deep-link attribution + referral
 tracking (`/stats`), blog auto-announcements (OG cards), native polls, share
