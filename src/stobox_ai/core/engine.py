@@ -121,6 +121,16 @@ class AgentEngine:
             window_min=int(config.get("moderation.fud_alert.window_min", 10)),
             cooldown_min=int(config.get("moderation.fud_alert.cooldown_min", 30)),
         )
+        # Content flywheel — community question-gaps → blog outlines as issues.
+        import os as _os
+
+        from ..content import ContentFlywheel
+
+        self.flywheel = ContentFlywheel(
+            repo=config.get("content.repo", "genedeyev/stobox-v15"),
+            token=_os.environ.get("GITHUB_TOKEN"),
+            state_path=config.get("content.state_path", "data/content_flywheel.json"),
+        )
         # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
         from ..ops.email import EmailSender
 

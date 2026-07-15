@@ -98,7 +98,37 @@ class ProactiveScheduler:
         # Opt-in win-back: check quiet subscribers a few times a day.
         if cfg.get("proactive.winback.enabled", True):
             jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
+        # Weekly content-ideas preview to admins (from community question-gaps).
+        if cfg.get("proactive.content.enabled", True):
+            jq.run_repeating(self._content_job, interval=7 * 24 * 3600, first=6 * 3600)
         log.info("proactive.scheduled")
+
+    async def _content_job(self, context) -> None:
+        """DM admins a weekly preview of blog outlines drafted from question-gaps."""
+        admins = getattr(self.app.bot_data.get("adapter"), "admins", set())
+        if not admins:
+            return
+        try:
+            results = await self.engine.flywheel.run(
+                self.engine.decisions.records(), dry_run=True, limit=5
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("content.job_failed", error=str(exc))
+            return
+        if not results:
+            return
+        lines = [f"📝 Weekly content ideas ({len(results)}) — from community questions:"]
+        for r in results:
+            tag = "🕳 gap" if r["is_gap"] else f"{r['count']}×"
+            lines.append(f"• {tag} — {r['title'][:80]}")
+        lines.append("\nRun /content file to open these as GitHub issues.")
+        text = "\n".join(lines)
+        for admin_id in admins:
+            try:
+                await context.bot.send_message(admin_id, text, disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001
+                pass
+        log.info("content.previewed", count=len(results))
 
     async def _reminder_job(self, context) -> None:
         from ...guardrails.canonicals import _as_date

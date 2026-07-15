@@ -1220,6 +1220,36 @@ async def gaps_cmd(update, context) -> None:
     await update.effective_message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+async def content_cmd(update, context) -> None:
+    """Draft blog outlines from community question-gaps. `/content file` files
+    them as GitHub issues; bare `/content` previews without filing."""
+    if not _is_admin(update, context):
+        return
+    engine = _engine(context)
+    do_file = bool(context.args and context.args[0].lower() in ("file", "go", "issues"))
+    decisions = engine.decisions.records()
+    results = await engine.flywheel.run(decisions, dry_run=not do_file, limit=5)
+    if not results:
+        await update.effective_message.reply_text(
+            "No fresh content themes yet — need a few more recurring questions. "
+            "Check /gaps for what's building."
+        )
+        return
+    lines = [f"📝 <b>Content ideas from community questions</b> ({len(results)}):"]
+    for r in results:
+        tag = "🕳 gap" if r["is_gap"] else f"{r['count']}×"
+        if r["filed"]:
+            lines.append(f"✅ #{r['issue']} · {tag} — {r['title'][:70]}")
+        else:
+            lines.append(f"• {tag} — {r['title'][:70]}")
+    if not do_file:
+        has_token = bool(engine.flywheel.token)
+        lines.append("\n<i>Preview only.</i> " + (
+            "Run <code>/content file</code> to open GitHub issues."
+            if has_token else "Set GITHUB_TOKEN to file these as issues."))
+    await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+
+
 async def admin_cmd(update, context) -> None:
     if not _is_admin(update, context):
         await update.effective_message.reply_text("Not authorized.")
@@ -1227,7 +1257,7 @@ async def admin_cmd(update, context) -> None:
     await update.effective_message.reply_text(
         "🔐 Admin: /amaopen /amaclose /amalist /amaclear /quiz /pending /answer /pause "
         "/resume /sync /reindex /stats /health "
-        "/digest /faq /gaps /prompts /reload /memory /export /logs /debug /test /cache /users\n"
+        "/digest /faq /gaps /content /prompts /reload /memory /export /logs /debug /test /cache /users\n"
         "🛡 Moderation (reply to a user): /warn /mute [min] /unmute /ban · "
         "/unban &lt;id&gt; /strikes /clearstrikes /cleanup /modstats"
     )
@@ -1269,6 +1299,7 @@ def registry() -> dict:
         "digest": digest_cmd,
         "faq": faq_cmd,
         "gaps": gaps_cmd,
+        "content": content_cmd,
         "sync": sync_cmd,
         "resync": sync_cmd,
         "pause": pause_cmd,

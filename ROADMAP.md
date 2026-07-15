@@ -76,14 +76,19 @@ daily cron, preflight doctor, Railway + Supabase deploy (LIVE).
   who've gone quiet (14-day inactive, opt-in only, 45-day cooldown, one-tap out).
 
 ### Wave 4 — ops polish
-- **Content flywheel** — top unanswered themes → auto-drafted blog outlines as
-  stobox-v15 issues.
+- ✅ **Content flywheel** (`/content`) — recurring community questions (esp. the
+  low-confidence gaps) become deterministic blog-outline briefs, filed as
+  GitHub issues on the content repo (dedup via persisted theme keys). Admin
+  preview by default; `/content file` opens issues; weekly preview DM'd to admins.
 - ✅ **Real-time FUD/sentiment alarm** — the router tags every message's
   sentiment (frustrated / angry / anxious / fud / toxic); Stoby de-escalates
   with a calm, human reply (facts only), AND a coordinated-FUD spike (N flagged
   messages in a short window, per-chat, cooldowned) now DMs admins immediately —
   even when Stoby stays silent publicly — so a human can step in fast.
-- **Analytics dashboard UI** (data already served at `/insights/*`).
+- ✅ **Analytics dashboard UI** — a self-contained, theme-aware HTML dashboard at
+  `GET /insights` (community health, top questions, doc gaps, potential leads,
+  languages, moderation), rendered from the live decision log. Auto-refreshes;
+  gate behind auth in production.
 
 ### Group hygiene (live)
 - ✅ **Deleted-account removal** — Stoby auto-kicks ghost "Deleted Account"

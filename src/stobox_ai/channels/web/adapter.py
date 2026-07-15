@@ -170,6 +170,15 @@ def create_app_from_config():
         # NOTE: protect behind auth/gateway in production — analytics data.
         return JSONResponse(request.app.state.engine.daily_digest().build())
 
+    async def dashboard_endpoint(request: Request):
+        # NOTE: protect behind auth/gateway in production — analytics data.
+        from starlette.responses import HTMLResponse
+
+        from ...insights.dashboard import render_dashboard
+
+        digest = request.app.state.engine.daily_digest().build()
+        return HTMLResponse(render_dashboard(digest))
+
     async def faq_endpoint(request: Request):
         entries = await request.app.state.engine.weekly_faq().generate(top_n=10)
         from ...insights import WeeklyFAQ
@@ -197,6 +206,7 @@ def create_app_from_config():
         routes=[
             Route("/chat", chat_endpoint, methods=["POST"]),
             Route("/health", health_endpoint, methods=["GET"]),
+            Route("/insights", dashboard_endpoint, methods=["GET"]),
             Route("/insights/digest", digest_endpoint, methods=["GET"]),
             Route("/insights/faq", faq_endpoint, methods=["GET"]),
             Route("/api/reingest", reingest_endpoint, methods=["POST"]),
