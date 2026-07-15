@@ -53,3 +53,19 @@ async def test_engine_stays_silent_on_group_chitchat(config):
     resp = await engine.handle(msg)
     # Engine should decline to reply to unaddressed group small-talk.
     assert resp is None
+
+
+@pytest.mark.asyncio
+async def test_engine_answers_untagged_group_question(config):
+    """A real question in a group is answered even without an @mention/reply."""
+    engine = await AgentEngine.create(config)
+    msg = IncomingMessage(
+        author=Author(external_id="8", display_name="Curious"),
+        text="What is the STBU token used for?",
+        chat_id="grp-2",
+        chat_type=ChatType.GROUP,
+        message_id="10",
+        raw={"addressed": False},  # NOT tagged, NOT a reply
+    )
+    resp = await engine.handle(msg)
+    assert resp is not None and resp.text

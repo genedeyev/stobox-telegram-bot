@@ -535,12 +535,13 @@ class AgentEngine:
     def _should_engage(self, msg: IncomingMessage, routing: Routing) -> bool:
         if msg.is_private:
             return True
-        if msg.author.is_admin and msg.raw.get("addressed"):
-            return True
-        # In groups, engage when directly addressed or when it's a real question.
+        # In a group, always engage when directly addressed (@mention or reply).
         if msg.raw.get("addressed"):
             return True
-        return routing.is_question and routing.needs_docs
+        # Untagged: jump in on any question, or a clearly Stobox-relevant message
+        # (the router tags topics / needs_docs for those) — but stay quiet on pure
+        # chatter ("hey", "gm", "lol"), which carries no question, docs, or topics.
+        return routing.is_question or routing.needs_docs or bool(routing.topics)
 
     async def _answer(
         self,
