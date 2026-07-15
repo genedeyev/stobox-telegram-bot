@@ -127,3 +127,23 @@ async def test_fud_spike_raises_admin_alert(config):
     assert not (r1 and r1.meta.get("fud_alert"))
     assert not (r2 and r2.meta.get("fud_alert"))
     assert r3 is not None and r3.meta.get("fud_alert") == 3
+
+
+@pytest.mark.asyncio
+async def test_mql_summary_emitted_once(config):
+    """An MQL (email + intent) sets mql_summary the first time only."""
+    engine = await AgentEngine.create(config)
+
+    def msg():
+        return IncomingMessage(
+            author=Author(external_id="mql1", display_name="Lead"),
+            text="I want to tokenize my building — email me at lead@acme.com",
+            chat_id="dm-1", chat_type=ChatType.PRIVATE, message_id="1",
+            raw={"addressed": True},
+        )
+
+    r1 = await engine.handle(msg())
+    assert r1 is not None and r1.meta.get("mql_summary")        # first time → notify
+    assert "lead@acme.com" in r1.meta["mql_summary"]
+    r2 = await engine.handle(msg())
+    assert r2 is not None and not r2.meta.get("mql_summary")    # already notified

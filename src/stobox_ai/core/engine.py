@@ -751,6 +751,11 @@ class AgentEngine:
         )
         if await self.leads.handoff(profile):
             response.lead_captured = True
+            # Ping admins in Telegram once, the first time they become an MQL —
+            # a zero-config safety net alongside the email to the team inbox.
+            if not profile.mql_notified:
+                profile.mql_notified = True
+                response.meta["mql_summary"] = self.leads.summary(profile)
 
     async def _moderation_response(
         self, msg: IncomingMessage, verdict, thread_key: str, started: float

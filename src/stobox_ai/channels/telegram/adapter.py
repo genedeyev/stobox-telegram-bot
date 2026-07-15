@@ -456,10 +456,31 @@ class TelegramChannel(Channel):
                 pass
         log.info("fud.alert_sent", chat=str(getattr(chat, "id", "?")), count=count)
 
+    async def _dm_admins(self, context, text: str) -> None:
+        """Best-effort broadcast to every configured admin."""
+        for admin_id in self.admins:
+            try:
+                await context.bot.send_message(admin_id, text, disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001 - admin hasn't started the bot, etc.
+                pass
+
+    async def notify_mql_admins(self, context, profile) -> bool:
+        """DM admins a fresh MQL once (safety net beside the team-inbox email)."""
+        if profile.mql_notified or not (profile.email and profile.lead_score >= 40):
+            return False
+        profile.mql_notified = True
+        await self._dm_admins(context, "🟢 New MQL from Telegram\n\n"
+                              + self.engine.leads.summary(profile))
+        return True
+
     async def _render(self, update, context, response, placeholder=None) -> None:
         # Coordinated-FUD spike → ping admins immediately (independent of the reply).
         if response.meta.get("fud_alert"):
             await self._alert_fud(context, update, response)
+        # Fresh MQL from the passive lead path → DM admins the summary.
+        if response.meta.get("mql_summary"):
+            await self._dm_admins(context, "🟢 New MQL from Telegram\n\n"
+                                  + response.meta["mql_summary"])
         # Moderation verdict → apply action, DM the offender, post the mod-log.
         if response.moderation != ModerationAction.NONE or response.meta.get("alert_admin"):
             await self._handle_moderation(update, context, response)
@@ -677,7 +698,7 @@ class TelegramChannel(Channel):
         except Exception:  # noqa: BLE001
             await context.bot.send_message(query.message.chat.id, text,
                                            parse_mode="HTML", reply_markup=markup)
-        await self._capture_axis_lead(query.from_user, session)
+        await self._capture_axis_lead(context, query.from_user, session)
 
     async def _on_match_callback(self, update, context) -> None:
         """Show the tailored resource pack from the AXIS 'Resources' button."""
@@ -695,7 +716,7 @@ class TelegramChannel(Channel):
             pass
         await query.answer()
 
-    async def _capture_axis_lead(self, user, session) -> None:
+    async def _capture_axis_lead(self, context, user, session) -> None:
         try:
             uk = f"telegram:{user.id}"
             profile = await self.engine.memory.get_profile(uk, user.full_name)
@@ -706,6 +727,7 @@ class TelegramChannel(Channel):
                     profile.add_product(v)
             self.engine.leads.update_score(profile, buying_intent=True, has_email=bool(profile.email))
             await self.engine.leads.handoff(profile)
+            await self.notify_mql_admins(context, profile)   # no-op unless email + qualified
             await self.engine.memory.save_profile(profile)
             self.engine.xp.award(uk, 5, "qualified", user.full_name)
             from ...leads.axis import band

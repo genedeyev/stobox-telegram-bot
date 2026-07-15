@@ -415,6 +415,7 @@ async def email_cmd(update, context) -> None:
     # Always capture as a warm lead (email = strong intent).
     engine.leads.update_score(profile, buying_intent=True, has_email=True)
     await engine.leads.handoff(profile)
+    await adapter.notify_mql_admins(context, profile)   # Telegram safety net
     await engine.memory.save_profile(profile)
 
     if sent:
