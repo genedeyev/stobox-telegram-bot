@@ -118,7 +118,9 @@ proactive:
     quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 (chat tz)
   growth:
     revive_inactive: true
-    inactivity_minutes: 240        # nudge a quiet chat after N minutes
+    inactivity_minutes: 180        # after N min of silence, surface a blog post /
+                                   # fact (skips 00:00–07:00). Dial 120 for more
+                                   # presence, 240 for less.
   blog_announcements:
     enabled: true                  # announce every newly published blog post
     interval_minutes: 10           # how often to check for new posts (cheap diff)
