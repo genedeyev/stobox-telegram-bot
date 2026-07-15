@@ -47,6 +47,10 @@ production** (Railway + Supabase), no human in the loop for day-to-day operation
 - **Engagement engine** — XP, daily streaks, levels (Newcomer → Community OG), **weekly
   leaderboard**, **native quiz nights** (auto-scored), **AMA collector** (crowd-ranked).
 - **Opt-in migration reminders** (`/remindme`) counting down to the Sep 15 deadline.
+- **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — new blog posts are
+  keyword-routed and DM-pushed only to that topic's subscribers, each with a one-tap out.
+- **Win-back nudges** — one gentle, cooled-down check-in for subscribers who've gone quiet
+  (14-day inactive, opt-in only). Never a cold DM.
 
 ### 🛡 Moderation (Stoby is a group admin)
 - 4 layers: deterministic filters (slurs, doxxing, scams, flood) + LLM classifier + **strike
@@ -54,16 +58,30 @@ production** (Railway + Supabase), no human in the loop for day-to-day operation
   harassment = delete→mute→ban; **honest criticism never touched**).
 - **Impersonation defense** (fake "Stobox Support" → alert or ban), **mod-log** with one-tap
   Pardon/Ban, offender DMs with `/appeal`.
+- **Deleted-account removal** (`/cleanup`) — auto-kicks ghost accounts as they surface.
+- **Sentiment-aware de-escalation** — reads each message's emotional temperature and, when the
+  room is heated or spreading FUD, replies calmly with published facts; a **coordinated-FUD
+  spike** DMs admins immediately (not just the daily digest).
 
 ### 💰 Leads & conversion
+- **In-chat pre-qualifier** (`/qualify`) — a 5-tap fit check that routes to the free Readiness
+  Score, plus a **resource matcher** (`/resources`) mapping asset + jurisdiction to the right
+  published guides. Neither ever fabricates a score, case study, or legal conclusion.
 - Buying-intent detection, lead scoring, **on-chain wallet migration checker** (`/check` reads
-  STBU balances across chains, read-only), CRM handoff (`source=telegram-bot`).
+  STBU balances across chains, read-only).
+- **Lead handoff** — a qualified MQL is emailed as a summary to `info@stobox.io` (via **Resend**
+  or SMTP) *and* DM'd to admins as a zero-config safety net; users are routed to self-serve
+  (app.stobox.io · contact form · Readiness Score). CRM is a one-line `CRM_WEBHOOK_URL` switch.
 
 ### 🤖 Runs itself + keeps you in control
 - **Unanswered-question loop** — Stoby captures what it can't answer, proposes a draft, DMs
   admins; you tap `/approve` or `/answer`, and it replies to everyone who asked + saves the
   wording to the register.
 - **Daily digest**, **weekly FAQ**, **documentation-gap** detection, full **decision log**.
+- **Content flywheel** (`/content`) — recurring/low-confidence questions become blog-outline
+  briefs filed as GitHub issues (dedup'd; weekly preview DM'd to admins).
+- **Analytics dashboard** — a self-contained, theme-aware HTML view at `GET /insights`
+  (community health, top questions, doc gaps, potential leads, languages, moderation).
 - **Ops safety:** per-user rate limiting + global spend cap + `/pause` kill switch.
 
 ### 🔌 Channel-agnostic core
@@ -116,7 +134,7 @@ state (strikes, XP, reminders, question queue) lives under `/app/data` (Railway 
 ```bash
 pip install -e ".[dev]"
 stobox-doctor          # preflight: what's configured / missing
-pytest -q              # 85 offline tests
+pytest -q              # 143 offline tests
 stobox-golden          # compliance gate (needs API keys for the full run)
 ruff check src evals tests
 ```
@@ -128,9 +146,14 @@ Console scripts: `stobox-bot` (run) · `stobox-web` · `stobox-doctor` · `stobo
 
 ## What's planned
 
-See **[ROADMAP.md](ROADMAP.md)**. Highlights: AXIS pre-qualifier in chat, case-study &
-jurisdiction matcher, real Twenty CRM connector, topic subscriptions, win-back, content
-flywheel, sentiment alarm, analytics dashboard, multimodal ingestion, Slack adapter.
+See **[ROADMAP.md](ROADMAP.md)**. Waves 1–4 are shipped (pre-qualifier, resource matcher,
+subscriptions, win-back, de-escalation, FUD alarm, deleted-account removal, content flywheel,
+analytics dashboard). Still open: the real **Twenty CRM** connector (needs credentials —
+`CRM_WEBHOOK_URL` is the switch), multimodal ingestion, and a Slack adapter.
+
+**📖 Full field guide:** [`docs/stoby-guide.html`](docs/stoby-guide.html) — a complete,
+browser-ready walkthrough of what Stoby does, how he thinks, what he knows, and what he can
+(and can't) access.
 
 ---
 

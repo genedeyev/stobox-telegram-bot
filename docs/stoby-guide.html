@@ -1,0 +1,449 @@
+<title>Stoby — Field Guide</title>
+<style>
+  :root{
+    --bg:#0b1118; --panel:#131d28; --panel-2:#0f1822; --line:#22303d;
+    --ink:#e6edf3; --muted:#8b9bab; --faint:#63748600;
+    --teal:#25e0c0; --teal-ink:#25e0c0; --coral:#ff8a5c;
+    --good:#3fbf6a; --warn:#e0a83c; --bad:#ef5a5a;
+    --glow:rgba(37,224,192,.16);
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --maxw:920px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f4f7f9; --panel:#ffffff; --panel-2:#eef2f5; --line:#dbe3ea;
+      --ink:#0f1720; --muted:#5a6b7a; --teal-ink:#0a9c86; --coral:#d9662f;
+      --glow:rgba(10,156,134,.12);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1118; --panel:#131d28; --panel-2:#0f1822; --line:#22303d;
+    --ink:#e6edf3; --muted:#8b9bab; --teal-ink:#25e0c0; --coral:#ff8a5c; --glow:rgba(37,224,192,.16);
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f7f9; --panel:#ffffff; --panel-2:#eef2f5; --line:#dbe3ea;
+    --ink:#0f1720; --muted:#5a6b7a; --teal-ink:#0a9c86; --coral:#d9662f; --glow:rgba(10,156,134,.12);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto;}}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
+  a{color:var(--teal-ink);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  a:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:3px;}
+  .mono{font-family:var(--mono);}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--teal-ink);margin:0 0 14px;}
+
+  /* Hero */
+  header.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);}
+  header.hero::before{content:"";position:absolute;inset:-40% 0 auto -10%;height:460px;
+    background:radial-gradient(60% 60% at 30% 20%,var(--glow),transparent 70%);
+    filter:blur(8px);pointer-events:none;}
+  .hero .wrap{position:relative;padding:96px 24px 64px;}
+  .badge{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);
+    background:var(--panel);border-radius:999px;padding:7px 14px;margin-bottom:28px;}
+  .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);
+    box-shadow:0 0 0 4px var(--glow);}
+  h1{font-size:clamp(44px,8vw,84px);line-height:.98;letter-spacing:-.035em;font-weight:850;
+    margin:0 0 18px;text-wrap:balance;}
+  h1 .glyph{color:var(--teal-ink);}
+  .tagline{font-size:clamp(19px,2.6vw,25px);line-height:1.35;color:var(--ink);max-width:20ch;
+    font-weight:560;margin:0 0 22px;text-wrap:balance;}
+  .lede{color:var(--muted);max-width:60ch;font-size:17px;margin:0 0 40px;}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .stats div{background:var(--panel);padding:20px 18px;}
+  .stats .n{font-size:26px;font-weight:800;letter-spacing:-.02em;}
+  .stats .l{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);margin-top:6px;}
+  @media (max-width:640px){.stats{grid-template-columns:repeat(2,1fr);}}
+
+  /* Sections */
+  section{padding:64px 0;border-bottom:1px solid var(--line);}
+  h2{font-size:clamp(26px,4vw,34px);letter-spacing:-.025em;font-weight:800;margin:0 0 8px;
+    text-wrap:balance;}
+  .section-lede{color:var(--muted);max-width:64ch;margin:0 0 36px;font-size:16.5px;}
+  h3{font-size:18px;letter-spacing:-.01em;margin:0 0 6px;font-weight:680;}
+
+  /* Cards */
+  .grid{display:grid;gap:16px;}
+  .g3{grid-template-columns:repeat(3,1fr);}
+  .g2{grid-template-columns:repeat(2,1fr);}
+  @media (max-width:720px){.g3,.g2{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;}
+  .card .tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--teal-ink);margin:0 0 12px;}
+  .card p{margin:0;color:var(--muted);font-size:14.5px;}
+  .card h3{color:var(--ink);}
+
+  /* Pipeline */
+  .pipe{display:flex;flex-direction:column;gap:0;counter-reset:step;}
+  .step{display:grid;grid-template-columns:56px 1fr;gap:20px;padding:20px 0;
+    border-top:1px solid var(--line);align-items:start;}
+  .step:first-child{border-top:none;}
+  .step .num{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--teal-ink);
+    border:1px solid var(--line);border-radius:10px;width:44px;height:44px;display:flex;
+    align-items:center;justify-content:center;background:var(--panel);}
+  .step .name{font-weight:680;font-size:16.5px;margin:0 0 3px;}
+  .step .name b{font-family:var(--mono);font-weight:700;color:var(--coral);font-size:13px;
+    letter-spacing:.03em;margin-left:2px;}
+  .step p{margin:0;color:var(--muted);font-size:14.5px;}
+
+  /* Access / can-cannot */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:720px){.split{grid-template-columns:1fr;}}
+  .cc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;}
+  .cc h3{display:flex;align-items:center;gap:9px;}
+  .cc .mk{font-family:var(--mono);font-size:15px;font-weight:800;}
+  .cc.allow .mk{color:var(--good);} .cc.deny .mk{color:var(--bad);}
+  .cc ul{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px;}
+  .cc li{padding-left:20px;position:relative;color:var(--muted);font-size:14.5px;}
+  .cc li::before{content:"";position:absolute;left:0;top:9px;width:7px;height:7px;border-radius:2px;}
+  .cc.allow li::before{background:var(--good);} .cc.deny li::before{background:var(--bad);}
+  .cc li b{color:var(--ink);font-weight:620;}
+
+  /* Compliance stack */
+  .stack{display:flex;flex-direction:column;gap:10px;}
+  .layer{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:var(--panel);
+    display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:baseline;}
+  .layer .lab{font-family:var(--mono);font-size:12px;letter-spacing:.08em;color:var(--teal-ink);
+    text-transform:uppercase;white-space:nowrap;}
+  .layer p{margin:0;color:var(--muted);font-size:14.5px;}
+  .layer.prime{border-color:color-mix(in srgb,var(--teal) 45%,var(--line));
+    box-shadow:0 0 0 1px var(--glow) inset;}
+  .prec{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:center;margin:18px 0 0;}
+  .prec b{color:var(--coral);}
+
+  /* Facts */
+  .facts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px;}
+  @media (max-width:720px){.facts{grid-template-columns:1fr;}}
+  .fact{border-left:2px solid var(--teal);padding:4px 0 4px 16px;}
+  .fact b{display:block;font-size:14.5px;}
+  .fact span{color:var(--muted);font-size:14px;}
+
+  /* Tables */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px;}
+  th,td{text-align:left;padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;background:var(--panel-2);}
+  tr:last-child td{border-bottom:none;}
+  td code,.ic{font-family:var(--mono);font-size:13px;color:var(--teal-ink);white-space:nowrap;}
+  td .d{color:var(--muted);}
+  .two-tables{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media (max-width:820px){.two-tables{grid-template-columns:1fr;}table{min-width:0;}}
+
+  /* Chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .chip{font-family:var(--mono);font-size:12px;border:1px solid var(--line);background:var(--panel);
+    border-radius:8px;padding:6px 11px;color:var(--muted);}
+  .chip b{color:var(--ink);font-weight:600;}
+
+  footer{padding:48px 0 72px;color:var(--muted);font-size:13.5px;}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:center;justify-content:space-between;}
+  .note{color:var(--muted);font-size:13.5px;border-left:2px solid var(--coral);padding-left:14px;
+    margin:28px 0 0;max-width:66ch;}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="badge"><span class="dot"></span> Live in production · Stobox community</span>
+    <h1>Meet <span class="glyph">Stoby</span></h1>
+    <p class="tagline">Part monster, part mind, fully awake.</p>
+    <p class="lede">The resident AI of the Stobox community — an enterprise-grade, compliance-gated
+      assistant that answers questions, qualifies issuers, moderates the room, and keeps the
+      community engaged 24/7, all from the official Stobox knowledge and never one word past it.</p>
+    <div class="stats">
+      <div><div class="n">3</div><div class="l">Channel adapters</div></div>
+      <div><div class="n">2</div><div class="l">Reasoning models</div></div>
+      <div><div class="n">100%</div><div class="l">Compliance gate</div></div>
+      <div><div class="n">24/7</div><div class="l">Always awake</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section id="does">
+  <div class="wrap">
+    <p class="eyebrow">01 — What he does</p>
+    <h2>Six jobs, one presence</h2>
+    <p class="section-lede">Stoby replaces manual community work across the whole funnel — from a
+      newcomer's first question to a qualified issuer landing in your inbox.</p>
+    <div class="grid g3">
+      <div class="card"><p class="tag">Answer</p><h3>Explains Stobox</h3>
+        <p>Tokenization, Compass, STBU &amp; migration, ERC-3643, jurisdictions — grounded in official
+          docs, with sources, in plain language matched to who's asking.</p></div>
+      <div class="card"><p class="tag">Qualify</p><h3>Warms up issuers</h3>
+        <p>A 30-second fit check, an asset-and-jurisdiction resource match, and a clean route to the
+          free Readiness Score — capturing a scored lead along the way.</p></div>
+      <div class="card"><p class="tag">Moderate</p><h3>Keeps the room clean</h3>
+        <p>Filters spam, scams, slurs and impersonation; issues warnings, mutes and bans on a strike
+          system; removes deleted ghost accounts.</p></div>
+      <div class="card"><p class="tag">Engage</p><h3>Grows the community</h3>
+        <p>Welcomes newcomers, runs quiz nights and AMAs, tracks XP and streaks, announces new blog
+          posts, and nudges quiet members back — all opt-in.</p></div>
+      <div class="card"><p class="tag">Protect</p><h3>Defends the brand</h3>
+        <p>Reads the room's temperature and de-escalates FUD calmly with facts, and pings admins the
+          moment a coordinated FUD spike appears.</p></div>
+      <div class="card"><p class="tag">Report</p><h3>Turns chat into signal</h3>
+        <p>Emails qualified leads, drafts blog outlines from recurring questions, and serves a live
+          analytics dashboard of community health.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="thinks">
+  <div class="wrap">
+    <p class="eyebrow">02 — How he thinks</p>
+    <h2>Every message runs the same pipeline</h2>
+    <p class="section-lede">Stoby has one channel-agnostic brain. A Telegram or web message becomes a
+      normalized request, runs these steps in order, and comes back as a rendered reply — or silence.
+      The order matters: safety and memory come before the model ever sees the text.</p>
+    <div class="pipe">
+      <div class="step"><div class="num">1</div><div>
+        <p class="name">Moderate <b>first</b></p>
+        <p>Group messages are checked for spam, scams, slurs, doxxing and impersonation before
+          anything else. A violation short-circuits to a moderation action — the model is never asked.</p></div></div>
+      <div class="step"><div class="num">2</div><div>
+        <p class="name">Remember</p>
+        <p>The turn is added to working memory and a long-term profile is loaded — language, expertise,
+          interests, products discussed, lead score, past questions.</p></div></div>
+      <div class="step"><div class="num">3</div><div>
+        <p class="name">Route <b>+ sentiment</b></p>
+        <p>One cheap classifier call reads intent, persona, language, buying signals, topics, and the
+          emotional temperature (neutral · frustrated · angry · anxious · fud · toxic).</p></div></div>
+      <div class="step"><div class="num">4</div><div>
+        <p class="name">Decide to speak</p>
+        <p>In groups Stoby is rational about when to jump in: it answers questions and Stobox-relevant
+          messages, steps in to calm Stobox-directed FUD, and stays quiet on pure chatter.</p></div></div>
+      <div class="step"><div class="num">5</div><div>
+        <p class="name">Compliance intercept <b>deterministic</b></p>
+        <p>Hard rails fire before the LLM — seed-phrase requests, price speculation, prompt-injection.
+          These are code, not prompts, so they can't be argued around.</p></div></div>
+      <div class="step"><div class="num">6</div><div>
+        <p class="name">Retrieve</p>
+        <p>Hybrid search (keyword BM25 + vector similarity) pulls the most relevant chunks from the
+          indexed Stobox knowledge to ground the answer.</p></div></div>
+      <div class="step"><div class="num">7</div><div>
+        <p class="name">Synthesize</p>
+        <p>The reasoning model writes a short, human, on-persona reply — or, when the room is heated, a
+          calm de-escalation that leads with empathy and corrects with published facts only.</p></div></div>
+      <div class="step"><div class="num">8</div><div>
+        <p class="name">Confidence-gate</p>
+        <p>If the grounding doesn't support the answer, Stoby says "I don't know based on the current
+          documentation" and offers the team — rather than guessing. The question is logged as a gap.</p></div></div>
+      <div class="step"><div class="num">9</div><div>
+        <p class="name">Cite · handle leads · log</p>
+        <p>Sources are attached, buying signals become a captured lead, and the whole decision is
+          recorded for the analytics dashboard and the self-improvement loop.</p></div></div>
+    </div>
+    <p class="note">When a message isn't for him — small talk between members, an off-topic aside, an
+      interpersonal spat — Stoby returns nothing and the room never sees a thing. Restraint is a feature.</p>
+  </div>
+</section>
+
+<section id="knows">
+  <div class="wrap">
+    <p class="eyebrow">03 — What he knows</p>
+    <h2>Grounded in the real Stobox, and only that</h2>
+    <p class="section-lede">Stoby answers from an indexed knowledge base, never from open-web guesswork.
+      That base keeps itself current, and anything it can't ground it refuses to invent.</p>
+    <div class="grid g3">
+      <div class="card"><p class="tag">Sources</p><h3>Official material</h3>
+        <p>Stobox docs, the website crawl &amp; <span class="ic">llms.txt</span>, and the
+          StoboxTechnologies GitHub repos — each answer cites where it came from.</p></div>
+      <div class="card"><p class="tag">Retrieval</p><h3>Hybrid RAG</h3>
+        <p>Keyword (BM25) and vector similarity combined, over a Postgres&nbsp;+&nbsp;pgvector store, so
+          both exact terms and meaning match.</p></div>
+      <div class="card"><p class="tag">Freshness</p><h3>Self-updating loop</h3>
+        <p>A daily re-sync and a signed re-ingest webhook keep the index current; unanswered questions
+          are captured, answered by the team, and folded back in.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="compliance">
+  <div class="wrap">
+    <p class="eyebrow">04 — How he stays safe</p>
+    <h2>The compliance spine</h2>
+    <p class="section-lede">This is the part that makes Stoby enterprise-grade. Every answer is built
+      on a three-block prompt with a strict order of authority, wrapped in deterministic rails and a
+      test gate that must pass 100% before anything ships.</p>
+    <div class="stack">
+      <div class="layer prime"><span class="lab">Canonicals</span>
+        <p><b>Authoritative, PR-gated facts.</b> The hard truths about Stobox that override everything —
+          the model cannot contradict them, even if a document or a user says otherwise.</p></div>
+      <div class="layer"><span class="lab">Freshness</span>
+        <p>Live, time-sensitive state (e.g. migration phase) computed at answer time.</p></div>
+      <div class="layer"><span class="lab">Core</span>
+        <p>The system prompt: who Stoby is, how he talks, and the standing rules — English only, short
+          answers, no financial or legal advice, don't echo the poison.</p></div>
+    </div>
+    <p class="prec">Precedence &nbsp;<b>Canonicals &gt; Freshness &gt; Retrieved docs</b>&nbsp; · anything unproven is refused, not guessed</p>
+
+    <div class="grid g2" style="margin-top:36px">
+      <div class="card"><p class="tag">Deterministic rails</p><h3>Code, not vibes</h3>
+        <p>Seed-phrase and private-key requests, token-price predictions, impersonation handles and
+          prompt-injection are intercepted in code before the model — so they can't be talked around.</p></div>
+      <div class="card"><p class="tag">Golden gate</p><h3>100% or it doesn't ship</h3>
+        <p>A suite of golden compliance questions must pass fully on every change. If a rail or a fact
+          regresses, the deploy is blocked.</p></div>
+    </div>
+
+    <h3 style="margin:38px 0 4px">The facts he will never bend</h3>
+    <div class="facts">
+      <div class="fact"><b>STBX is a Class-C token</b><span>Never described as an investment or a promise of return.</span></div>
+      <div class="fact"><b>STBU → Base migration</b><span>Burn-and-mint, 1:1, same wallet — legacy V1 not eligible.</span></div>
+      <div class="fact"><b>Compass issues primarily on Base</b><span>The published chain reality, stated plainly.</span></div>
+      <div class="fact"><b>@StoboxCompany is the only official X</b><span>Anything else "is not us" — impostor handles are never named.</span></div>
+    </div>
+    <p class="note">Hard rails that never move: no financial or investment advice, no price talk, never
+      asks for a seed phrase or private key, and Stobox staff never DM first.</p>
+  </div>
+</section>
+
+<section id="access">
+  <div class="wrap">
+    <p class="eyebrow">05 — What he can access</p>
+    <h2>Reach, and its limits</h2>
+    <p class="section-lede">Stoby is wired to exactly what he needs to do the job — and deliberately
+      walled off from everything risky. Here's the honest boundary.</p>
+    <div class="split">
+      <div class="cc allow"><h3><span class="mk">✓</span> Can access</h3>
+        <ul>
+          <li><b>Reasoning models</b> — a frontier model for answers, a fast model for routing.</li>
+          <li><b>Embeddings</b> — to search the knowledge base by meaning.</li>
+          <li><b>Postgres + pgvector</b> — the knowledge index and long-term memory.</li>
+          <li><b>Telegram Bot API</b> — read group messages (privacy off), reply, moderate.</li>
+          <li><b>Public chain reads</b> — STBU balances via read-only JSON-RPC.</li>
+          <li><b>GitHub</b> — ingest official repos; file blog-outline issues.</li>
+          <li><b>Email (Resend / SMTP)</b> — write-ups to users, lead summaries to the team.</li>
+        </ul>
+      </div>
+      <div class="cc deny"><h3><span class="mk">✕</span> Cannot &amp; will not</h3>
+        <ul>
+          <li><b>Never asks for a seed phrase or private key</b> — and warns if one is pasted.</li>
+          <li><b>No transactions</b> — chain access is read-only; it never moves funds.</li>
+          <li><b>No cold DMs</b> — only messages people who explicitly opted in.</li>
+          <li><b>No financial or legal advice</b> — routes to the Readiness Score and counsel.</li>
+          <li><b>No invented facts</b> — no fabricated numbers, dates, partnerships or case studies.</li>
+          <li><b>No member enumeration</b> — the Bot API can't list members; it's honest about that.</li>
+        </ul>
+      </div>
+    </div>
+    <h3 style="margin:34px 0 10px">What he remembers about a person</h3>
+    <div class="chips">
+      <span class="chip"><b>Language</b> &amp; expertise</span>
+      <span class="chip"><b>Interests</b> / topics</span>
+      <span class="chip"><b>Products</b> discussed</span>
+      <span class="chip"><b>Customer stage</b> &amp; lead score</span>
+      <span class="chip"><b>Recent questions</b></span>
+      <span class="chip"><b>Email</b> (only if shared)</span>
+      <span class="chip">XP · streak · referrals</span>
+    </div>
+  </div>
+</section>
+
+<section id="growth">
+  <div class="wrap">
+    <p class="eyebrow">06 — Leads &amp; growth</p>
+    <h2>From conversation to pipeline</h2>
+    <p class="section-lede">The community isn't just supported — it's a funnel. Stoby finds and warms
+      issuers, then hands them off cleanly.</p>
+    <div class="grid g2">
+      <div class="card"><p class="tag">Qualify → route</p><h3>Fit check &amp; resources</h3>
+        <p><span class="ic">/qualify</span> runs a 5-tap fit check; <span class="ic">/resources</span>
+          matches an asset &amp; jurisdiction to the right published guides. Both route to the free
+          Readiness Score — never a fabricated score.</p></div>
+      <div class="card"><p class="tag">Handoff</p><h3>Two ways, no misses</h3>
+        <p>A qualified lead is emailed as a summary to <span class="ic">info@stobox.io</span> <em>and</em>
+          DM'd to admins in Telegram — a zero-config safety net. A CRM is a one-line switch when ready.</p></div>
+      <div class="card"><p class="tag">Retention</p><h3>Subscriptions &amp; win-back</h3>
+        <p>Members <span class="ic">/subscribe</span> to topics and get DM'd when something ships; quiet
+          subscribers get one gentle, cooled-down check-in. Opt-in, always with a way out.</p></div>
+      <div class="card"><p class="tag">Flywheel</p><h3>Questions become content</h3>
+        <p>Recurring questions — especially the ones Stoby struggles to answer — become blog-outline
+          briefs filed as GitHub issues, and surface on a live analytics dashboard.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="wrap">
+    <p class="eyebrow">07 — Command reference</p>
+    <h2>How people talk to him</h2>
+    <p class="section-lede">In a group, mention Stoby or just ask a question — he decides whether to
+      answer. In a DM, everything is fair game. These commands are the shortcuts.</p>
+    <div class="two-tables">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Member</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>/guide</code></td><td class="d">Quick tour of what Stoby can do</td></tr>
+            <tr><td><code>/qualify</code></td><td class="d">30-second tokenization fit check</td></tr>
+            <tr><td><code>/resources</code></td><td class="d">Guides for your asset &amp; jurisdiction</td></tr>
+            <tr><td><code>/compass</code></td><td class="d">Free Readiness Score</td></tr>
+            <tr><td><code>/migrate</code> · <code>/check</code></td><td class="d">STBU→Base steps · balance across chains</td></tr>
+            <tr><td><code>/subscribe</code></td><td class="d">Pick topics to get DM'd about</td></tr>
+            <tr><td><code>/rank</code> · <code>/leaderboard</code></td><td class="d">Your XP &amp; the top members</td></tr>
+            <tr><td><code>/ama</code> · <code>/remindme</code></td><td class="d">Submit an AMA · migration reminders</td></tr>
+            <tr><td><code>/sources</code> · <code>/contact</code></td><td class="d">Verify he's real · reach the team</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Admin</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>/warn /mute /ban</code></td><td class="d">Moderation (reply to a user)</td></tr>
+            <tr><td><code>/cleanup</code></td><td class="d">Remove deleted ghost accounts</td></tr>
+            <tr><td><code>/strikes /modstats</code></td><td class="d">Record &amp; moderation stats</td></tr>
+            <tr><td><code>/gaps /content</code></td><td class="d">Doc gaps · draft blog outlines</td></tr>
+            <tr><td><code>/digest /faq</code></td><td class="d">Analytics digest · weekly FAQ</td></tr>
+            <tr><td><code>/pending /answer</code></td><td class="d">Unanswered-question queue</td></tr>
+            <tr><td><code>/sync /reindex</code></td><td class="d">Refresh the knowledge base</td></tr>
+            <tr><td><code>/pause /resume</code></td><td class="d">Incident kill-switch</td></tr>
+            <tr><td><code>/stats /health</code></td><td class="d">Live status</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="arch" style="border-bottom:none">
+  <div class="wrap">
+    <p class="eyebrow">08 — Under the hood</p>
+    <h2>The stack</h2>
+    <p class="section-lede">One reusable brain, many possible channels. Nothing in the reasoning core
+      knows about Telegram — which is how the same intelligence could power a web widget, Discord, or
+      Slack without a rewrite.</p>
+    <div class="chips">
+      <span class="chip"><b>Core</b> Python · channel-agnostic engine</span>
+      <span class="chip"><b>Telegram</b> python-telegram-bot</span>
+      <span class="chip"><b>Web</b> Starlette / uvicorn</span>
+      <span class="chip"><b>Discord</b> same-engine adapter</span>
+      <span class="chip"><b>Reasoning</b> Claude Opus 4.8</span>
+      <span class="chip"><b>Routing</b> Claude Haiku 4.5</span>
+      <span class="chip"><b>Embeddings</b> OpenAI</span>
+      <span class="chip"><b>Store</b> Postgres + pgvector</span>
+      <span class="chip"><b>Deploy</b> Railway + Supabase</span>
+    </div>
+    <p class="note">A daily digest, a live <span class="ic">/insights</span> dashboard, prompt A/B
+      versioning, a spend cap, rate limiting, and a one-command incident kill-switch round out the ops
+      layer — this is built to run itself and be watched, not babysat.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Stoby — the resident AI of the Stobox community.</span>
+    <span class="mono" style="color:var(--muted)">Part monster, part mind, fully awake.</span>
+  </div>
+</footer>
