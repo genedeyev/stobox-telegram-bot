@@ -45,6 +45,26 @@ _QUIET_BLOG_OPENERS = [
     "No rush, but this one's worth bookmarking:",
 ]
 
+# Open, on-brand conversation starters that INVITE a reply (proactive engagement).
+# No links, no pressure — just spark discussion when a room goes still.
+_ENGAGE_PROMPTS = [
+    "Quick one for the room 👇 If you could tokenize any real-world asset tomorrow, "
+    "what would it be?",
+    "Curious what brought everyone here — the STBU migration, RWA in general, or building "
+    "with Compass?",
+    "Honest question: what's the biggest thing holding tokenization back right now — "
+    "regulation, liquidity, or awareness?",
+    "What would make you trust a tokenized asset enough to actually hold it? 🤔",
+    "Issuers in here — what asset class are you eyeing? Real estate, a fund, equity, "
+    "private credit?",
+    "What's one thing about Stobox or RWA you wish was explained more simply? I'll take a "
+    "crack at it.",
+    "Building anything on-chain right now? Drop what you're working on — happy to point you "
+    "the right way.",
+    "Real estate, private credit, or company equity — which do you reckon tokenizes best, "
+    "and why?",
+]
+
 
 async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
     """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
@@ -78,6 +98,10 @@ class ProactiveScheduler:
         # Per-chat rotation of blog posts already surfaced during quiet times.
         self._blog_shared: dict[str, set[str]] = {}
         self._blog_i = 0
+        # Per-chat rotation of conversation-starter prompts; alternates with blogs.
+        self._prompt_shared: dict[str, set[int]] = {}
+        self._prompt_i = 0
+        self._revival_i = 0
         # Per-chat revival state: consecutive unanswered nudges + our last nudge's
         # activity timestamp, so we back off from a room nobody's engaging with.
         self._revival_state: dict[str, dict] = {}
@@ -417,12 +441,40 @@ class ProactiveScheduler:
             st["streak"] = st["streak"] + 1 if ignored else 0
             if st["streak"] >= max_unanswered:
                 continue
-            revived = await self._share_blog(context, chat_id)
-            if not revived:
-                revived = await self._share_fact(context, chat_id)
+            revived = await self._revival_content(context, chat_id)
             if revived:
                 self.engine.memory.add_turn(thread_key, "assistant", "[revival]")
                 st["at"] = self.engine.memory.last_activity(thread_key)
+
+    async def _revival_content(self, context, chat_id) -> bool:
+        """Alternate a real blog post and a conversation-starter prompt (both
+        engaging); fall back to a grounded fact if neither is available."""
+        order = (["blog", "prompt"] if self._revival_i % 2 == 0 else ["prompt", "blog"])
+        self._revival_i += 1
+        for kind in order:
+            if kind == "blog" and await self._share_blog(context, chat_id):
+                return True
+            if kind == "prompt" and await self._share_prompt(context, chat_id):
+                return True
+        return await self._share_fact(context, chat_id)
+
+    async def _share_prompt(self, context, chat_id) -> bool:
+        """Post an open conversation starter that invites a reply (rotates)."""
+        seen = self._prompt_shared.setdefault(chat_id, set())
+        fresh = [i for i in range(len(_ENGAGE_PROMPTS)) if i not in seen]
+        if not fresh:                       # asked them all → start the cycle over
+            seen.clear()
+            fresh = list(range(len(_ENGAGE_PROMPTS)))
+        idx = fresh[self._prompt_i % len(fresh)]
+        self._prompt_i += 1
+        try:
+            await context.bot.send_message(chat_id, _ENGAGE_PROMPTS[idx])
+            seen.add(idx)
+            log.info("revival.prompt_shared", chat=chat_id, idx=idx)
+            return True
+        except Exception as exc:  # noqa: BLE001 - blocked / no rights
+            log.warning("revival.prompt_failed", chat=chat_id, error=str(exc))
+            return False
 
     async def _share_blog(self, context, chat_id) -> bool:
         """Surface an existing blog post the chat hasn't seen yet (rotates)."""

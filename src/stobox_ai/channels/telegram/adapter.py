@@ -35,6 +35,16 @@ _HTML_TAGS = re.compile(r"</?(b|strong|i|em|u|s|code|pre|a|tg-spoiler)(\s[^>]*)?
 _QUESTION_LIKE = re.compile(
     r"\?|^\s*(what|how|why|when|where|which|who|can|does|do|is|are|explain|tell)\b", re.I
 )
+# Addressed-by-name: "Stoby" and common typos, but never "Stobox" (the company).
+_NAME_RE = re.compile(r"\bstob(y|i|ie|by|bie|ey)\b", re.I)
+# Varied "thinking" placeholders (rotated) so Stoby visibly works, never a bot loop.
+_THINKING = [
+    "🔍 Checking the Stobox docs…",
+    "🔎 One sec — pulling that up…",
+    "📚 Digging into the sources…",
+    "🧠 Let me check that properly…",
+    "⏳ Looking into it…",
+]
 
 
 def strip_html(text: str) -> str:
@@ -71,6 +81,8 @@ class TelegramChannel(Channel):
         self._axis_sessions: dict = {}
         # Running count of deleted (ghost) accounts removed, for /modstats.
         self.deleted_removed: int = 0
+        # Rotates the "thinking" placeholder text so it never looks canned.
+        self._think_i: int = 0
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -238,14 +250,22 @@ class TelegramChannel(Channel):
                     log.error("telegram.wallet_check_failed", error=str(exc))
                 return
 
-        # Immediate feedback: for question-like messages we'll answer, post a
-        # "checking the docs" placeholder right away, then EDIT it into the
-        # final answer — the user is never left staring at silence.
+        # Immediate feedback so nobody stares at silence: show the native
+        # "typing…" indicator whenever we'll engage, and for question-like
+        # messages also post a rotating "thinking" placeholder we EDIT into the
+        # final answer (visible searching/validating while docs are pulled).
         placeholder = None
         will_answer = incoming.is_private or incoming.raw.get("addressed")
-        if will_answer and _QUESTION_LIKE.search(incoming.text):
+        if will_answer:
             try:
-                placeholder = await message.reply_text("🔍 Checking the Stobox docs…")
+                await context.bot.send_chat_action(chat.id, "typing")
+            except Exception:  # noqa: BLE001
+                pass
+        if will_answer and _QUESTION_LIKE.search(incoming.text):
+            think = _THINKING[self._think_i % len(_THINKING)]
+            self._think_i += 1
+            try:
+                placeholder = await message.reply_text(think)
             except Exception:  # noqa: BLE001
                 placeholder = None
 
@@ -999,8 +1019,13 @@ class TelegramChannel(Channel):
         )
 
     def _is_addressed(self, message, text: str) -> bool:
+        # By @username…
         if self.bot_username and f"@{self.bot_username}".lower() in text.lower():
             return True
+        # …by name ("Hey Stoby", and common typos) — always react…
+        if _NAME_RE.search(text or ""):
+            return True
+        # …or a reply to one of Stoby's messages.
         reply = message.reply_to_message
         if reply and reply.from_user and self.bot_username:
             return reply.from_user.username == self.bot_username

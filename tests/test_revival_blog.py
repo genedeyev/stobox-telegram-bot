@@ -121,3 +121,29 @@ async def test_revival_backs_off_then_resumes_after_human(monkeypatch):
     eng.memory.add_turn("telegram:c1:main", "user", "hi")
     await sched._revival_job(ctx)
     assert len(ctx.bot.sent) == 3
+
+
+@pytest.mark.asyncio
+async def test_prompt_rotation_no_repeat():
+    sched = pro.ProactiveScheduler(_Engine([]), app=None)
+    ctx = _Ctx()
+    n = len(pro._ENGAGE_PROMPTS)
+    for _ in range(n):
+        assert await sched._share_prompt(ctx, "c1") is True
+    sent = [t for _, t in ctx.bot.sent]
+    assert len(set(sent)) == n              # every prompt distinct before repeating
+    assert await sched._share_prompt(ctx, "c1") is True   # resets, keeps going
+
+
+@pytest.mark.asyncio
+async def test_revival_content_alternates_blog_and_prompt(monkeypatch):
+    async def fake_og(url, timeout=15.0):
+        return {}
+    monkeypatch.setattr(pro, "fetch_og_meta", fake_og)
+    sched = pro.ProactiveScheduler(_Engine([{"url": "https://s/b", "title": "B"}]), app=None)
+    ctx = _Ctx()
+    await sched._revival_content(ctx, "c1")     # i=0 → blog first
+    await sched._revival_content(ctx, "c1")     # i=1 → prompt first
+    texts = [t for _, t in ctx.bot.sent]
+    assert any("https://s/b" in t for t in texts)                 # a blog went out
+    assert any(t in pro._ENGAGE_PROMPTS for t in texts)           # a prompt went out
