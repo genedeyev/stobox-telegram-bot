@@ -7,6 +7,8 @@ gated on the configured admin user-id allowlist.
 
 from __future__ import annotations
 
+from html import escape as html_escape
+
 from ...logging import get_logger
 
 log = get_logger(__name__)
@@ -210,13 +212,13 @@ async def ama_cmd(update, context) -> None:
     if is_new:
         await update.effective_message.reply_text(
             f"✅ Added to the AMA queue! Others can upvote it below. 👇\n\n"
-            f"❓ <i>{q.text}</i>",
+            f"❓ <i>{html_escape(q.text)}</i>",
             parse_mode="HTML", reply_markup=_ama_button(q.qid, q.votes),
         )
     else:
         await update.effective_message.reply_text(
             f"👍 Someone already asked something similar — I've added your vote to it "
-            f"(now {q.votes}):\n\n❓ <i>{q.text}</i>",
+            f"(now {q.votes}):\n\n❓ <i>{html_escape(q.text)}</i>",
             parse_mode="HTML", reply_markup=_ama_button(q.qid, q.votes),
         )
 
@@ -228,13 +230,13 @@ async def amaopen_cmd(update, context) -> None:
     topic = " ".join(context.args).strip()
     engine.ama.open_session(topic)
     announce = (
-        "📢 <b>AMA time!</b> " + (f"Topic: <b>{topic}</b>. " if topic else "")
+        "📢 <b>AMA time!</b> " + (f"Topic: <b>{html_escape(topic)}</b>. " if topic else "")
         + "Submit your questions for the team with:\n<code>/ama your question</code>\n"
         "Then upvote the ones you most want answered. Top-voted questions get answered first!"
     )
-    # Broadcast to known groups.
+    # Broadcast to known groups (copy — handlers mutate the set concurrently).
     sent = 0
-    for chat_id in getattr(_adapter(context), "known_chats", set()):
+    for chat_id in list(getattr(_adapter(context), "known_chats", ())):
         try:
             await context.bot.send_message(chat_id, announce, parse_mode="HTML")
             sent += 1
@@ -257,7 +259,8 @@ async def amaclose_cmd(update, context) -> None:
         return
     lines = ["✅ <b>AMA closed — ranked questions</b>"]
     for i, q in enumerate(ranked, 1):
-        lines.append(f"\n<b>{i}. ({q.votes} 👍)</b> {q.text}\n<i>— {q.submitter_name or 'member'}</i>")
+        lines.append(f"\n<b>{i}. ({q.votes} 👍)</b> {html_escape(q.text)}"
+                     f"\n<i>— {html_escape(q.submitter_name or 'member')}</i>")
     await update.effective_message.reply_text("\n".join(lines)[:4096], parse_mode="HTML")
 
 
@@ -270,7 +273,7 @@ async def amalist_cmd(update, context) -> None:
         return
     lines = ["🎤 <b>AMA questions (by votes)</b>"]
     for i, q in enumerate(ranked, 1):
-        lines.append(f"{i}. ({q.votes} 👍) {q.text[:120]}")
+        lines.append(f"{i}. ({q.votes} 👍) {html_escape(q.text[:120])}")
     await update.effective_message.reply_text("\n".join(lines)[:4096], parse_mode="HTML")
 
 
@@ -1067,7 +1070,8 @@ async def appeal_cmd(update, context) -> None:
         try:
             await context.bot.send_message(
                 admin_id,
-                f"📣 <b>Appeal</b> from {user.full_name} (id {user.id}):\n“{reason[:400]}”\n"
+                f"📣 <b>Appeal</b> from {html_escape(user.full_name)} (id {user.id}):\n"
+                f"“{html_escape(reason[:400])}”\n"
                 f"Pardon: /unban {user.id}  ·  Record: reply /strikes",
                 parse_mode="HTML",
             )
@@ -1087,7 +1091,8 @@ async def pending_cmd(update, context) -> None:
         return
     lines = ["❓ <b>Open community questions</b>"]
     for e in entries[:15]:
-        lines.append(f"\n<b>#{e.qid}</b> ({e.ask_count}× · {e.created})\n“{e.question[:200]}”")
+        lines.append(f"\n<b>#{e.qid}</b> ({e.ask_count}× · {e.created})\n"
+                     f"“{html_escape(e.question[:200])}”")
     lines.append("\nAnswer with: <code>/answer &lt;id&gt; &lt;text&gt;</code>")
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
@@ -1277,8 +1282,10 @@ def _fmt_log(entries) -> str:
             ts = datetime.fromisoformat(m.at).strftime("%m-%d %H:%M")
         except ValueError:
             ts = "?"
-        who = m.display_name or (f"@{m.username}" if m.username else m.user_id)
-        lines.append(f"[{ts}] <b>{who}</b>: {m.text[:160]}")
+        # Logged names/messages are member-controlled: escape, or one stray '<'
+        # in a message makes Telegram reject the whole /log reply.
+        who = html_escape(m.display_name or (f"@{m.username}" if m.username else m.user_id))
+        lines.append(f"[{ts}] <b>{who}</b>: {html_escape(m.text[:160])}")
     return "\n".join(lines)
 
 
@@ -1312,13 +1319,13 @@ async def whosaid_cmd(update, context) -> None:
     target = _reply_target(update)
     if target:
         entries = engine.message_log.by_user(chat_id, str(target.id))
-        label = f"from {target.full_name}"
+        label = f"from {html_escape(target.full_name)}"
     elif term.startswith("@"):
         entries = engine.message_log.by_user(chat_id, term)
-        label = f"from {term}"
+        label = f"from {html_escape(term)}"
     elif term:
         entries = engine.message_log.search(chat_id, term)
-        label = f"matching “{term}”"
+        label = f"matching “{html_escape(term)}”"
     else:
         await update.effective_message.reply_text(
             "Usage: /whosaid <term>, /whosaid @user, or reply to a user with /whosaid."

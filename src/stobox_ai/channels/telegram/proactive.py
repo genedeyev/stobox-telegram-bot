@@ -12,14 +12,45 @@ gracefully (the bot still answers reactively).
 
 from __future__ import annotations
 
+import asyncio
 import random
 from datetime import UTC, datetime
+from html import escape as html_escape
+from pathlib import Path
 
 from ...core.types import Mode
 from ...llm.base import ChatMessage
 from ...logging import get_logger
 
 log = get_logger(__name__)
+
+# Where one-shot broadcast dedupe state persists (config: proactive.state_path).
+DEFAULT_STATE_PATH = "data/proactive_state.json"
+
+
+async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2, **kwargs) -> str:
+    """Send a message honoring Telegram's flood-wait signal.
+
+    Telegram raises RetryAfter at ~30 msg/s globally (and per-chat limits);
+    swallowing it silently drops recipients from a blast. Returns:
+      "ok"        — delivered
+      "forbidden" — user blocked the bot / bot kicked (caller may unsubscribe)
+      "failed"    — other error after retries (caller decides whether to retry later)
+    """
+    from telegram.error import Forbidden, RetryAfter
+
+    for _ in range(retries + 1):
+        try:
+            await bot.send_message(chat_id, text, **kwargs)
+            return "ok"
+        except RetryAfter as exc:
+            await asyncio.sleep(float(exc.retry_after) + 0.5)
+        except Forbidden:
+            return "forbidden"
+        except Exception as exc:  # noqa: BLE001 - deleted chat, bad id, network…
+            log.warning("send.failed", chat=str(chat_id), error=str(exc))
+            return "failed"
+    return "failed"
 
 _FORMATS = [
     # Hero topics — weighted heavier so proactive content leans into STBU,
@@ -163,10 +194,33 @@ class ProactiveScheduler:
         # Per-chat revival state: consecutive unanswered nudges + our last nudge's
         # activity timestamp, so we back off from a room nobody's engaging with.
         self._revival_state: dict[str, dict] = {}
-        # Migration-countdown dedupe: last date (or "claims-open") we posted.
-        self._countdown_last: str = ""
+        # Migration-countdown dedupe + updates-briefing dedupe. PERSISTED: the
+        # one-shot announcements ("window opened", "claims open") must survive
+        # restarts, or every redeploy after claims open would re-broadcast them
+        # to every group at the next 09:00 tick.
+        from ...ops.statefile import load_json_guarded
+
+        cfg = getattr(engine, "config", None)
+        self._state_path = Path(
+            cfg.get("proactive.state_path", DEFAULT_STATE_PATH)
+            if cfg else DEFAULT_STATE_PATH
+        )
+        state = load_json_guarded(self._state_path, label="proactive") or {}
+        # Last date (or "opened"/"claims-open") the public countdown posted.
+        self._countdown_last: str = str(state.get("countdown_last", ""))
         # Last updates-briefing text, to skip back-to-back identical broadcasts.
-        self._updates_last: str = ""
+        self._updates_last: str = str(state.get("updates_last", ""))
+
+    def _save_state(self) -> None:
+        from ...ops.statefile import save_json_atomic
+
+        try:
+            save_json_atomic(self._state_path, {
+                "countdown_last": self._countdown_last,
+                "updates_last": self._updates_last,
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("proactive.state_save_failed", error=str(exc))
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -281,6 +335,7 @@ class ProactiveScheduler:
         # Opening day → one "window is NOW OPEN" announcement.
         if window_open and today == window_open and self._countdown_last != "opened":
             self._countdown_last = "opened"
+            self._save_state()
             text = ("🟢 <b>The STBU → Base burn window is NOW OPEN!</b>\n\n"
                     "Burn-and-mint, 1:1, <b>same wallet only</b> — consolidate all your STBU into "
                     "one wallet first. Legacy V1 isn't eligible. Deadline: "
@@ -308,6 +363,7 @@ class ProactiveScheduler:
             )
             await self._broadcast(context, chats, text)
             self._countdown_last = str(today)
+            self._save_state()
             log.info("migration.preopen_posted", days=days, chats=len(chats))
             return
 
@@ -315,6 +371,7 @@ class ProactiveScheduler:
         if today > deadline:
             if claims and today >= claims and self._countdown_last != "claims-open":
                 self._countdown_last = "claims-open"
+                self._save_state()
                 text = ("🟢 <b>STBU claims are open.</b> If you burned before the deadline, "
                         "you can now claim on Base (same wallet). Steps: /migrate · stobox.io\n"
                         "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
@@ -337,6 +394,7 @@ class ProactiveScheduler:
         )
         await self._broadcast(context, chats, text)
         self._countdown_last = str(today)
+        self._save_state()
         log.info("migration.countdown_posted", days=days, chats=len(chats))
 
     async def _build_updates_briefing(self) -> str | None:
@@ -373,7 +431,7 @@ class ProactiveScheduler:
             posts = getattr(self.engine, "blog_posts", None) or []
             if posts:
                 p = posts[0]
-                blocks.append(f"📰 <b>Latest read</b>: {p['title']}\n{p['url']}")
+                blocks.append(f"📰 <b>Latest read</b>: {html_escape(p['title'])}\n{p['url']}")
 
         if not blocks:
             return None
@@ -400,15 +458,21 @@ class ProactiveScheduler:
             return
         await self._broadcast(context, chats, text)
         self._updates_last = text
+        self._save_state()
         log.info("updates.briefing_posted", chats=len(chats))
 
     async def _broadcast(self, context, chats, text: str) -> None:
+        ok = failed = 0
         for chat_id in chats:
-            try:
-                await context.bot.send_message(chat_id, text, parse_mode="HTML",
-                                               disable_web_page_preview=True)
-            except Exception:  # noqa: BLE001
-                pass
+            status = await send_with_flood_control(
+                context.bot, chat_id, text,
+                parse_mode="HTML", disable_web_page_preview=True,
+            )
+            ok += status == "ok"
+            failed += status != "ok"
+            await asyncio.sleep(0.05)   # stay well under Telegram's global send rate
+        if failed:
+            log.warning("broadcast.partial", delivered=ok, failed=failed)
 
     async def _reminder_job(self, context) -> None:
         from ...guardrails.canonicals import _as_date
@@ -452,16 +516,30 @@ class ProactiveScheduler:
         if not blast:
             return
         tag, text = blast
-        sent = 0
+        sent = failed = 0
         for chat_id in list(book.subscribers):
-            try:
-                await context.bot.send_message(chat_id, text, parse_mode="HTML",
-                                               disable_web_page_preview=True)
+            if book.was_delivered(tag, chat_id):
+                continue    # already got this blast (crash/flood-wait retry pass)
+            status = await send_with_flood_control(
+                context.bot, chat_id, text,
+                parse_mode="HTML", disable_web_page_preview=True,
+            )
+            if status == "ok":
+                book.mark_delivered(tag, chat_id)
                 sent += 1
-            except Exception:  # noqa: BLE001 - blocked bot etc.
-                pass
-        book.mark_sent(tag)
-        log.info("reminders.blast", tag=tag, sent=sent, subscribers=len(book.subscribers))
+            elif status == "forbidden":
+                # Blocked the bot — that's an unsubscribe, not a retry-forever.
+                book.unsubscribe(chat_id)
+                log.info("reminders.unsubscribed_blocked", chat=chat_id)
+            else:
+                failed += 1
+            await asyncio.sleep(0.05)
+        # Only close the tag after a pass with zero transient failures — the
+        # hourly tick retries just the missed subscribers otherwise.
+        if failed == 0:
+            book.mark_sent(tag)
+        log.info("reminders.blast", tag=tag, sent=sent, failed=failed,
+                 subscribers=len(book.subscribers))
 
     async def _blog_announce_job(self, context) -> None:
         """Announce newly published blog posts with an OG-image card."""
@@ -482,9 +560,10 @@ class ProactiveScheduler:
             teaser = (og.get("description") or "").strip()
             opener = _BLOG_OPENERS[self._opener_i % len(_BLOG_OPENERS)]
             self._opener_i += 1
-            caption = f"{opener}\n\n<b>{title}</b>"
+            # Crawled OG metadata is untrusted for HTML mode — escape it.
+            caption = f"{opener}\n\n<b>{html_escape(title)}</b>"
             if teaser:
-                caption += f"\n{teaser[:220]}"
+                caption += f"\n{html_escape(teaser[:220])}"
             caption += (
                 f"\n\n🔗 {post['url']}"
                 "\n\nGive it a read — questions welcome right here. 👇"
@@ -525,20 +604,21 @@ class ProactiveScheduler:
         if not recipients:
             return
         label = TOPICS[topic]["label"]
-        body = f"<b>{title}</b>"
+        # Title/teaser come from crawled OG metadata — escape before HTML mode.
+        body = f"<b>{html_escape(title)}</b>"
         if teaser:
-            body += f"\n{teaser[:220]}"
+            body += f"\n{html_escape(teaser[:220])}"
         dm = (f"{label} — new from Stobox 👇\n\n{body}\n\n🔗 {url}"
               f"\n\n<i>You're subscribed to {label}. Manage or stop with /subscribe.</i>")
         sent = 0
         for chat_id, _lang in recipients:
-            try:
-                await context.bot.send_message(
-                    chat_id, dm[:4096], parse_mode="HTML", disable_web_page_preview=False
-                )
+            status = await send_with_flood_control(
+                context.bot, chat_id, dm[:4096],
+                parse_mode="HTML", disable_web_page_preview=False,
+            )
+            if status == "ok":
                 sent += 1
-            except Exception as exc:  # noqa: BLE001 - user may have blocked the bot
-                log.warning("subs.push_failed", chat=chat_id, error=str(exc))
+            await asyncio.sleep(0.05)
         log.info("subs.pushed", topic=topic, url=url, sent=sent)
 
     async def _winback_job(self, context) -> None:
@@ -606,7 +686,9 @@ class ProactiveScheduler:
                 pass
 
     def _known_chats(self) -> set[str]:
-        return getattr(self.app.bot_data.get("adapter"), "known_chats", set())
+        # COPY, not the adapter's live set: jobs iterate this across awaits while
+        # handlers may concurrently add chats ("set changed size during iteration").
+        return set(getattr(self.app.bot_data.get("adapter"), "known_chats", ()))
 
     def _in_quiet_hours(self) -> bool:
         rng = self.engine.config.get("proactive.evangelist.quiet_hours", [0, 7])

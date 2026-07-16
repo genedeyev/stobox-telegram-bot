@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
+from html import escape as html_escape
+from pathlib import Path
 
 from ...config import Secrets, get_secrets
 from ...core.engine import AgentEngine
@@ -29,6 +31,10 @@ from . import commands as cmd
 from .proactive import ProactiveScheduler
 
 log = get_logger(__name__)
+
+# Where known-chats/milestone state persists (config: channels.telegram.state_path).
+DEFAULT_STATE_PATH = "data/telegram_state.json"
+
 _URL = re.compile(r"https?://\S+")
 _HTML_TAGS = re.compile(r"</?(b|strong|i|em|u|s|code|pre|a|tg-spoiler)(\s[^>]*)?>", re.I)
 # Cheap "this will need retrieval" heuristic → show the searching placeholder.
@@ -70,8 +76,22 @@ class TelegramChannel(Channel):
         self.admins = self.secrets.admin_user_ids
         self.admin_usernames = self.secrets.admin_usernames
         self.proactive: ProactiveScheduler | None = None
-        # Group chats the bot has seen — targets for proactive posts.
-        self.known_chats: set[str] = set()
+        # Group chats the bot has seen — targets for proactive posts — plus the
+        # per-chat member-count milestones already celebrated. PERSISTED: without
+        # this, every restart silently stops all proactive broadcasts until a
+        # human happens to post in each group again, and re-fires milestones.
+        from ...ops.statefile import load_json_guarded
+
+        cfg = getattr(engine, "config", None)
+        self._state_path = Path(
+            cfg.get("channels.telegram.state_path", DEFAULT_STATE_PATH)
+            if cfg else DEFAULT_STATE_PATH
+        )
+        state = load_json_guarded(self._state_path, label="telegram_state") or {}
+        self.known_chats: set[str] = {str(c) for c in state.get("chats", [])}
+        self._member_milestones: dict[str, int] = {
+            str(k): int(v) for k, v in (state.get("milestones") or {}).items()
+        }
         # Follow-up state: token→question (for buttons) and pending email topics.
         self._q_cache: dict[str, str] = {}
         self._email_pending: dict[int, str] = {}
@@ -83,8 +103,23 @@ class TelegramChannel(Channel):
         self.deleted_removed: int = 0
         # Rotates the "thinking" placeholder text so it never looks canned.
         self._think_i: int = 0
-        # Highest member-count milestone already celebrated, per chat.
-        self._member_milestones: dict[str, int] = {}
+    def _save_state(self) -> None:
+        from ...ops.statefile import save_json_atomic
+
+        try:
+            save_json_atomic(self._state_path, {
+                "chats": sorted(self.known_chats),
+                "milestones": self._member_milestones,
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.warning("telegram.state_save_failed", error=str(exc))
+
+    def remember_chat(self, chat_id) -> None:
+        """Track a group chat as a proactive-broadcast target (persisted)."""
+        cid = str(chat_id)
+        if cid not in self.known_chats:
+            self.known_chats.add(cid)
+            self._save_state()
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -103,9 +138,14 @@ class TelegramChannel(Channel):
 
         # Generous timeouts: PTB's 5s defaults die on slow Wi-Fi / flaky IPv6
         # paths to api.telegram.org. Polling read timeout is higher by design.
+        # concurrent_updates: without it PTB processes updates strictly one at a
+        # time — a single slow LLM reply would queue every other user's messages
+        # AND group moderation behind it. Bounded so a flood can't fork unbounded
+        # tasks; per-user rate limits still apply inside the engine.
         self.app = (
             ApplicationBuilder()
             .token(self.secrets.telegram_token)
+            .concurrent_updates(32)
             .connect_timeout(20)
             .read_timeout(20)
             .write_timeout(20)
@@ -120,8 +160,15 @@ class TelegramChannel(Channel):
         for name, handler in cmd.registry().items():
             self.app.add_handler(CommandHandler(name, handler))
 
+        # UpdateType.MESSAGE only: without it this handler also fires on
+        # edited_message (a typo-fix edit would re-run the whole LLM pipeline
+        # and post a duplicate answer) and on channel_post (no effective_user →
+        # all posts share one "unknown" identity).
         self.app.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE,
+                self._on_message,
+            )
         )
         # Welcome new community members (first 60 seconds decide retention).
         self.app.add_handler(
@@ -234,7 +281,7 @@ class TelegramChannel(Channel):
             return
         chat = update.effective_chat
         if chat and chat.type in ("group", "supergroup"):
-            self.known_chats.add(str(chat.id))
+            self.remember_chat(chat.id)
             self._log_message(update)
         incoming = self._to_incoming(update)
 
@@ -312,7 +359,7 @@ class TelegramChannel(Channel):
         if not humans:
             return
         if chat:
-            self.known_chats.add(str(chat.id))
+            self.remember_chat(chat.id)
         if len(humans) > 5:
             log.warning("telegram.mass_join", count=len(humans), chat=str(chat.id))
             for admin_id in self.admins:
@@ -324,7 +371,9 @@ class TelegramChannel(Channel):
                 except Exception:  # noqa: BLE001
                     pass
             return
-        names = ", ".join(m.first_name for m in humans[:5])
+        # Escape names: the welcome is sent in HTML mode, and a display name like
+        # '<a href="…">Stobox Support</a>' must render as text, never as a link.
+        names = ", ".join(html_escape(m.first_name or "there") for m in humans[:5])
         variants = [
             f"👋 Welcome, {names}! I'm Stoby, the resident AI of the Stobox community — "
             f"part monster, part mind, fully awake. Ask me anything about tokenization, "
@@ -366,6 +415,7 @@ class TelegramChannel(Channel):
         crossed = max((m for m in self._MEMBER_MILESTONES if m <= count), default=0)
         if crossed and crossed > self._member_milestones.get(str(chat.id), 0):
             self._member_milestones[str(chat.id)] = crossed
+            self._save_state()   # never re-celebrate the same milestone after a restart
             try:
                 await context.bot.send_message(
                     chat.id,
@@ -528,8 +578,8 @@ class TelegramChannel(Channel):
         """DM admins on a coordinated-FUD spike so they can step in fast."""
         chat = update.effective_chat
         count = response.meta.get("fud_alert", 0)
-        excerpt = response.meta.get("fud_excerpt", "")
-        where = getattr(chat, "title", None) or (chat.id if chat else "?")
+        excerpt = html_escape(response.meta.get("fud_excerpt", ""))
+        where = html_escape(str(getattr(chat, "title", None) or (chat.id if chat else "?")))
         link = ""
         if getattr(chat, "username", None):
             link = f"\nJump in: https://t.me/{chat.username}"
@@ -640,11 +690,11 @@ class TelegramChannel(Channel):
         line = None
         if lvl:
             who = (lvl.get("name") or "").split()[:1]
-            name = who[0] if who else "You"
+            name = html_escape(who[0]) if who else "You"
             line = f"🎉 {name} just leveled up to <b>{lvl['title']}</b>! Keep it going. 🔥"
         elif streak:
             who = (streak.get("name") or "").split()[:1]
-            name = who[0] if who else "You"
+            name = html_escape(who[0]) if who else "You"
             line = f"🔥 {name} is on a <b>{streak['days']}-day streak</b> — respect!"
         if not line:
             return
@@ -703,12 +753,13 @@ class TelegramChannel(Channel):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         uk = m.get("offender_user_key", "")
-        name = m.get("offender_name") or m.get("offender_id")
-        cat = m.get("category", "?")
-        excerpt = (m.get("reason") or "")[:200]
+        # Offender name/reason are user-controlled — escape for HTML mode.
+        name = html_escape(str(m.get("offender_name") or m.get("offender_id")))
+        cat = html_escape(str(m.get("category", "?")))
+        excerpt = html_escape((m.get("reason") or "")[:200])
         title = "🛡 Impersonation flag" if action == ModerationAction.NONE else "🛡 Moderation action"
         text = (
-            f"{title} in <b>{getattr(chat, 'title', None) or chat.id}</b>\n"
+            f"{title} in <b>{html_escape(str(getattr(chat, 'title', None) or chat.id))}</b>\n"
             f"User: {name}\nCategory: <b>{cat}</b> · Action: <b>{action.value}</b> · "
             f"Strike {m.get('strike_count', '?')}\n"
         )
@@ -972,7 +1023,7 @@ class TelegramChannel(Channel):
             self.engine.strikes.pardon(uk)
             # Un-ban / un-mute in every group the bot knows, best-effort.
             uid = uk.split(":")[-1]
-            for chat_id in self.known_chats:
+            for chat_id in list(self.known_chats):   # copy: mutated by concurrent handlers
                 try:
                     await context.bot.unban_chat_member(chat_id, int(uid), only_if_banned=True)
                 except Exception:  # noqa: BLE001
@@ -1020,7 +1071,7 @@ class TelegramChannel(Channel):
             draft = entry.draft
         text = (
             f"❓ <b>New unanswered question #{qid}</b>\n\n"
-            f"“{qa_meta['question']}”\n\n"
+            f"“{html_escape(qa_meta['question'])}”\n\n"
         )
         if draft:
             text += (
@@ -1034,9 +1085,18 @@ class TelegramChannel(Channel):
             "I'll save it to the Community QA register, start using it, and "
             "follow up with everyone who asked. /pending lists open questions."
         )
+        from telegram.error import BadRequest
+
         for admin_id in self.admins:
             try:
                 await context.bot.send_message(admin_id, text, parse_mode="HTML")
+            except BadRequest:
+                # The LLM draft may carry HTML Telegram rejects — the admin ping
+                # must still land, so fall back to plain text.
+                try:
+                    await context.bot.send_message(admin_id, strip_html(text))
+                except Exception:  # noqa: BLE001
+                    pass
             except Exception:  # noqa: BLE001
                 pass
 
