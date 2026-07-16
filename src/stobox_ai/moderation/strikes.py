@@ -8,7 +8,6 @@ restart doesn't wipe a repeat offender's history.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -125,10 +124,12 @@ class StrikeBook:
 
     # ------------------------------------------------------------------ #
     def _load(self) -> None:
-        if not self.path.exists():
+        from ..ops.statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="strikes")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             for k, v in data.items():
                 strikes = [Strike(**s) for s in v.get("strikes", [])]
                 self.users[k] = UserRecord(
@@ -140,15 +141,16 @@ class StrikeBook:
             log.error("strikes.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from ..ops.statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
             out = {
                 k: {"display_name": r.display_name, "banned": r.banned,
                     "muted_until": r.muted_until,
                     "strikes": [vars(s) for s in r.strikes]}
                 for k, r in self.users.items()
             }
-            self.path.write_text(json.dumps(out, ensure_ascii=False, indent=1))
+            save_json_atomic(self.path, out)
         except Exception as exc:  # noqa: BLE001
             log.error("strikes.save_failed", error=str(exc))
 

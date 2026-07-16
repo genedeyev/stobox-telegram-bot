@@ -14,7 +14,6 @@ opt-in; without a GITHUB_TOKEN it degrades to a preview the admins can copy.
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 
@@ -137,16 +136,20 @@ class ContentFlywheel:
 
     # -- persistence --------------------------------------------------- #
     def _load(self) -> None:
-        if not self.path.exists():
+        from ..ops.statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="flywheel")
+        if data is None:
             return
         try:
-            self.filed = set(json.loads(self.path.read_text()).get("filed", []))
+            self.filed = set(data.get("filed", []))
         except Exception as exc:  # noqa: BLE001
             log.error("flywheel.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from ..ops.statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps({"filed": sorted(self.filed)}, indent=1))
+            save_json_atomic(self.path, {"filed": sorted(self.filed)})
         except Exception as exc:  # noqa: BLE001
             log.error("flywheel.save_failed", error=str(exc))

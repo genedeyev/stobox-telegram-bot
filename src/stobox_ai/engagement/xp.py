@@ -7,7 +7,6 @@ answers, referrals, and daily activity (streaks). Persists to JSON (mount
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -125,18 +124,20 @@ class XPBook:
 
     # ------------------------------------------------------------------ #
     def _load(self) -> None:
-        if not self.path.exists():
+        from ..ops.statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="xp")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             self.users = {k: UserXP(**v) for k, v in data.items()}
         except Exception as exc:  # noqa: BLE001
             log.error("xp.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from ..ops.statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(
-                {k: asdict(v) for k, v in self.users.items()}, ensure_ascii=False, indent=1))
+            save_json_atomic(self.path, {k: asdict(v) for k, v in self.users.items()})
         except Exception as exc:  # noqa: BLE001
             log.error("xp.save_failed", error=str(exc))

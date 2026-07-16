@@ -13,7 +13,6 @@ only announced in-group and never DM-pushed.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ..logging import get_logger
@@ -123,17 +122,20 @@ class SubscriptionBook:
 
     # -- persistence --------------------------------------------------- #
     def _load(self) -> None:
-        if not self.path.exists():
+        from .statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="subs")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             self.subs = {str(k): dict(v) for k, v in data.get("subs", {}).items()}
         except Exception as exc:  # noqa: BLE001
             log.error("subs.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from .statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps({"subs": self.subs}, indent=1))
+            save_json_atomic(self.path, {"subs": self.subs})
         except Exception as exc:  # noqa: BLE001
             log.error("subs.save_failed", error=str(exc))

@@ -8,7 +8,6 @@ answer when it lands.
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -105,20 +104,20 @@ class QARegister:
 
     # ------------------------------------------------------------------ #
     def _load(self) -> None:
-        if not self.path.exists():
+        from ..ops.statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="qa")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             self.entries = {int(k): QAEntry(**v) for k, v in data.items()}
         except Exception as exc:  # noqa: BLE001 - corrupt state must not kill boot
             log.error("qa.state_load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from ..ops.statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(
-                json.dumps({k: asdict(v) for k, v in self.entries.items()},
-                           ensure_ascii=False, indent=1)
-            )
+            save_json_atomic(self.path, {k: asdict(v) for k, v in self.entries.items()})
         except Exception as exc:  # noqa: BLE001
             log.error("qa.state_save_failed", error=str(exc))

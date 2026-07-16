@@ -12,7 +12,6 @@ job ticks never double-send. The consent + inactivity checks live in the job.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -48,17 +47,20 @@ class WinBackBook:
 
     # -- persistence --------------------------------------------------- #
     def _load(self) -> None:
-        if not self.path.exists():
+        from .statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="winback")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             self.last_nudged = {str(k): str(v) for k, v in data.get("last_nudged", {}).items()}
         except Exception as exc:  # noqa: BLE001
             log.error("winback.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from .statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps({"last_nudged": self.last_nudged}, indent=1))
+            save_json_atomic(self.path, {"last_nudged": self.last_nudged})
         except Exception as exc:  # noqa: BLE001
             log.error("winback.save_failed", error=str(exc))

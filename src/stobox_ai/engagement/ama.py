@@ -7,7 +7,6 @@ Admins get a vote-ranked list — zero manual triage. Persisted to JSON.
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -111,10 +110,12 @@ class AMABook:
 
     # ------------------------------------------------------------------ #
     def _load(self) -> None:
-        if not self.path.exists():
+        from ..ops.statefile import load_json_guarded
+
+        data = load_json_guarded(self.path, label="ama")
+        if data is None:
             return
         try:
-            data = json.loads(self.path.read_text())
             self.open = data.get("open", False)
             self.topic = data.get("topic", "")
             self.questions = {int(k): AMAQuestion(**v) for k, v in data.get("questions", {}).items()}
@@ -122,11 +123,12 @@ class AMABook:
             log.error("ama.load_failed", error=str(exc))
 
     def _save(self) -> None:
+        from ..ops.statefile import save_json_atomic
+
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps({
+            save_json_atomic(self.path, {
                 "open": self.open, "topic": self.topic,
                 "questions": {k: asdict(v) for k, v in self.questions.items()},
-            }, ensure_ascii=False, indent=1))
+            })
         except Exception as exc:  # noqa: BLE001
             log.error("ama.save_failed", error=str(exc))
