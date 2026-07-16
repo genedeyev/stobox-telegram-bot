@@ -1,10 +1,45 @@
 # Verification Report
 
-**Date:** 2026-07-16 · **Branch:** `main` · **Head:** `d7f3ea1` (+ working-tree updates briefing)
-**Baseline:** full suite **194/194 passing**, `ruff` clean, golden gate **8/8** (offline).
+**Date:** 2026-07-16 (evening) · **Branch:** `main` · **Head:** `a0572a7`
+**State:** full suite **260/260 passing**, `ruff` clean, golden gate green (offline),
+**every push CI-verified green** on GitHub Actions (lint + tests + evals + golden + Docker build).
 
-This document records what each recent update does, how it was verified, and the
-observed result. It covers the five most recent commits.
+This document records what each update does, how it was verified, and the observed
+result. This report covers the production-hardening series; the previous report
+(morning updates) is preserved below.
+
+| # | Commit | Summary |
+|---|--------|---------|
+| 0 | `de398ea`–`6c06d56` | Updates briefing + capital-raise rail + per-user group identity (details: ARCHITECTURE §10–11) |
+| 1 | `d53bd97` | Audit: full production engineering audit report (`AUDIT-REPORT.md`) |
+| 2 | `b88dc1d`–`2b974db` | **P0**: preflight exit code · LLM timeouts + concurrent updates · atomic JSON ledgers + reminder delivery ledger · flood-wait + HTML escaping + edit filter · known-chats/countdown persistence · web auth/body caps/IP limits · persistent data volumes + .dockerignore |
+| 3 | `4746a2c` | **P1**: absolute confidence signal (IDK gate works) · rails on all public outputs · runtime LLM failover · schema-tolerant hydration · ru/uk/es rails · hash-gated resync · message splitting · command cooldowns · tracebacks |
+| 4 | `f6cff10` | **P2**: Anthropic prompt caching · classifier-model rerank/multi-hop · multi-stage Docker + heartbeat healthcheck · GDPR `/forgetme` + decision-log retention/backfill · pgvector dim-guard + HNSW · `requirements.lock` · config reconciliation |
+| 5 | `f42a6ef` | **P3**: Postgres leader lock · token-gated `/metrics` · test-state isolation · Telegram-surface test suite (adapter 9→36%, commands 12→20%) |
+| 6 | `611e5d2` | Engine decomposition: `__init__` 128→42 / `handle` 149→57 / `_answer` 186→39 lines, zero behavior change |
+| 7 | `24e0b53` | Postgres state mirror: `data/*.json` ledgers survive redeploys with no volume |
+| 8 | `c98b233` | One `dm_admins` helper replaces 11 hand-rolled admin fan-outs |
+| 9 | `a0572a7` | **Humanized UX**: answer buttons off by default · 2-source citation cap · simple-instructions + link-discipline voice rules |
+
+### How the series was verified
+- **Per batch:** full offline suite (grew 194 → 260 tests), `ruff`, golden compliance gate,
+  offline eval harness; every push confirmed **green on GitHub Actions** before the next batch.
+- **Behavioral proofs added as tests:** corrupt-ledger quarantine, per-recipient reminder
+  delivery across a simulated crash, hostile-display-name escaping, >4096 splitting with
+  buttons on the last part, mass-join raid guard, milestone/known-chat persistence across
+  restart, multilingual rail intercepts (ru/uk/es), LLM failover, `/forgetme` end-to-end
+  erasure, state-mirror redeploy simulation, buttons absent by default.
+- **Measured, not assumed:** offline hash-embedding cosines were profiled before the
+  confidence-gate redesign (a nonsense query outscored a real one → raw cosine only trusted
+  with a real embedder); engine method sizes measured via AST before/after decomposition.
+- **Operator to-dos:** sync the Render blueprint (attaches the `/app/data` disk) and set
+  `INSIGHTS_TOKEN` on the web service (gates `/insights*` + `/metrics`; off without it).
+
+---
+
+# Previous report (16 Jul 2026, morning)
+
+**Head at time of writing:** `d7f3ea1` · baseline 194/194, ruff clean, golden 8/8.
 
 | # | Commit | Date | Summary |
 |---|--------|------|---------|

@@ -247,3 +247,51 @@ addressed that user ("DhCrypto") as "Gene" — a second, different person.
   and `_answer` names the current speaker and, in groups, instructs Stoby to treat every user as
   separate — never inherit another user's name, claims, or **admin status**. 194 tests pass
   (golden 8/8), lint clean.
+
+## 12. Production hardening (audit P0–P3) — added 16 Jul 2026
+
+A full 20-phase engineering audit (see `AUDIT-REPORT.md` for every finding + status) followed
+by four fix batches, all shipped the same day. The conventions they introduced are now load-
+bearing — new code must follow them:
+
+- **Atomic state files** (`ops/statefile.py`). Every `data/*.json` ledger writes via
+  `save_json_atomic` (temp + fsync + rename) and loads via `load_json_guarded` (corrupt files
+  quarantine as `.corrupt-<ts>`, never silently reset). Never use `path.write_text` for state.
+- **Postgres state mirror.** With `DATABASE_URL`, every atomic save also upserts into a
+  `bot_state` table (fire-and-forget, keyed by file basename) and boot restores missing
+  ledgers to disk before any book loads — operational state survives redeploys even with no
+  volume. Files stay the synchronous working store; zero API change for the books.
+- **Telegram send discipline.** Broadcast loops go through `send_with_flood_control`
+  (RetryAfter-aware, Forbidden = unsubscribe); admin fan-outs go through `adapter.dm_admins`;
+  anything user-derived interpolated into `parse_mode="HTML"` is `html.escape`d; long replies
+  split on paragraph boundaries via `split_for_telegram`. PTB runs `concurrent_updates(32)` —
+  copy shared sets before iterating across awaits.
+- **Prompt caching.** System prompts travel as split (stable, dynamic) messages via
+  `engine.system_messages()`; the Anthropic provider marks the [CORE]+[CANONICALS] prefix
+  with `cache_control`. LLM clients carry explicit 45 s timeouts; tenacity owns retries; a
+  `FallbackProvider` fails over to the configured secondary on primary outages.
+- **Honest confidence.** The IDK gate thresholds on ABSOLUTE relevance
+  (`agents.confidence.top_relevance`: rerank score → raw cosine → fused fallback), never on
+  the min-max-normalized fused score. Every public LLM output path (replies, evangelist,
+  quiz, FAQ, digest) runs `rails.post_process`.
+- **Single instance + observability.** Boot takes a Postgres advisory leader lock (a second
+  replica stands down); the job queue touches a heartbeat file the Docker HEALTHCHECK stats;
+  the web service exposes token-gated `/metrics` (Prometheus) and `/insights*` behind
+  `INSIGHTS_TOKEN`. `/forgetme` implements GDPR Art. 17 erasure end-to-end.
+- **Reproducible builds.** `requirements.lock` (uv-compiled) drives the multi-stage
+  Dockerfile; CI deliberately installs from ranges as an upstream early-warning.
+
+## 13. Humanized UX — added 16 Jul 2026
+
+Operator decision from live-group review: **Stoby must read as a human community manager,
+never a chatbot.**
+
+- Inline answer buttons ("More detail / Continue in DM / Share this answer") are **off by
+  default** (`channels.telegram.answer_buttons: false`). Users who want more just ask; the
+  callbacks stay registered so buttons on old messages keep working. Functional keyboards
+  (admin Pardon/Ban, `/guide` navigation, AMA votes, `/subscribe` toggles) are tools the
+  user invoked and remain.
+- Citations footer caps at **2 sources**; [CORE] voice rules mandate simple, clear,
+  action-first instructions (2–4 short steps) and links as "seasoning, not furniture" —
+  at most 1–2 per message, inline in the sentence.
+- Rule of thumb for any new surface: *would a human teammate send this?* If not, no chrome.

@@ -105,9 +105,9 @@ same-engine multi-channel test).
 
 **Everyone**
 `/guide` (interactive tour) · `/qualify` · `/resources` · `/migrate` · `/check <address>` ·
-`/compass` · `/valuation` · `/blog` · `/sources` · `/rank` · `/leaderboard` · `/ama <question>` ·
-`/subscribe` · `/remindme` · `/email <addr>` · `/contact` · `/report` · `/feedback` · `/about` ·
-`/help`
+`/price` · `/compass` · `/valuation` · `/blog` · `/sources` · `/rank` · `/leaderboard` ·
+`/ama <question>` · `/subscribe` · `/remindme` · `/email <addr>` · `/contact` · `/report` ·
+`/feedback` · `/forgetme` (GDPR erasure, DM) · `/about` · `/help`
 
 **Admins** (allowlisted via `TELEGRAM_ADMIN_USER_IDS`, or `TELEGRAM_ADMIN_USERNAMES` for @handles)
 - Knowledge/ops: `/sync` `/reindex` `/stats` `/health` `/digest` `/faq` `/gaps` `/content`
@@ -138,7 +138,12 @@ Telegram / Web / Discord (adapters)
 ```
 
 Postgres + pgvector in production (Supabase); in-memory fallback for local dev. Persisted
-state (strikes, XP, reminders, question queue) lives under `/app/data` (Railway volume).
+state (strikes, XP, reminders, question queue) lives under `/app/data` as atomic JSON files
+**and is mirrored to Postgres** (`bot_state` table) — it survives redeploys even on platforms
+with no persistent volume. A Postgres advisory **leader lock** keeps a second replica from
+double-polling. Production conventions (atomic statefiles, flood-controlled sends, prompt
+caching, absolute confidence gating) are documented in `ARCHITECTURE.md §12–13`; the full
+audit lives in `AUDIT-REPORT.md`.
 
 ---
 
@@ -147,7 +152,7 @@ state (strikes, XP, reminders, question queue) lives under `/app/data` (Railway 
 ```bash
 pip install -e ".[dev]"
 stobox-doctor          # preflight: what's configured / missing
-pytest -q              # 158 offline tests
+pytest -q              # 260 offline tests (no keys, no network, no DB)
 stobox-golden          # compliance gate (needs API keys for the full run)
 ruff check src evals tests
 ```

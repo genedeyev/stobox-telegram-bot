@@ -56,6 +56,13 @@ The app auto-creates its tables on first connect (`kb_chunks`, `user_profiles`,
 > restarts. With `STOBOX_SYNC_ON_BOOT=1` the bot refreshes from stobox.io + GitHub
 > on every boot (hash-gated, so unchanged content is skipped); the daily 04:00 UTC
 > cron keeps it current after that.
+>
+> Also with `DATABASE_URL`: (a) the `data/*.json` operational state (strikes, XP,
+> reminder ledgers, known chats) is **mirrored to Postgres** and restored at boot,
+> so it survives redeploys even without a volume; (b) the worker takes a Postgres
+> **leader lock** at boot — an accidental second replica stands down cleanly
+> instead of causing Telegram 409 conflicts and doubled broadcasts. Keep
+> `numReplicas: 1` regardless.
 
 ## 3. (Optional) Railway — the web service
 
@@ -64,6 +71,12 @@ Add a second service from the same repo, override the start command to
 `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`. Railway assigns it a public URL — that's
 your `BOT_REINGEST_URL` for the GitHub Action, and where the chat widget points.
 
+Also set **`INSIGHTS_TOKEN`** (any long random string, e.g. `openssl rand -hex 32`)
+if you want the analytics surfaces: `/insights` (dashboard), `/insights/digest`,
+`/insights/faq`, and `/metrics` (Prometheus). They contain member questions and
+lead data, so they are **disabled entirely when the token is unset**; access with
+`Authorization: Bearer <token>`.
+
 Then wire the self-update loop: add
 [deploy/stobox-v15-reingest.yml](deploy/stobox-v15-reingest.yml) to
 `genedeyev/stobox-v15`, and set that repo's secrets `BOT_REINGEST_URL` +
@@ -71,10 +84,13 @@ Then wire the self-update loop: add
 
 ## 4. Verify
 
-- Bot logs show `READY TO START ✅` and `telegram.start`.
+- Bot logs show `READY TO START ✅`, `leader_lock.acquired` (with a DB), and `telegram.start`.
 - DM `/health` (admin) → chunk count > 0.
-- If you ran the web service: `curl https://<web-url>/health` → `{"status":"ok",...}`.
+- If you ran the web service: `curl https://<web-url>/health` → `{"status":"ok",...}` and
+  `curl -H "Authorization: Bearer $INSIGHTS_TOKEN" https://<web-url>/metrics` → gauges.
 - Run the compliance gate against production creds anytime: `stobox-golden`.
+- A failed boot now **exits non-zero** (restart policies react); a duplicate replica exits 0
+  with `leader_lock.duplicate_instance` in the logs (intentional stand-down, stays down).
 
 ## Rollback / incident
 
@@ -84,6 +100,9 @@ Then wire the self-update loop: add
 
 ## Other targets
 
-- **Render:** `render.yaml` blueprint is included (worker + web).
+- **Render:** `render.yaml` blueprint is included (worker + web). After pulling the
+  latest blueprint, **sync it** in the Render dashboard so the worker's 1 GB disk at
+  `/app/data` attaches (instant local state on restart; the Postgres mirror covers
+  durability either way).
 - **Fly.io / Heroku:** use the `Procfile` (`worker:` / `web:`).
 - **Docker Compose (single box):** `docker compose up --build` (bundles pgvector).
