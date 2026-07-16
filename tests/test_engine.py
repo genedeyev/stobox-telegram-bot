@@ -40,6 +40,22 @@ async def test_engine_answers_and_logs(config):
 
 
 @pytest.mark.asyncio
+async def test_group_history_attributes_distinct_speakers(config):
+    """In a shared group thread, history labels each user turn by name so two
+    different people are never blended into one identity (the DhCrypto≠Gene bug)."""
+    engine = await AgentEngine.create(config)
+    tk = "telegram:grp-9:main"
+    engine.memory.add_turn(tk, "user", "gm everyone", name="Gene")
+    engine.memory.add_turn(tk, "assistant", "Morning, Gene!")
+    engine.memory.add_turn(tk, "user", "flag that answer", name="DhCrypto")
+    engine.memory.add_turn(tk, "user", "(current turn)", name="DhCrypto")  # excluded
+    hist = engine._format_history(tk)
+    assert "User (Gene): gm everyone" in hist
+    assert "User (DhCrypto): flag that answer" in hist
+    assert "You: Morning, Gene!" in hist        # assistant turns stay unnamed
+
+
+@pytest.mark.asyncio
 async def test_engine_stays_silent_on_group_chitchat(config):
     engine = await AgentEngine.create(config)
     msg = IncomingMessage(

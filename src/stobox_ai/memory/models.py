@@ -14,6 +14,8 @@ def _now() -> datetime:
 class ConversationTurn:
     role: str          # "user" | "assistant"
     text: str
+    name: str | None = None   # speaker's display name — distinguishes users in a
+                              # shared group thread so identities never bleed together
     at: datetime = field(default_factory=_now)
 
 

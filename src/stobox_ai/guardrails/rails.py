@@ -55,6 +55,32 @@ _BUY_SELL = re.compile(
     re.I,
 )
 
+# Capital-raise / securities-solicitation: STBX/STBU are regulated securities, so
+# an "active seed round / token sale / STBX funding" is a securities offering. Any
+# message asserting or asking about a Stobox raise is deflected to the team — Stoby
+# never confirms, denies, or persists unannounced financing, and never adopts such a
+# claim from chat (not even from an admin; material facts change only via canonicals).
+_CAPITAL_RAISE = re.compile(
+    # A Stobox subject near a genuine raise-EVENT term. Note: bare "token" is NOT a
+    # raise event (it's the token's name — "STBU token"); only "token sale" counts.
+    r"\b(stbx|stbu|stobox)\b[^.?!]{0,40}\b(seed\s+round|private\s+round|funding\s+round|"
+    r"funding|pre[\s-]?sale|presale|token\s+sale|ico|ieo|ido|raising|capital\s+raise)\b"
+    r"|\b(seed|private|funding|investment)\s+round\b[^.?!]{0,40}"
+    r"\b(stbx|stbu|stobox|you|your|the\s+team|the\s+company)\b"
+    r"|\b(token\s+sale|pre[\s-]?sale|presale|private\s+sale)\b[^.?!]{0,40}\b(stbx|stbu|stobox)\b"
+    r"|\binvest(ing)?\s+in\s+(the\s+)?(stbx|stbu|stobox)\b"
+    r"|\b(is|are)\s+(stobox|you|the\s+team|the\s+company)\s+(raising|doing\s+a\s+(raise|round))\b",
+    re.I,
+)
+# Exclude Raisable PRODUCT questions ("help ME raise", "for my company") — those are
+# a legit routed answer, not a Stobox-solicitation deflection. Deliberately narrow so
+# it never swallows "how do I invest in the Stobox seed round" (that IS a deflection).
+_RAISE_PRODUCT = re.compile(
+    r"\b(help|helps|helping|my\s+company|our\s+company|for\s+(me|my|our)\b|"
+    r"raisable|onboard\s+investors|cap\s+table|my\s+raise|my\s+offering|my\s+asset)\b",
+    re.I,
+)
+
 _WALLET_TOPIC = re.compile(
     r"\b(migrat|claim|burn|wallet|seed|private\s*key|self[\s-]?custody|"
     r"metamask|ledger|support\s+dm|sync\s+wallet|validate\s+wallet)\b",
@@ -151,6 +177,19 @@ class ComplianceRails:
                     "you to the team.\n\n" + DISCLAIMER
                 ),
                 intercepted=True, category="advice",
+            )
+
+        if _CAPITAL_RAISE.search(t) and not _RAISE_PRODUCT.search(t):
+            return RailResult(
+                text=(
+                    "I can't confirm any active raise — anything about fundraising, a seed "
+                    "round, or an STBU/STBX token sale is a question for the Stobox team and "
+                    "official channels (stobox.io). I only share what's in the official docs, "
+                    "and I won't speculate on or confirm unannounced financing.\n\n"
+                    + IMPERSONATION_WARNING
+                ),
+                intercepted=True, category="capital_raise",
+                impersonation_added=True,
             )
         return None
 

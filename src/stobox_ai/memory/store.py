@@ -44,8 +44,8 @@ class MemoryStore:
         self._profiles: dict[str, UserProfile] = {}
 
     # --- conversation memory -------------------------------------------------
-    def add_turn(self, thread_key: str, role: str, text: str) -> None:
-        self._convos[thread_key].append(ConversationTurn(role=role, text=text))
+    def add_turn(self, thread_key: str, role: str, text: str, name: str | None = None) -> None:
+        self._convos[thread_key].append(ConversationTurn(role=role, text=text, name=name))
 
     def history(self, thread_key: str) -> list[ConversationTurn]:
         return list(self._convos.get(thread_key, ()))

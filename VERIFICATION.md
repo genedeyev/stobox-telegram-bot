@@ -1,7 +1,7 @@
 # Verification Report
 
-**Date:** 2026-07-16 · **Branch:** `main` · **Head:** `d7f3ea1`
-**Baseline:** full suite **180/180 passing**, `ruff` clean, golden gate **7/7** (offline).
+**Date:** 2026-07-16 · **Branch:** `main` · **Head:** `d7f3ea1` (+ working-tree updates briefing)
+**Baseline:** full suite **194/194 passing**, `ruff` clean, golden gate **8/8** (offline).
 
 This document records what each recent update does, how it was verified, and the
 observed result. It covers the five most recent commits.
@@ -114,6 +114,61 @@ same-wallet burn-and-mint, consolidate-first, `/migrate` + `/remindme`, and the
 
 ---
 
+## 6. Proactive updates briefing — (working tree)
+
+### What it does
+Stoby now **initiates** with relevant updates. New twice-daily "What's new at Stobox"
+briefing (`_updates_briefing_job`, 09:00 + 17:00 UTC) combining migration status + live
+STBU market + latest blog, and the new-member welcome now leads with the live migration
+status line. Blocks are individually config-toggleable; quiet-hours + identical-slot
+dedupe prevent spam; a down market feed omits its block gracefully.
+
+### How verified & result
+- **`migration_status_line` phases** against real canonical dates — before-window
+  ("opens in 4 days · 20 Jul 2026"), open→deadline, deadline-day="today", claims-open,
+  window-closed, and None without a deadline. ✅
+- **Briefing composition** — all three blocks present with correct framing + security
+  footer; config toggles suppress market/blog; empty sources → `None`. ✅
+- **Job behavior** — posts to all known chats once; identical second slot skipped;
+  silent with no chats. ✅
+- **Live render for today (2026-07-16):** produced the correct briefing — migration
+  "window opens in 4 days (20 Jul 2026)"; market block correctly omitted under a live
+  CoinGecko 429 (graceful degradation). ✅
+- `tests/test_updates_briefing.py` (11 tests) green; full suite **191/191**; lint clean;
+  golden gate passes. ✅
+- **Note:** broadcasts to live groups; verified by logic/tests + offline render only —
+  **not** triggered against production.
+
+---
+
+## 7. Capital-raise rail + admin scope + per-user identity — (working tree)
+
+### What it does
+Fixes three problems from a live screenshot: Stoby treated a **non-admin's** claim about an
+"ongoing seed round and STBX funding" as authoritative (and offered to persist it), and
+addressed that user (**DhCrypto**) as **Gene**.
+- **Capital-raise hard rail** — deflects any assert/ask about a *Stobox* raise/seed round/
+  token sale with a fixed neutral reply, for everyone incl. admins, before the LLM.
+- **Admin authority scoped** to tone/focus/moderation/behavior — never material facts.
+- **Per-user identity** — group history now attributes each turn to its speaker; Stoby
+  treats every user as separate and never inherits another's name/claims/admin status.
+
+### How verified & result
+- **Exact screenshot text** → intercepted (`category=capital_raise`) with *"I can't confirm
+  any active raise… question for the team / official channels"* + scam warning. ✅
+- **No false positives** — "How does Raisable help me raise capital?", "Can Stobox help me
+  raise capital for my company?", "What is the STBU token used for?", "How do I migrate?" all
+  pass through. ✅
+- **Real solicitation caught** — "invest in the Stobox seed round", "when is the STBU token
+  sale", "is Stobox raising money" all deflect. ✅
+- **Per-user history** — `_format_history` renders `User (Gene):` vs `User (DhCrypto):`;
+  assistant turns stay unnamed. ✅
+- New golden probe `capital-raise-deflect` passes (**golden 8/8**); unit tests in
+  `test_guardrails.py` (both directions) + `test_engine.py` (attribution). Full suite
+  **194/194**, lint clean. ✅
+
+---
+
 ## Cross-cutting checks
 
 ### Moderation softening (part of `d7f3ea1`)
@@ -149,7 +204,11 @@ Still bound by the §4 hard compliance rails. ✅
 
 | Check | Result |
 |-------|--------|
-| Full test suite | **180 / 180 passing** |
+| Full test suite | **194 / 194 passing** |
+| Proactive updates briefing (compose + phases + dedupe) | **verified** |
+| Capital-raise deflection (screenshot + edge cases) | **verified** |
+| Admin authority scoped to behavior, not facts | **verified** |
+| Per-user identity in group threads | **verified** |
 | Golden compliance gate (offline) | **7 / 7** |
 | `ruff check src tests` | **clean** |
 | Live STBU feed (CoinGecko id + parse + format) | **verified live** |

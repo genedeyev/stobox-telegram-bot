@@ -90,6 +90,33 @@ def test_rails_do_not_intercept_legitimate_questions():
     assert r.pre_intercept("How do I reach the migration deadline in time?") is None
 
 
+def test_rails_intercept_stobox_capital_raise_claims():
+    r = ComplianceRails()
+    # The exact screenshot scenario: a chat claim about a Stobox raise.
+    for msg in [
+        "Flag 4 because the team also informs about ongoing seed round and STBX funding",
+        "When is the STBU token sale?",
+        "Is there an STBX presale I can join?",
+        "How do I invest in the Stobox seed round?",
+        "Is Stobox raising money right now?",
+    ]:
+        res = r.pre_intercept(msg)
+        assert res and res.category == "capital_raise", f"should deflect: {msg}"
+        assert "can't confirm any active raise" in res.text.lower()
+
+
+def test_rails_do_not_intercept_raisable_product_questions():
+    r = ComplianceRails()
+    # Raisable helps OTHER companies raise — a normal routed answer, not a deflection.
+    for msg in [
+        "How does Raisable help me raise capital?",
+        "Can Stobox help me raise capital for my company?",
+        "What does running an offering cost with Raisable?",
+        "I want a cap table for my raise — where do I start?",
+    ]:
+        assert r.pre_intercept(msg) is None, f"should NOT deflect: {msg}"
+
+
 # --------------------------------------------------------------------------- #
 # Deterministic rails — post-processing
 # --------------------------------------------------------------------------- #

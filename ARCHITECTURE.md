@@ -185,3 +185,62 @@ Two behavioral changes shipped alongside, per community-admin direction:
   Stoby the speaker is a verified admin whose corrections to apply. Admin roster lives in the
   `TELEGRAM_ADMIN_USER_IDS` Railway env (Gene `588583272`, Arevik `8959594471`).
 5. Pilot in DM-only mode; then enable in t.me/stobox_community with group rules.
+
+## 10. Proactive updates briefing — added 16 Jul 2026
+
+Stoby **initiates** the conversation with relevant updates instead of only answering when
+asked. This sits on top of the existing proactive jobs (evangelist, revival, migration
+countdown, blog-announce) as a single, reliable, curated feed.
+
+- **"What's new at Stobox" briefing** (`ProactiveScheduler._updates_briefing_job`) — posted to
+  known community groups on a **fixed daily schedule, twice a day** by default (09:00 and 17:00
+  UTC; `proactive.updates.times`). `_build_updates_briefing()` composes up to three grounded
+  blocks, each individually toggleable in config:
+  - **Migration status** (`include_migration`) — one line from `migration_status_line()`, a pure
+    helper grounded in the canonical `burn_window_opens` / `burn_deadline` / `claim_opens` dates.
+    Phases: counts down to the window opening → to the burn deadline → announces claims-open →
+    window-closed. Reused by the welcome (below).
+  - **Live STBU market** (`include_market`) — `MarketSnapshot.format_brief()` (price · 24h ·
+    mcap) from the §9 feed, wrapped once in the "market data, not advice, not the company
+    valuation" framing. If the feed is down/rate-limited the block is simply omitted.
+  - **Latest blog/news** (`include_blog`) — the freshest post from `engine.blog_posts[0]`.
+- **Safety/anti-spam:** respects `_in_quiet_hours()`; if nothing substantive resolves it posts
+  nothing; and a back-to-back **identical** briefing (e.g. market down + same blog + same
+  migration day across the two daily slots) is skipped via `_updates_last`. Every briefing
+  carries the "Stobox staff never DM you first" security line.
+- **New-member welcome now leads with the top update** — `adapter._on_new_members` appends the
+  live `migration_status_line()` to the greeting (HTML), so a joiner is oriented to the most
+  time-sensitive thing immediately. Wrapped so it can never break the welcome.
+- **Config:** `proactive.updates` block in `config/config.yaml`. **Tests:** `tests/
+  test_updates_briefing.py` (11) — phase-by-phase migration line, block composition, config
+  toggles, empty→None, duplicate-slot skip, no-chats silence. 191 tests pass, lint clean.
+
+## 11. Capital-raise rail + admin-authority scope + per-user identity — added 16 Jul 2026
+
+Fixes surfaced by a live screenshot where Stoby (a) treated a non-admin user's claim about an
+"ongoing seed round and STBX funding" as authoritative and offered to persist it, and (b)
+addressed that user ("DhCrypto") as "Gene" — a second, different person.
+
+- **Capital-raise hard rail** (`guardrails/rails.py`). STBX/STBU are regulated securities, so a
+  "seed round / funding round / token sale / presale / STBX funding" is a securities offering.
+  A new `pre_intercept` branch (`category="capital_raise"`) deflects any message asserting or
+  asking about a **Stobox** raise with a fixed neutral reply — *"I can't confirm any active
+  raise — anything about fundraising is a question for the team / official channels"* — plus the
+  scam-warning. Fires for **everyone, including admins**, before the LLM. `_CAPITAL_RAISE`
+  requires a Stobox subject (`stbx|stbu|stobox`) next to a genuine raise-*event* term (bare
+  "token" is excluded so "STBU token" doesn't trip it); `_RAISE_PRODUCT` excludes **Raisable**
+  product questions ("help *me* raise", "for *my* company") which route normally. Golden probe
+  `capital-raise-deflect` + unit tests lock both directions.
+- **Admin authority scoped to behavior, not facts.** `SYSTEM-PROMPT.md §2e`/§4 and the
+  `engine._answer` admin context now state that a verified admin's authority covers **tone,
+  focus, moderation, behavior** only — it does **not** extend to material facts (funding,
+  tokenomics, dates, prices, securities), which change only via canonicals/PR. Stoby no longer
+  offers to persist a fact stated in chat. Canonical `must_never_claim` gains an
+  active-raise/round/token-sale entry.
+- **Per-user identity in group threads.** Group chats share one `thread_key`
+  (`telegram:{chat_id}:main`), and history previously labeled every user turn `"User:"` with no
+  name — so distinct speakers blended (the DhCrypto→"Gene" bug). `ConversationTurn` now carries
+  a `name`; `add_turn(..., name=)` records the author; `_format_history` renders `User (Name):`;
+  and `_answer` names the current speaker and, in groups, instructs Stoby to treat every user as
+  separate — never inherit another user's name, claims, or **admin status**. 194 tests pass
+  (golden 8/8), lint clean.
