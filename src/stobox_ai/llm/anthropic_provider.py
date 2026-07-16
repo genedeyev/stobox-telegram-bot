@@ -29,7 +29,9 @@ class AnthropicProvider(LLMProvider):
         # Imported lazily so the package imports without the SDK installed.
         from anthropic import AsyncAnthropic
 
-        self._client = AsyncAnthropic(api_key=api_key)
+        # Explicit request timeout (SDK default is 600s — a hung call must not
+        # stall the bot) and max_retries=0: tenacity owns the retry policy.
+        self._client = AsyncAnthropic(api_key=api_key, timeout=45.0, max_retries=0)
         # Newer models (e.g. claude-opus-4-8) reject `temperature` as deprecated.
         # Learned at runtime on the first 400 and remembered per provider.
         self._no_temperature = False

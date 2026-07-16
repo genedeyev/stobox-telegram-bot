@@ -20,7 +20,9 @@ class OpenAIProvider(LLMProvider):
         super().__init__(model, temperature, max_tokens)
         from openai import AsyncOpenAI
 
-        self._client = AsyncOpenAI(api_key=api_key)
+        # Explicit request timeout (SDK default is 600s) and max_retries=0:
+        # tenacity owns the retry policy.
+        self._client = AsyncOpenAI(api_key=api_key, timeout=45.0, max_retries=0)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8), reraise=True)
     async def complete(
@@ -56,7 +58,7 @@ class OpenAIEmbeddings(EmbeddingProvider):
         super().__init__(model, dimensions)
         from openai import AsyncOpenAI
 
-        self._client = AsyncOpenAI(api_key=api_key)
+        self._client = AsyncOpenAI(api_key=api_key, timeout=45.0, max_retries=0)
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=8), reraise=True)
     async def embed(self, texts: list[str]) -> list[list[float]]:
