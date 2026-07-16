@@ -70,6 +70,7 @@ class FreshnessBuilder:
     corpus_hash: str = ""
     blog_posts: list[dict[str, Any]] | None = None   # [{title, url, date}]
     valuation_mark: str | None = None
+    market_line: str | None = None                   # live STBU price fact (CoinGecko/CMC)
 
     @staticmethod
     def valuation_from_env() -> str | None:
@@ -101,6 +102,9 @@ class FreshnessBuilder:
                 "- Eqvista company valuation: see https://stobox.io/valuation for the "
                 "current mark (do not state a number you were not given)."
             )
+
+        if self.market_line:
+            lines.append(self.market_line)
 
         lines.append(f"- STBU migration phase: {phase.value} — {phase_text}")
         if self.canon.expired:

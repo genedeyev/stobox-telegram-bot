@@ -368,6 +368,29 @@ async def check_cmd(update, context) -> None:
                                               disable_web_page_preview=True)
 
 
+async def price_cmd(update, context) -> None:
+    """Live STBU market price / market cap / 24h volume (CoinGecko, CMC fallback).
+    A published market FACT — with the 'not advice, not the company valuation' framing."""
+    engine = _engine(context)
+    snap = await engine.market_snapshot()
+    if not snap:
+        await update.effective_message.reply_text(
+            "I can't reach the STBU market feed right now. You can check it on CoinGecko: "
+            "https://www.coingecko.com/en/coins/stobox-token\n\n"
+            "This is market data, not investment advice.",
+            parse_mode="HTML", disable_web_page_preview=True,
+        )
+        return
+    canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
+    contracts = (
+        canon.get("tokens.stbu.migration.eligible_contracts", {}) if canon else {}
+    )
+    await update.effective_message.reply_text(
+        snap.format_report(contracts=contracts),
+        parse_mode="HTML", disable_web_page_preview=True,
+    )
+
+
 async def email_cmd(update, context) -> None:
     """Email the user a full write-up of their last topic: /email you@addr.com."""
     import asyncio as _asyncio
@@ -1395,6 +1418,10 @@ def registry() -> dict:
         "unsubscribe": unsubscribe_cmd,
         "email": email_cmd,
         "check": check_cmd,
+        "price": price_cmd,
+        "stbu": price_cmd,
+        "marketcap": price_cmd,
+        "mcap": price_cmd,
         "qualify": qualify_cmd,
         "fit": qualify_cmd,
         "readiness": qualify_cmd,

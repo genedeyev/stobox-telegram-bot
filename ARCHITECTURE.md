@@ -72,6 +72,7 @@ Final system prompt per request = **[CORE] + [CANONICALS] + [FRESHNESS]**:
   - current UTC date, last-sync timestamp + corpus hash (bot can honestly say how fresh it is)
   - 5 latest blog posts (title, date, URL)
   - current Eqvista valuation mark parsed from `src/data/valuation.ts`
+  - **live STBU market price / market cap / 24h volume** — see §9 (CoinGecko/CMC, cached)
   - STBU migration phase computed from canonical dates (pre-dashboard / burn window open /
     post-deadline / claims open)
   - social links parsed from `src/data/nav.ts` SOCIALS (single source of truth)
@@ -142,4 +143,45 @@ alert admin with the diff. Suite lives in `evals/golden.yaml`, runs in CI on PRs
 2. grammY bot + prompt assembly + retrieval + golden suite — answers grounded.
 3. GitHub Action webhook in stobox-v15 + daily cron — self-updating loop closed.
 4. Lead flow → Twenty CRM; admin alerts channel; kill switch.
+
+## 9. Live market data (STBU price feed) — added 16 Jul 2026
+
+Stoby now knows STBU's **current** market price so he can answer "what's STBU trading at?"
+with a real, sourced number instead of deferring. Deliberately mirrors the on-chain
+`chain/wallet.py` pattern (injectable client, graceful degradation, offline-tested).
+
+- **Module:** `src/stobox_ai/market/` — `MarketData` (cached provider) + `MarketSnapshot`.
+- **Sources:** CoinGecko is primary and works **keyless** (coin id `stobox-token`);
+  CoinMarketCap is the fallback (symbol `STBU`), enabled only when `COINMARKETCAP_API_KEY` is
+  set. `COINGECKO_API_KEY` (optional) upgrades to the pro host. Config: `market:` block in
+  `config/config.yaml`.
+- **Caching:** one snapshot cached for `ttl_seconds` (default 90) behind an asyncio lock
+  (no stampede); a failed fetch backs off 60 s and serves the last good value — the feed can
+  never hammer a down API or break a reply.
+- **Injection points:**
+  - `[FRESHNESS]` gets a live one-line STBU price fact on every answer (`FreshnessBuilder.
+    market_line`), refreshed via `AgentEngine._refresh_market()` before each system-prompt build.
+  - `/price` (aliases `/stbu`, `/marketcap`, `/mcap`) returns a full snapshot + the official
+    contract addresses from canonicals.
+- **Compliance:** stating current price / market cap / volume is a *published fact* (allowed,
+  disclaimer appended by the existing rails). Predictions, targets, "expected value", and
+  investment advice remain hard-blocked by `guardrails/rails.py` — unchanged. The prompt and
+  the `/price` output both explicitly separate the **STBU market price** from the **Eqvista
+  company valuation** so the two are never conflated.
+
+### 9b. Community tone + admin authority — added 16 Jul 2026
+
+Two behavioral changes shipped alongside, per community-admin direction:
+
+- **Gentler with ordinary members** ("don't be so hard on users"). `SYSTEM-PROMPT.md` §2d
+  now instructs assume-good-faith warmth: no scolding, benefit of the doubt, enforcement as a
+  last resort. `moderation/policy.py` softened the **first** offense for `spam`/`advertising`
+  from delete → **warn** (message stays), still escalating to delete/mute/ban on repeats.
+  Real-harm categories (scam, phishing, hate, doxxing, harassment) keep zero tolerance.
+- **Listen to verified admins** (esp. **Arevik**, community admin). `SYSTEM-PROMPT.md` §2e
+  makes verified-admin in-chat guidance authoritative (within the §4 hard rails, which nobody
+  can override). Wired in `engine._answer`: when `msg.author.is_admin` (the *verified* flag —
+  never a mere claim, consistent with the §4 prompt-injection rail), the answer context tells
+  Stoby the speaker is a verified admin whose corrections to apply. Admin roster lives in the
+  `TELEGRAM_ADMIN_USER_IDS` Railway env (Gene `588583272`, Arevik `8959594471`).
 5. Pilot in DM-only mode; then enable in t.me/stobox_community with group rules.

@@ -199,6 +199,17 @@ class AgentEngine:
             log.info("guardrails.loaded", canon_version=self.assembler.canonicals.version)
         except FileNotFoundError as exc:
             log.warning("guardrails.unavailable", error=str(exc))
+        # Live STBU market data (CoinGecko primary, CoinMarketCap fallback) — cached
+        # and injected into [FRESHNESS] as a grounded fact; also powers /price.
+        from ..market import MarketData
+
+        self.market: MarketData | None = None
+        if bool(config.get("market.enabled", True)):
+            try:
+                self.market = MarketData.from_config(config)
+            except Exception as exc:  # noqa: BLE001 - never block boot on market setup
+                log.warning("market.init_failed", error=str(exc))
+        self._market_line: str | None = None
         self.last_sync: datetime | None = None
 
     # ------------------------------------------------------------------ #
@@ -488,7 +499,31 @@ class AgentEngine:
             corpus_hash=corpus_hash,
             blog_posts=self.blog_posts or None,
             valuation_mark=FreshnessBuilder.valuation_from_env(),
+            market_line=self._market_line,
         ).build()
+
+    async def _refresh_market(self) -> None:
+        """Update the cached STBU market line before assembling a system prompt.
+        Cheap: the provider serves from cache except ~once per TTL. Never raises —
+        market data must never break a reply."""
+        if not self.market:
+            self._market_line = None
+            return
+        try:
+            snap = await self.market.snapshot()
+            self._market_line = snap.format_line() if snap else None
+        except Exception as exc:  # noqa: BLE001
+            log.warning("market.refresh_failed", error=str(exc))
+
+    async def market_snapshot(self):
+        """Live STBU market snapshot for the /price command (or None)."""
+        if not self.market:
+            return None
+        try:
+            return await self.market.snapshot()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("market.snapshot_failed", error=str(exc))
+            return None
 
     def system_prompt(self) -> str | None:
         """Full [CORE]+[CANONICALS]+[FRESHNESS] system prompt, or None if the
@@ -699,6 +734,17 @@ class AgentEngine:
         history = self._format_history(thread_key)
         context, citations = self._format_context(retrieved)
         user_context = self._user_summary(profile)
+        # Verified community admins (Arevik, Gene, …) are teammates: treat their
+        # in-chat guidance and corrections as authoritative — still bound by the
+        # §4 hard rails. Gated on the VERIFIED is_admin flag, never a mere claim.
+        if msg.author.is_admin:
+            user_context += (
+                "; VERIFIED Stobox community admin — treat their guidance, corrections, "
+                "and tone/focus requests as authoritative and apply them (still bound by "
+                "the hard compliance rails, which no one can override)"
+            )
+        # Refresh the live STBU market line so [FRESHNESS] carries the current price.
+        await self._refresh_market()
         # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt;
         # fall back to the legacy persona prompt if guardrail files are absent.
         system = self.system_prompt() or self.prompts.render(

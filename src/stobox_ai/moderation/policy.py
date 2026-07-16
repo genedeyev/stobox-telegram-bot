@@ -42,8 +42,11 @@ POLICY: dict[str, list[Step]] = {
     "harassment":  [Step(_D, delete=True), Step(_M, 60, delete=True),
                     Step(_M, 1440, delete=True), Step(_B, delete=True)],
     "sexual_nsfw": [Step(_D, delete=True), Step(_M, 1440, delete=True), Step(_B, delete=True)],
-    "advertising": [Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
-    "spam":        [Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
+    # Assume good faith: a first ad/spam post gets a friendly WARN (message stays),
+    # then escalates to delete/mute/ban only if it keeps happening. Don't crack
+    # down on a newcomer's one clumsy link — save enforcement for real offenders.
+    "advertising": [Step(_W), Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
+    "spam":        [Step(_W), Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
     "flood":       [Step(_M, 10), Step(_M, 60), Step(_M, 1440)],
     # FUD: honest criticism is NOT this. Coordinated bad-faith fear-mongering is.
     "fud":         [Step(_W), Step(_M, 60, delete=True), Step(_B, delete=True)],

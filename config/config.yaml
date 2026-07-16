@@ -169,6 +169,21 @@ engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
   ama_path: data/ama.json          # AMA question queue
 
+# --- Live market data (STBU price / market cap / volume, /price) -------------
+# CoinGecko is the primary source and works with NO key (free tier). Optional
+# env keys upgrade/extend: COINGECKO_API_KEY (pro host), COINMARKETCAP_API_KEY
+# (enables the CMC fallback). The snapshot is cached and injected into
+# [FRESHNESS] so Stoby can state the CURRENT market price as a grounded fact —
+# never a prediction. Distinct from the Eqvista COMPANY valuation.
+market:
+  enabled: true
+  coingecko_id: stobox-token        # CoinGecko coin id (symbol STBU)
+  cmc_symbol: STBU                  # CoinMarketCap symbol (fallback)
+  cmc_id: null                      # optional exact CMC id (more precise than symbol)
+  vs_currency: usd
+  ttl_seconds: 90                   # cache; caps API calls to ~once/1.5 min
+  symbol: STBU
+
 # --- On-chain reads (STBU wallet migration checker, /check) ------------------
 chain:
   rpc:                             # public endpoints (no key); override if rate-limited
