@@ -11,7 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from ...config import Secrets, get_secrets
 from ...core.engine import AgentEngine
@@ -335,8 +335,20 @@ class TelegramChannel(Channel):
             f"👋 Welcome aboard, {names}! I'm Stoby, here 24/7 for anything Stobox — ask a "
             f"question, or /help to see what I can do. Verify me with /sources.",
         ]
+        welcome = variants[len(names) % len(variants)]
+        # Lead new members straight to the most relevant live update (the STBU
+        # migration status), grounded in the canonical dates.
         try:
-            await message.reply_text(variants[len(names) % len(variants)])
+            from .proactive import migration_status_line
+
+            canon = self.engine.assembler.canonicals if self.engine.assembler else None
+            line = migration_status_line(canon, datetime.now(UTC).date())
+            if line:
+                welcome += f"\n\n{line}"
+        except Exception as exc:  # noqa: BLE001 - never let this break the welcome
+            log.warning("telegram.welcome_update_failed", error=str(exc))
+        try:
+            await message.reply_text(welcome, parse_mode="HTML")
         except Exception as exc:  # noqa: BLE001
             log.warning("telegram.welcome_failed", error=str(exc))
         await self._member_milestone(context, chat)

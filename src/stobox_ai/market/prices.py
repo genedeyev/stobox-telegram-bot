@@ -98,6 +98,18 @@ class MarketSnapshot:
             "or targets."
         )
 
+    def format_brief(self) -> str:
+        """Compact one-liner for a community post (not the system prompt). The
+        'not advice / not the company valuation' framing is added once by the
+        caller around the whole updates briefing, so this stays short."""
+        parts = [f"${_fmt_price(self.price_usd)}"]
+        if self.change_24h_pct is not None:
+            arrow = "🔺" if self.change_24h_pct >= 0 else "🔻"
+            parts.append(f"{arrow} {self.change_24h_pct:+.1f}% (24h)")
+        if self.market_cap_usd is not None:
+            parts.append(f"mcap ${_fmt_usd(self.market_cap_usd)}")
+        return " · ".join(parts)
+
     def format_report(self, contracts: dict[str, str] | None = None) -> str:
         """Full HTML block for the /price command. Carries its own compliance
         framing because command output bypasses the answer-path rails."""

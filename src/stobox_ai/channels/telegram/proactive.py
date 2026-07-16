@@ -84,6 +84,46 @@ _ENGAGE_PROMPTS = [
 ]
 
 
+def migration_status_line(canon, today) -> str | None:
+    """One concise, HTML STBU→Base migration status line for `today`, grounded in
+    the canonical dates. Reused by the twice-daily updates briefing AND the
+    new-member welcome (the single most relevant live update). Returns None when
+    the canonical dates are missing. Pure/synchronous — trivially unit-tested."""
+    from ...guardrails.canonicals import _as_date
+
+    if canon is None:
+        return None
+    m = canon.get("tokens.stbu.migration", {}) or {}
+    window_open = _as_date(m.get("burn_window_opens")) or _as_date(m.get("burns_count_from"))
+    deadline = _as_date(m.get("burn_deadline"))
+    claims = _as_date(m.get("claim_opens"))
+    if not deadline:
+        return None
+
+    def _in(n: int) -> str:
+        return "today" if n == 0 else ("tomorrow" if n == 1 else f"in {n} days")
+
+    # Before the window opens → count down to the opening.
+    if window_open and today < window_open:
+        days = (window_open - today).days
+        return (f"⏳ <b>STBU → Base</b> burn window opens <b>{_in(days)}</b> "
+                f"({window_open.strftime('%d %b %Y')}). Consolidate all STBU into one "
+                "wallet now; 1:1, same wallet only. Steps: /migrate")
+    # Window open, on/before the deadline → count down to the deadline.
+    if today <= deadline:
+        days = (deadline - today).days
+        return (f"⏳ <b>STBU → Base migration is OPEN</b> — burn deadline <b>{_in(days)}</b> "
+                f"({deadline.strftime('%d %b %Y')}, 23:59 UTC). Burn-and-mint, 1:1, same "
+                "wallet only. Steps: /migrate")
+    # After the deadline.
+    if claims and today >= claims:
+        return ("🟢 <b>STBU claims are open on Base</b> — if you burned before the deadline, "
+                "claim now (same wallet). Steps: /migrate")
+    return ("⛔ The <b>STBU → Base</b> burn window has closed. "
+            + (f"Claims open {claims.strftime('%d %b %Y')}. " if claims else "")
+            + "Details: /migrate")
+
+
 async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
     """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
     returns {} on any failure so announcements degrade to a link card."""
@@ -125,6 +165,8 @@ class ProactiveScheduler:
         self._revival_state: dict[str, dict] = {}
         # Migration-countdown dedupe: last date (or "claims-open") we posted.
         self._countdown_last: str = ""
+        # Last updates-briefing text, to skip back-to-back identical broadcasts.
+        self._updates_last: str = ""
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -161,6 +203,20 @@ class ProactiveScheduler:
             from datetime import time as _time
 
             jq.run_daily(self._migration_countdown_job, time=_time(9, 0, tzinfo=UTC))
+        # "What's new at Stobox" — a curated updates briefing (latest blog +
+        # migration status + live STBU market) posted to groups on a fixed daily
+        # schedule (twice a day by default). Stoby INITIATES with relevant updates.
+        updates = cfg.section("proactive.updates")
+        if updates.get("enabled", True):
+            from datetime import time as _time
+
+            for hhmm in updates.get("times", ["09:00", "17:00"]):
+                try:
+                    hh, mm = (int(x) for x in str(hhmm).split(":", 1))
+                    jq.run_daily(self._updates_briefing_job,
+                                 time=_time(hh, mm, tzinfo=UTC))
+                except (ValueError, TypeError):
+                    log.warning("proactive.updates_bad_time", value=hhmm)
         # Opt-in win-back: check quiet subscribers a few times a day.
         if cfg.get("proactive.winback.enabled", True):
             jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
@@ -282,6 +338,66 @@ class ProactiveScheduler:
         await self._broadcast(context, chats, text)
         self._countdown_last = str(today)
         log.info("migration.countdown_posted", days=days, chats=len(chats))
+
+    async def _build_updates_briefing(self) -> str | None:
+        """Compose the 'What's new at Stobox' briefing from the enabled sources
+        (migration status + live STBU market + latest blog). Returns None when
+        nothing substantive resolves. Never raises — a broken source is skipped."""
+        cfg = self.engine.config.section("proactive.updates")
+        blocks: list[str] = []
+
+        # 1) Migration status — the single most time-sensitive update.
+        if cfg.get("include_migration", True):
+            canon = self.engine.assembler.canonicals if self.engine.assembler else None
+            line = migration_status_line(canon, datetime.now(UTC).date())
+            if line:
+                blocks.append(line)
+
+        # 2) Live STBU market snapshot (grounded fact, framed as not-advice).
+        if cfg.get("include_market", True):
+            try:
+                snap = await self.engine.market_snapshot()
+            except Exception:  # noqa: BLE001
+                snap = None
+            if snap:
+                blocks.append(
+                    f"📈 <b>STBU</b>: {snap.format_brief()} — market data, "
+                    "not advice, not the company valuation."
+                )
+
+        # 3) Latest blog / news post.
+        if cfg.get("include_blog", True):
+            posts = getattr(self.engine, "blog_posts", None) or []
+            if posts:
+                p = posts[0]
+                blocks.append(f"📰 <b>Latest read</b>: {p['title']}\n{p['url']}")
+
+        if not blocks:
+            return None
+        header = "📣 <b>What's new at Stobox</b>"
+        footer = ("\n\nQuestions on any of this? Just ask — I'm here 24/7. "
+                  "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
+        return header + "\n\n" + "\n\n".join(blocks) + footer
+
+    async def _updates_briefing_job(self, context) -> None:
+        """Post the curated updates briefing to community groups (twice daily)."""
+        if self._in_quiet_hours():
+            return
+        chats = self._known_chats()
+        if not chats:
+            return
+        text = await self._build_updates_briefing()
+        if not text:
+            log.info("updates.nothing_to_post")
+            return
+        # Skip if identical to the last briefing (e.g. market feed down + same
+        # blog + same migration day → the two daily slots would be duplicates).
+        if text == self._updates_last:
+            log.info("updates.skipped_duplicate")
+            return
+        await self._broadcast(context, chats, text)
+        self._updates_last = text
+        log.info("updates.briefing_posted", chats=len(chats))
 
     async def _broadcast(self, context, chats, text: str) -> None:
         for chat_id in chats:
