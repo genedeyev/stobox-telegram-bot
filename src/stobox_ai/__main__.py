@@ -26,7 +26,9 @@ async def run() -> None:
     print(pf.render())
     if not pf.ready:
         print("\nStartup aborted — resolve the blockers above. See SETUP.md.")
-        return
+        # Exit non-zero so orchestrators (Railway ON_FAILURE, compose, systemd)
+        # treat a mis-configured boot as a failure, not a clean shutdown.
+        raise SystemExit(1)
 
     config = load_config()
     configure_logging(config.get("app.log_level"))
