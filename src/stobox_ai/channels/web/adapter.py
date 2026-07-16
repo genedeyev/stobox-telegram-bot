@@ -12,6 +12,8 @@ framework is installed, keeping it an optional dependency.
 
 from __future__ import annotations
 
+import json
+import os
 from typing import Any
 
 from ...core.engine import AgentEngine
@@ -20,6 +22,50 @@ from ...logging import get_logger
 from ..base import Channel, public_citation_url
 
 log = get_logger(__name__)
+
+# Hard cap on /chat request bodies — Starlette does not bound body size, and an
+# unauthenticated endpoint that feeds an LLM must not accept megabyte payloads.
+MAX_BODY_BYTES = 16_384
+MAX_TEXT_CHARS = 4_000
+
+
+async def _read_json_capped(request) -> dict | None:
+    """Parse the request body as JSON, rejecting oversized or invalid payloads."""
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > MAX_BODY_BYTES:
+        return None
+    body = await request.body()
+    if len(body) > MAX_BODY_BYTES:
+        return None
+    try:
+        data = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _client_ip(request) -> str:
+    """Best-effort client IP for rate limiting (first X-Forwarded-For hop on PaaS)."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _insights_authorized(request) -> bool:
+    """Bearer-token gate for the analytics endpoints (community PII).
+
+    Secure by default: with no INSIGHTS_TOKEN configured the routes are OFF —
+    they leak member questions and lead data if left open on a public service.
+    """
+    token = os.environ.get("INSIGHTS_TOKEN", "")
+    if not token:
+        return False
+    import hmac
+
+    supplied = request.headers.get("authorization", "")
+    supplied = supplied.removeprefix("Bearer ").strip()
+    return bool(supplied) and hmac.compare_digest(supplied, token)
 
 
 class WebChannel(Channel):
@@ -103,12 +149,14 @@ def create_app(engine: AgentEngine):
     channel = WebChannel(engine)
 
     async def chat_endpoint(request: Request):
-        body = await request.json()
+        body = await _read_json_capped(request)
+        if body is None:
+            return JSONResponse({"error": "invalid or oversized body"}, status_code=413)
         if not body.get("text") or not body.get("user_id"):
             return JSONResponse({"error": "user_id and text are required"}, status_code=400)
         result = await channel.chat(
-            user_id=str(body["user_id"]),
-            text=str(body["text"]),
+            user_id=str(body["user_id"])[:128],
+            text=str(body["text"])[:MAX_TEXT_CHARS],
             session_id=body.get("session_id"),
             display_name=body.get("display_name"),
             language=body.get("language"),
@@ -146,16 +194,29 @@ def create_app_from_config():
         engine = await AgentEngine.create(load_config())
         app.state.channel = WebChannel(engine)
         app.state.engine = engine
+        # Per-IP limiter for /chat: the body's user_id is client-supplied and
+        # trivially rotated, so the engine's per-user limits can't stop a
+        # scripted cost-DoS on their own. IPs are much harder to rotate.
+        from ...ops.ratelimit import RateLimiter
+
+        app.state.ip_limiter = RateLimiter(
+            per_minute=20, per_day=2000, global_daily_output_tokens=None)
         log.info("web.app_ready")
         yield
 
     async def chat_endpoint(request: Request):
-        body = await request.json()
+        decision = request.app.state.ip_limiter.check(f"ip:{_client_ip(request)}")
+        if not decision.allowed:
+            return JSONResponse({"error": "rate limited", "detail": decision.retry_hint},
+                                status_code=429)
+        body = await _read_json_capped(request)
+        if body is None:
+            return JSONResponse({"error": "invalid or oversized body"}, status_code=413)
         if not body.get("text") or not body.get("user_id"):
             return JSONResponse({"error": "user_id and text are required"}, status_code=400)
         result = await request.app.state.channel.chat(
-            user_id=str(body["user_id"]),
-            text=str(body["text"]),
+            user_id=str(body["user_id"])[:128],
+            text=str(body["text"])[:MAX_TEXT_CHARS],
             session_id=body.get("session_id"),
             display_name=body.get("display_name"),
             language=body.get("language"),
@@ -166,12 +227,22 @@ def create_app_from_config():
         n = await request.app.state.engine.retriever.store.count()
         return JSONResponse({"status": "ok", "indexed_chunks": n})
 
+    def _insights_denied() -> JSONResponse:
+        return JSONResponse(
+            {"error": "insights endpoints require a Bearer INSIGHTS_TOKEN "
+                      "(disabled when the token is unset)"},
+            status_code=403,
+        )
+
     async def digest_endpoint(request: Request):
-        # NOTE: protect behind auth/gateway in production — analytics data.
+        # Analytics data (member questions, leads) — token-gated, off by default.
+        if not _insights_authorized(request):
+            return _insights_denied()
         return JSONResponse(request.app.state.engine.daily_digest().build())
 
     async def dashboard_endpoint(request: Request):
-        # NOTE: protect behind auth/gateway in production — analytics data.
+        if not _insights_authorized(request):
+            return _insights_denied()
         from starlette.responses import HTMLResponse
 
         from ...insights.dashboard import render_dashboard
@@ -180,6 +251,9 @@ def create_app_from_config():
         return HTMLResponse(render_dashboard(digest))
 
     async def faq_endpoint(request: Request):
+        # Also triggers LLM spend on demand — must never be open to the internet.
+        if not _insights_authorized(request):
+            return _insights_denied()
         entries = await request.app.state.engine.weekly_faq().generate(top_n=10)
         from ...insights import WeeklyFAQ
 
