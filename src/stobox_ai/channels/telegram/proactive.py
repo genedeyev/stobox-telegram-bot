@@ -123,6 +123,8 @@ class ProactiveScheduler:
         # Per-chat revival state: consecutive unanswered nudges + our last nudge's
         # activity timestamp, so we back off from a room nobody's engaging with.
         self._revival_state: dict[str, dict] = {}
+        # Migration-countdown dedupe: last date (or "claims-open") we posted.
+        self._countdown_last: str = ""
 
     def schedule(self) -> None:
         jq = getattr(self.app, "job_queue", None)
@@ -152,6 +154,13 @@ class ProactiveScheduler:
         # per-threshold dedupe means each blast fires exactly once.
         if cfg.get("proactive.reminders.enabled", True):
             jq.run_repeating(self._reminder_job, interval=3600, first=300)
+        # PUBLIC migration countdown to groups — once a day at 09:00 UTC; the job
+        # itself decides whether today is a post-day (weekly far out → daily in
+        # the final week). Separate from the opt-in /remindme DMs.
+        if cfg.get("proactive.migration_countdown.enabled", True):
+            from datetime import time as _time
+
+            jq.run_daily(self._migration_countdown_job, time=_time(9, 0, tzinfo=UTC))
         # Opt-in win-back: check quiet subscribers a few times a day.
         if cfg.get("proactive.winback.enabled", True):
             jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
@@ -186,6 +195,67 @@ class ProactiveScheduler:
             except Exception:  # noqa: BLE001
                 pass
         log.info("content.previewed", count=len(results))
+
+    @staticmethod
+    def _countdown_due(days: int, today) -> bool:
+        """Ramping cadence: daily in the final week, ~every 3 days within a month,
+        weekly (Mondays) when the deadline is further out."""
+        if days <= 7:
+            return True
+        if days <= 30:
+            return days % 3 == 0
+        return today.weekday() == 0
+
+    async def _migration_countdown_job(self, context) -> None:
+        """Public STBU→Base countdown to groups (separate from opt-in /remindme)."""
+        from ...guardrails.canonicals import _as_date
+
+        canon = self.engine.assembler.canonicals if self.engine.assembler else None
+        chats = self._known_chats()
+        if not canon or not chats:
+            return
+        m = canon.get("tokens.stbu.migration", {}) or {}
+        deadline = _as_date(m.get("burn_deadline"))
+        claims = _as_date(m.get("claim_opens"))
+        today = datetime.now(UTC).date()
+        if not deadline:
+            return
+
+        # After the deadline → one "claims open" announcement, then done.
+        if today > deadline:
+            if claims and today >= claims and self._countdown_last != "claims-open":
+                self._countdown_last = "claims-open"
+                text = ("🟢 <b>STBU claims are open.</b> If you burned before the deadline, "
+                        "you can now claim on Base (same wallet). Steps: /migrate · stobox.io\n"
+                        "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
+                await self._broadcast(context, chats, text)
+                log.info("migration.claims_announced", chats=len(chats))
+            return
+
+        days = (deadline - today).days
+        if self._countdown_last == str(today) or not self._countdown_due(days, today):
+            return
+        when = ("<b>TODAY</b>" if days == 0 else
+                "<b>tomorrow</b>" if days == 1 else f"in <b>{days} days</b>")
+        text = (
+            f"⏳ The <b>STBU → Base</b> burn deadline is {when} — "
+            f"{deadline.strftime('%d %b %Y')}, 23:59 UTC.\n\n"
+            "Burn-and-mint, 1:1, <b>same wallet only</b>. Consolidate all your STBU into one "
+            "wallet first; legacy V1 isn't eligible.\n\n"
+            "Steps: /migrate  ·  Personal reminders: /remindme\n"
+            "⚠️ Stobox staff never DM you first; only trust links from stobox.io."
+        )
+        await self._broadcast(context, chats, text)
+        self._countdown_last = str(today)
+        log.info("migration.countdown_posted", days=days, chats=len(chats))
+
+    async def _broadcast(self, context, chats, text: str) -> None:
+        for chat_id in chats:
+            try:
+                await context.bot.send_message(chat_id, text, parse_mode="HTML",
+                                               disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001
+                pass
 
     async def _reminder_job(self, context) -> None:
         from ...guardrails.canonicals import _as_date

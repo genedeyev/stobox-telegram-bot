@@ -129,6 +129,9 @@ proactive:
     enabled: true
     interval_hours: 4              # publish useful content every N hours
     quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 (chat tz)
+  migration_countdown:
+    enabled: true                  # public STBU→Base countdown to groups; the job
+                                   # ramps weekly → daily as 15 Sep approaches
   growth:
     revive_inactive: true
     inactivity_minutes: 180        # after N min of silence, surface a blog post /
