@@ -245,6 +245,33 @@ async def test_dm_question_gets_a_reply(channel):
     assert msg.replies, "a private question must always get some reply"
 
 
+# --------------------------------------------------------------------------- #
+# Humanized replies: no bot-style buttons under answers (config-off by default)
+# --------------------------------------------------------------------------- #
+
+async def test_answers_carry_no_buttons_by_default(channel):
+    msg = FakeMessage("What is the STBU token?")
+    upd = _update(msg, _chat(cid=78, ctype="private"), _user(uid=78))
+    await channel._on_message(upd, SimpleNamespace(bot=FakeBot()))
+    assert msg.replies
+    assert all(not r.get("reply_markup") for r in msg.replies), \
+        "answers must read like a person: no inline button furniture"
+
+
+async def test_answer_buttons_return_when_config_enabled(channel):
+    from stobox_ai.core.types import AgentResponse, Confidence
+
+    channel.engine.config.raw.setdefault("channels", {}).setdefault(
+        "telegram", {})["answer_buttons"] = True
+    try:
+        resp = AgentResponse(text="answer", confidence=Confidence.HIGH,
+                             meta={"shareable": True})
+        markup = channel._answer_buttons(resp, "what is STBU?", is_private=False)
+        assert markup is not None
+    finally:
+        channel.engine.config.raw["channels"]["telegram"]["answer_buttons"] = False
+
+
 async def test_group_chatter_not_addressed_is_ignored(channel):
     msg = FakeMessage("lol nice weather")
     upd = _update(msg, _chat(), _user(uid=12))

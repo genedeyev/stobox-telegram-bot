@@ -234,6 +234,9 @@ channels:
   telegram:
     enabled: true
     state_path: data/telegram_state.json  # known chats + celebrated milestones
+    answer_buttons: false             # inline buttons under answers (More detail /
+                                      # Continue in DM / Share). Off: Stoby reads as a
+                                      # person, not a bot — users just ask for more.
 
 # --- Rate limiting / abuse ---------------------------------------------------
 limits:

@@ -559,7 +559,14 @@ class TelegramChannel(Channel):
 
     def _answer_buttons(self, response, question: str, is_private: bool):
         """Progressive-disclosure buttons under a substantive answer: More
-        detail, Email me this / Continue in DM, and Share."""
+        detail, Email me this / Continue in DM, and Share.
+
+        OFF by default (channels.telegram.answer_buttons): buttons under every
+        reply read as bot furniture, and Stoby should feel like a person — a
+        user who wants more just asks. The follow-up callbacks stay registered
+        so old messages' buttons keep working."""
+        if not self.engine.config.get("channels.telegram.answer_buttons", False):
+            return None
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         # Only offer follow-ups on real, confident, doc-grounded answers.

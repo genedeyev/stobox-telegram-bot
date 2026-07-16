@@ -48,7 +48,8 @@ class Channel(abc.ABC):
     @staticmethod
     def render_citations(response: AgentResponse) -> str:
         """Compact citation footer: one line per source document (deduped by
-        title, max 3) — chat readers don't need per-section variants."""
+        title, max 2) — verifiability without turning a reply into a link
+        directory; chat readers don't need per-section variants."""
         if not response.citations:
             return ""
         lines = []
@@ -66,6 +67,6 @@ def _dedupe(citations: list[Citation]) -> list[Citation]:
         if c.title not in seen:
             seen.add(c.title)
             out.append(c)
-        if len(out) >= 3:
+        if len(out) >= 2:
             break
     return out
