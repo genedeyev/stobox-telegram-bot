@@ -395,14 +395,9 @@ class TelegramChannel(Channel):
             self.remember_chat(chat.id)
         if len(humans) > 5:
             log.warning("telegram.mass_join", count=len(humans), chat=str(chat.id))
-            for admin_id in self.admins:
-                try:
-                    await context.bot.send_message(
-                        admin_id, f"⚠️ Mass join in {chat.title or chat.id}: "
-                                  f"{len(humans)} accounts at once — possible raid."
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
+            await self.dm_admins(
+                context, f"⚠️ Mass join in {chat.title or chat.id}: "
+                         f"{len(humans)} accounts at once — possible raid.")
             return
         # Escape names: the welcome is sent in HTML mode, and a display name like
         # '<a href="…">Stobox Support</a>' must render as text, never as a link.
@@ -626,21 +621,38 @@ class TelegramChannel(Channel):
             f"“{excerpt}”\n\n"
             f"I'm already replying calmly with facts — a human touch may help.{link}"
         )
-        for admin_id in self.admins:
-            try:
-                await context.bot.send_message(admin_id, text, parse_mode="HTML",
-                                               disable_web_page_preview=True)
-            except Exception:  # noqa: BLE001
-                pass
+        await self.dm_admins(context, text, html=True)
         log.info("fud.alert_sent", chat=str(getattr(chat, "id", "?")), count=count)
 
-    async def _dm_admins(self, context, text: str) -> None:
-        """Best-effort broadcast to every configured admin."""
+    async def dm_admins(self, context, text: str, *, html: bool = False,
+                        reply_markup=None) -> int:
+        """Best-effort broadcast to every configured admin — THE one admin
+        fan-out (replaces nine hand-rolled loops). HTML mode falls back to
+        stripped plain text per admin, so an admin ping is never lost to one
+        bad tag. Returns the delivered count."""
+        from telegram.error import BadRequest
+
+        kwargs: dict = {"disable_web_page_preview": True}
+        if reply_markup is not None:
+            kwargs["reply_markup"] = reply_markup
+        sent = 0
         for admin_id in self.admins:
             try:
-                await context.bot.send_message(admin_id, text, disable_web_page_preview=True)
+                if html:
+                    try:
+                        await context.bot.send_message(
+                            admin_id, text, parse_mode="HTML", **kwargs)
+                    except BadRequest:
+                        await context.bot.send_message(admin_id, strip_html(text), **kwargs)
+                else:
+                    await context.bot.send_message(admin_id, text, **kwargs)
+                sent += 1
             except Exception:  # noqa: BLE001 - admin hasn't started the bot, etc.
                 pass
+        return sent
+
+    # Backwards-compatible internal alias.
+    _dm_admins = dm_admins
 
     async def notify_mql_admins(self, context, profile) -> bool:
         """DM admins a fresh MQL once (safety net beside the team-inbox email)."""
@@ -814,12 +826,8 @@ class TelegramChannel(Channel):
         buttons = [InlineKeyboardButton("↩️ Pardon", callback_data=f"mod:pardon:{uk}")]
         if action != ModerationAction.BAN:
             buttons.append(InlineKeyboardButton("⛔ Ban", callback_data=f"mod:ban:{uk}:{chat.id}"))
-        markup = InlineKeyboardMarkup([buttons])
-        for admin_id in self.admins:
-            try:
-                await context.bot.send_message(admin_id, text, parse_mode="HTML", reply_markup=markup)
-            except Exception:  # noqa: BLE001
-                pass
+        await self.dm_admins(context, text, html=True,
+                             reply_markup=InlineKeyboardMarkup([buttons]))
 
     async def _on_followup_callback(self, update, context) -> None:
         """User taps 'More detail' or 'Email me this' under an answer."""
@@ -1131,20 +1139,7 @@ class TelegramChannel(Channel):
             "I'll save it to the Community QA register, start using it, and "
             "follow up with everyone who asked. /pending lists open questions."
         )
-        from telegram.error import BadRequest
-
-        for admin_id in self.admins:
-            try:
-                await context.bot.send_message(admin_id, text, parse_mode="HTML")
-            except BadRequest:
-                # The LLM draft may carry HTML Telegram rejects — the admin ping
-                # must still land, so fall back to plain text.
-                try:
-                    await context.bot.send_message(admin_id, strip_html(text))
-                except Exception:  # noqa: BLE001
-                    pass
-            except Exception:  # noqa: BLE001
-                pass
+        await self.dm_admins(context, text, html=True)
 
     async def _escalate(self, update, context, response) -> None:
         """Notify admins of scams/low-confidence escalations."""
@@ -1153,11 +1148,7 @@ class TelegramChannel(Channel):
             f"({response.meta.get('category', 'low_confidence')}). "
             f"Message: {update.effective_message.text[:200]}"
         )
-        for admin_id in self.admins:
-            try:
-                await context.bot.send_message(admin_id, text)
-            except Exception:  # noqa: BLE001
-                pass
+        await self.dm_admins(context, text)
 
     # ------------------------------------------------------------------ #
     def _to_incoming(self, update) -> IncomingMessage:

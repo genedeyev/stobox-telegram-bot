@@ -768,16 +768,11 @@ async def support_cmd(update, context) -> None:
             "The team has already been flagged — hold tight, someone will follow up."
         )
         return
-    adapter = _adapter(context)
-    for admin_id in adapter.admins:
-        try:
-            await context.bot.send_message(
-                admin_id,
-                f"🆘 Support request from @{update.effective_user.username or update.effective_user.id} "
-                f"in {update.effective_chat.title or 'private'}.",
-            )
-        except Exception:  # noqa: BLE001
-            pass
+    await _adapter(context).dm_admins(
+        context,
+        f"🆘 Support request from @{update.effective_user.username or update.effective_user.id} "
+        f"in {update.effective_chat.title or 'private'}.",
+    )
     await update.effective_message.reply_text(
         "I've flagged the team for you. Someone will follow up. Meanwhile I can try to help — just ask."
     )
@@ -790,11 +785,7 @@ async def report_cmd(update, context) -> None:
         )
         return
     text = " ".join(context.args) if context.args else "(no details)"
-    for admin_id in _adapter(context).admins:
-        try:
-            await context.bot.send_message(admin_id, f"⚠️ Report: {text[:500]}")
-        except Exception:  # noqa: BLE001
-            pass
+    await _adapter(context).dm_admins(context, f"⚠️ Report: {text[:500]}")
     await update.effective_message.reply_text("Thanks — your report has been sent to the team.")
 
 
@@ -1105,17 +1096,13 @@ async def appeal_cmd(update, context) -> None:
         return
     user = update.effective_user
     reason = " ".join(context.args) if context.args else "(no details given)"
-    for admin_id in _adapter(context).admins:
-        try:
-            await context.bot.send_message(
-                admin_id,
-                f"📣 <b>Appeal</b> from {html_escape(user.full_name)} (id {user.id}):\n"
-                f"“{html_escape(reason[:400])}”\n"
-                f"Pardon: /unban {user.id}  ·  Record: reply /strikes",
-                parse_mode="HTML",
-            )
-        except Exception:  # noqa: BLE001
-            pass
+    await _adapter(context).dm_admins(
+        context,
+        f"📣 <b>Appeal</b> from {html_escape(user.full_name)} (id {user.id}):\n"
+        f"“{html_escape(reason[:400])}”\n"
+        f"Pardon: /unban {user.id}  ·  Record: reply /strikes",
+        html=True,
+    )
     await update.effective_message.reply_text(
         "Thanks — your appeal has been sent to a human admin. We'll review it fairly."
     )

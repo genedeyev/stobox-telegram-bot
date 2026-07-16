@@ -293,8 +293,8 @@ class ProactiveScheduler:
 
     async def _content_job(self, context) -> None:
         """DM admins a weekly preview of blog outlines drafted from question-gaps."""
-        admins = getattr(self.app.bot_data.get("adapter"), "admins", set())
-        if not admins:
+        adapter = self.app.bot_data.get("adapter")
+        if not adapter or not getattr(adapter, "admins", None):
             return
         try:
             results = await self.engine.flywheel.run(
@@ -310,12 +310,7 @@ class ProactiveScheduler:
             tag = "🕳 gap" if r["is_gap"] else f"{r['count']}×"
             lines.append(f"• {tag} — {r['title'][:80]}")
         lines.append("\nRun /content file to open these as GitHub issues.")
-        text = "\n".join(lines)
-        for admin_id in admins:
-            try:
-                await context.bot.send_message(admin_id, text, disable_web_page_preview=True)
-            except Exception:  # noqa: BLE001
-                pass
+        await adapter.dm_admins(context, "\n".join(lines))
         log.info("content.previewed", count=len(results))
 
     @staticmethod
@@ -698,11 +693,10 @@ class ProactiveScheduler:
             return
         total = sum(results.values())
         log.info("proactive.resync", results=results, total=total)
-        for admin_id in getattr(self.app.bot_data.get("adapter"), "admins", set()):
-            try:
-                await context.bot.send_message(admin_id, f"🔄 Daily knowledge resync: {total} chunks ({results}).")
-            except Exception:  # noqa: BLE001
-                pass
+        adapter = self.app.bot_data.get("adapter")
+        if adapter:
+            await adapter.dm_admins(
+                context, f"🔄 Daily knowledge resync: {total} chunks ({results}).")
 
     def _known_chats(self) -> set[str]:
         # COPY, not the adapter's live set: jobs iterate this across awaits while
@@ -878,8 +872,6 @@ class ProactiveScheduler:
         digest = digest_builder.build()
         narrative = await digest_builder.narrative(digest)
         text = digest_builder.render_text(digest, narrative)
-        for admin_id in getattr(self.app.bot_data.get("adapter"), "admins", set()):
-            try:
-                await context.bot.send_message(admin_id, text[:4096])
-            except Exception:  # noqa: BLE001
-                pass
+        adapter = self.app.bot_data.get("adapter")
+        if adapter:
+            await adapter.dm_admins(context, text[:4096])
