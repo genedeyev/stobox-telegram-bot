@@ -207,8 +207,13 @@ class AgentEngine:
         reasoner = build_reasoner(config)
         classifier = build_classifier(config)
         indexer = await Indexer.create(config)
-        # Warm the index from docs on boot (incremental).
-        await indexer.index_directory(config.get("knowledge.docs_path", "docs"))
+        # Warm the index from docs on boot (incremental). NEVER let an indexing
+        # hiccup (embedding API / pgvector) crash-loop the bot — degrade to
+        # whatever's already indexed; the daily resync retries.
+        try:
+            await indexer.index_directory(config.get("knowledge.docs_path", "docs"))
+        except Exception as exc:  # noqa: BLE001
+            log.error("boot.index_failed", error=str(exc))
         # Optionally pull remote sources (stobox.io + GitHub) at startup.
         import os as _os
 
