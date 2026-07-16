@@ -17,6 +17,44 @@ from .logging import configure_logging, get_logger
 
 log = get_logger("stobox_ai.main")
 
+# App-wide advisory-lock key for the single-poller guard (arbitrary constant).
+_LEADER_LOCK_KEY = 0x5703B0    # "STOBO"
+
+
+async def _acquire_leader_lock():
+    """Single-instance guard. Two replicas long-polling the same bot token
+    cause Telegram 409 conflict storms, doubled broadcasts, and split-brain
+    rate limiting. With a DATABASE_URL we hold a Postgres advisory lock for
+    the process lifetime; a second replica exits 0 (an intentional standby
+    shutdown, not a failure — restart policies leave it down).
+
+    Returns the lock-holding connection (keep it alive!), or None when no DB
+    is configured (single-instance is then an operator responsibility).
+    """
+    import os
+
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return None
+    try:
+        import psycopg
+
+        conn = await psycopg.AsyncConnection.connect(url, autocommit=True, connect_timeout=10)
+    except Exception as exc:  # noqa: BLE001 - no lock is a warning, not a blocker
+        log.warning("leader_lock.unavailable", error=str(exc))
+        return None
+    cur = await conn.execute("SELECT pg_try_advisory_lock(%s)", (_LEADER_LOCK_KEY,))
+    row = await cur.fetchone()
+    if not row or not row[0]:
+        await conn.close()
+        log.error("leader_lock.duplicate_instance",
+                  hint="another bot replica is already polling this token")
+        print("Another bot instance holds the leader lock — standing down to "
+              "avoid Telegram 409 conflicts and doubled broadcasts.")
+        raise SystemExit(0)
+    log.info("leader_lock.acquired")
+    return conn
+
 
 async def run() -> None:
     from .preflight import load_dotenv_if_present, run_preflight
@@ -33,6 +71,8 @@ async def run() -> None:
     config = load_config()
     configure_logging(config.get("app.log_level"))
     log.info("boot", app=config.get("app.name"), env=config.get("app.environment"))
+
+    leader_conn = await _acquire_leader_lock()
 
     engine = await AgentEngine.create(config)
     log.info("index.ready", chunks=await engine.retriever.store.count(),
@@ -85,6 +125,11 @@ async def run() -> None:
     if watcher:
         watcher.stop()
     await channel.stop()
+    if leader_conn is not None:
+        try:
+            await leader_conn.close()   # releases the advisory lock
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def main() -> None:

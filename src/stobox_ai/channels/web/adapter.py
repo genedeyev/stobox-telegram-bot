@@ -259,6 +259,39 @@ def create_app_from_config():
 
         return JSONResponse({"faq": WeeklyFAQ.to_dict(entries)})
 
+    async def metrics_endpoint(request: Request):
+        """Prometheus text exposition — token-gated like the other analytics
+        surfaces (latency percentiles and volumes are business-sensitive)."""
+        if not _insights_authorized(request):
+            return _insights_denied()
+        from starlette.responses import PlainTextResponse
+
+        engine = request.app.state.engine
+        chunks = await engine.retriever.store.count()
+        snap = engine.decisions.snapshot() or {}
+        lines = [
+            "# HELP stobox_indexed_chunks Chunks in the knowledge index",
+            "# TYPE stobox_indexed_chunks gauge",
+            f"stobox_indexed_chunks {chunks}",
+            "# TYPE stobox_decisions_window gauge",
+            f"stobox_decisions_window {snap.get('count', 0)}",
+            "# TYPE stobox_unknown_rate gauge",
+            f"stobox_unknown_rate {snap.get('unknown_rate', 0)}",
+            "# TYPE stobox_escalations_window gauge",
+            f"stobox_escalations_window {snap.get('escalations', 0)}",
+            "# TYPE stobox_leads_window gauge",
+            f"stobox_leads_window {snap.get('leads', 0)}",
+            "# TYPE stobox_p95_latency_ms gauge",
+            f"stobox_p95_latency_ms {snap.get('p95_latency_ms', 0)}",
+            "# TYPE stobox_tokens_in_window gauge",
+            f"stobox_tokens_in_window {snap.get('tokens_in', 0)}",
+            "# TYPE stobox_tokens_out_window gauge",
+            f"stobox_tokens_out_window {snap.get('tokens_out', 0)}",
+            "# TYPE stobox_paused gauge",
+            f"stobox_paused {int(getattr(engine, 'paused', False))}",
+        ]
+        return PlainTextResponse("\n".join(lines) + "\n")
+
     async def reingest_endpoint(request: Request):
         """HMAC-signed webhook: re-ingest stobox.io + GitHub (self-update loop).
         Signature required — see ops/webhook.py."""
@@ -283,6 +316,7 @@ def create_app_from_config():
             Route("/insights", dashboard_endpoint, methods=["GET"]),
             Route("/insights/digest", digest_endpoint, methods=["GET"]),
             Route("/insights/faq", faq_endpoint, methods=["GET"]),
+            Route("/metrics", metrics_endpoint, methods=["GET"]),
             Route("/api/reingest", reingest_endpoint, methods=["POST"]),
         ],
     )

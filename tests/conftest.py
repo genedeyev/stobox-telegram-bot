@@ -32,8 +32,28 @@ def _isolate_state_files(tmp_path, monkeypatch):
                         str(tmp_path / "proactive_state.json"))
 
 
-@pytest.fixture(scope="session")
-def config():
+@pytest.fixture(scope="session", autouse=True)
+def config(tmp_path_factory):
+    """The real config, with every data/ state path redirected into a session
+    tmp dir — engine-based tests must never write into the repo's live data/
+    (they used to mutate xp.json, reminders.json, etc. on every run).
+    Autouse + session-scoped: load_config() is lru_cached, so the redirect
+    lands before any test grabs the shared instance directly."""
     from stobox_ai.config import load_config
 
-    return load_config()
+    cfg = load_config()
+    state_dir = tmp_path_factory.mktemp("state")
+
+    def _redirect(node):
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if isinstance(v, str) and v.startswith("data/"):
+                    node[k] = str(state_dir / v[len("data/"):])
+                else:
+                    _redirect(v)
+        elif isinstance(node, list):
+            for item in node:
+                _redirect(item)
+
+    _redirect(cfg.raw)
+    return cfg
