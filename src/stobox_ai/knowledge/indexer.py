@@ -57,8 +57,16 @@ class Indexer:
             if not rebuild and existing.get(doc.doc_id) == doc.content_hash:
                 continue
             total += await self.index_document(doc)
-        # Remove documents whose files disappeared.
+        # Remove LOCAL documents whose files disappeared — but ONLY local ones.
+        # The store is shared with the web/github/llms sources (source_file has a
+        # "scheme://" prefix); pruning "everything not a local file" here used to
+        # delete the entire remote corpus right after sync_sources indexed it,
+        # pinning the index at just the local-doc count.
+        sources = await self.store.doc_sources()
         for doc_id in set(existing) - seen:
+            src = sources.get(doc_id, "")
+            if "://" in src:            # web:// github:// llms:// — not ours to prune
+                continue
             await self.store.delete_doc(doc_id)
             log.info("index.removed_missing", doc_id=doc_id)
         return total

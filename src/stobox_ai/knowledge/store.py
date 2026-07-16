@@ -61,6 +61,17 @@ class VectorStore(abc.ABC):
     @abc.abstractmethod
     async def clear(self) -> None: ...
 
+    async def doc_sources(self) -> dict[str, str]:
+        """doc_id → source_file for everything in the store. Lets a directory
+        re-index prune only the docs IT manages (local files), never the
+        web/github/llms docs a shared store also holds. Default derives it from
+        all_chunks(); Pg overrides with a cheap DISTINCT query."""
+        out: dict[str, str] = {}
+        for c in await self.all_chunks():
+            if c.meta and c.meta.source_file:
+                out.setdefault(c.doc_id, c.meta.source_file)
+        return out
+
     async def count(self) -> int:
         return len(await self.all_chunks())
 
@@ -263,6 +274,14 @@ class PgVectorStore(VectorStore):
         async with self._pool.connection() as conn:
             cur = await conn.execute(
                 "SELECT doc_id, MAX(content_hash) FROM kb_chunks GROUP BY doc_id"
+            )
+            rows = await cur.fetchall()
+        return {r[0]: r[1] for r in rows if r[1]}
+
+    async def doc_sources(self) -> dict[str, str]:
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT DISTINCT doc_id, meta->>'source_file' FROM kb_chunks"
             )
             rows = await cur.fetchall()
         return {r[0]: r[1] for r in rows if r[1]}

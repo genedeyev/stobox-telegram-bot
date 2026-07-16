@@ -63,3 +63,47 @@ async def test_in_memory_vector_search_ranks_relevant_chunk():
     assert results
     # The security chunk should surface for a security query.
     assert any("seed phrase" in c.text.lower() for c, _ in results)
+
+
+@pytest.mark.asyncio
+async def test_index_directory_does_not_prune_remote_docs(tmp_path):
+    """Regression: sync_knowledge shares one store between the local-docs
+    re-index and the web/github sources. index_directory's orphan cleanup must
+    prune ONLY local docs — it used to delete the entire remote corpus right
+    after it was indexed, pinning the index at the local-doc count."""
+    from stobox_ai.knowledge.chunking import SemanticChunker
+    from stobox_ai.knowledge.indexer import Indexer
+    from stobox_ai.knowledge.models import DocMeta, Document
+    from stobox_ai.llm.local import LocalHashEmbeddings
+
+    store = InMemoryVectorStore()
+    idx = Indexer(store, LocalHashEmbeddings("local", 128), SemanticChunker())
+
+    # A local doc on disk…
+    (tmp_path / "guide.md").write_text(
+        "# Guide\n\n" + ("Stobox tokenizes real-world assets. " * 40))
+    await idx.index_directory(str(tmp_path))
+    local_count = await store.count()
+    assert local_count > 0
+
+    # …plus remote (web + github) docs indexed into the SAME store.
+    for scheme, url in [("web", "https://www.stobox.io/blog/post-a"),
+                        ("github", "StoboxTechnologies/repo/Token.sol")]:
+        doc = Document(
+            meta=DocMeta(title=f"{scheme} doc", source_file=f"{scheme}://{url}",
+                         source_url=f"https://{url}"),
+            text=("Deep grounded tokenization content for retrieval. " * 40))
+        await idx.index_document(doc)
+    with_remote = await store.count()
+    assert with_remote > local_count
+
+    # Re-index the directory again (as sync_knowledge does AFTER sync_sources).
+    await idx.index_directory(str(tmp_path))
+    assert await store.count() == with_remote, "remote docs must survive a local re-index"
+
+    # And a genuinely-removed LOCAL file IS still pruned.
+    (tmp_path / "guide.md").unlink()
+    await idx.index_directory(str(tmp_path))
+    remaining = {c.meta.source_file for c in await store.all_chunks()}
+    assert all("://" in s for s in remaining), "local doc pruned, remote kept"
+    assert len(remaining) == 2
