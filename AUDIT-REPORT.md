@@ -1,5 +1,7 @@
 # Stobox AI Telegram Bot — Production Engineering Audit
 
+> **Status update (2026-07-16, branch `audit/p0-fixes`):** the P0 batch is implemented and committed — C1 (LLM timeouts + concurrent updates + copy discipline), C2 (preflight exit code), C3 (atomic JSON ledgers + quarantine + per-recipient reminder delivery), H1/H2 (insights auth, body caps, IP rate limit), H3 (flood-wait handling), H4 (HTML escaping), H5 (update-type filter), H8/H9 (persistent `data/` + persisted known-chats/countdown state), H10 (iteration copies). 203 tests pass. Remaining open: P1/P2 items below.
+
 **Date:** 2026-07-16 · **Scope:** full repo (working tree incl. uncommitted changes) · **Method:** mechanical verification (build, tests, coverage, ruff, mypy, bandit, pip-audit, offline evals) + six parallel deep code reviews (security, Telegram platform, AI/RAG, storage, reliability/DevOps, code quality/tests). Every finding below was verified against actual code; each lists severity, location, root cause, failure scenario, fix, and effort (S/M/L).
 
 ---
