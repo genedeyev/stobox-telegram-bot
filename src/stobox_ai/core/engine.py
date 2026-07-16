@@ -417,10 +417,18 @@ class AgentEngine:
         return "" if ("NO_DRAFT" in text or len(text) < 20) else text
 
     async def sync_knowledge(self) -> dict[str, int]:
-        """Crawl stobox.io + ingest the GitHub repos into the live index."""
+        """Refresh the live index: local docs (source of truth for community Q&A)
+        + a crawl of stobox.io + the GitHub repos. Local docs are re-indexed too
+        so a doc edit (e.g. a new community-qa answer) reliably reaches the index,
+        not only on the next reboot."""
         from ..knowledge.sync import sync_sources
 
         results = await sync_sources(self.indexer, self.config)
+        try:
+            n = await self.indexer.index_directory(self.config.get("knowledge.docs_path", "docs"))
+            results["local_docs"] = n
+        except Exception as exc:  # noqa: BLE001
+            log.error("sync.local_docs_failed", error=str(exc))
         self.last_sync = datetime.now(UTC)
         await self.refresh_blog_posts()
         return results
