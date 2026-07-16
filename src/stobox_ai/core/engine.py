@@ -225,6 +225,28 @@ class AgentEngine:
     # ------------------------------------------------------------------ #
     @classmethod
     async def create(cls, config: Config) -> AgentEngine:
+        # Optional Postgres state mirror: restore the data/*.json ledgers from
+        # the DB BEFORE any book loads, so operational state (strikes, reminder
+        # ledgers, XP, known chats…) survives a redeploy even on platforms with
+        # no persistent volume. Files remain the working store; every atomic
+        # save mirrors back fire-and-forget.
+        from ..config import get_secrets as _get_secrets
+        from ..ops.statefile import init_state_mirror, restore_state_files
+
+        if await init_state_mirror(_get_secrets().database_url):
+            await restore_state_files([
+                config.get("qa.state_path", "data/qa_register.json"),
+                config.get("reminders.state_path", "data/reminders.json"),
+                config.get("subscriptions.state_path", "data/subscriptions.json"),
+                config.get("winback.state_path", "data/winback.json"),
+                config.get("content.state_path", "data/content_flywheel.json"),
+                config.get("engagement.xp_path", "data/xp.json"),
+                config.get("engagement.ama_path", "data/ama.json"),
+                config.get("moderation.strikes_path", "data/strikes.json"),
+                config.get("channels.telegram.state_path", "data/telegram_state.json"),
+                config.get("proactive.state_path", "data/proactive_state.json"),
+            ])
+
         reasoner = build_reasoner(config)
         classifier = build_classifier(config)
         indexer = await Indexer.create(config)

@@ -125,6 +125,9 @@ async def run() -> None:
     if watcher:
         watcher.stop()
     await channel.stop()
+    from .ops.statefile import close_state_mirror
+
+    await close_state_mirror()
     if leader_conn is not None:
         try:
             await leader_conn.close()   # releases the advisory lock
