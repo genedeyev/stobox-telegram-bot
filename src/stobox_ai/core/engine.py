@@ -118,7 +118,17 @@ class AgentEngine:
             ),
         )
         self.max_reply = int(config.get("limits.max_reply_chars", 3500))
-        # Operational safety: rate limiting + spend cap + kill switch (§7).
+        self._init_safety(config)
+        self._init_community_loops(config)
+        self._init_message_log(config)
+        self._init_engagement(config)
+        self._init_guardrails(config)
+        self._init_market(config)
+        self.last_sync: datetime | None = None
+
+    # ---- subsystem wiring (called from __init__ only) ------------------- #
+    def _init_safety(self, config: Config) -> None:
+        """Operational safety: rate limiting + spend cap + kill switch (§7)."""
         from ..ops import RateLimiter
 
         self.rate_limiter = RateLimiter(
@@ -128,31 +138,39 @@ class AgentEngine:
         )
         self.paused = False
         self.pause_reason = ""
-        # Unanswered-question loop: capture → notify admins → /answer → deliver.
+
+    def _init_community_loops(self, config: Config) -> None:
+        """Opt-in community loops: QA register, reminders, subscriptions,
+        win-back, and the content flywheel + email follow-up."""
+        import os as _os
+
+        from ..content import ContentFlywheel
+        from ..ops.email import EmailSender
+        from ..ops.reminders import ReminderBook
+        from ..ops.subscriptions import SubscriptionBook
+        from ..ops.winback import WinBackBook
         from ..qa import QARegister
 
         self.qa = QARegister(config.get("qa.state_path", "data/qa_register.json"))
-        # Opt-in migration reminders (/remindme).
-        from ..ops.reminders import ReminderBook
-
         self.reminders = ReminderBook(config.get("reminders.state_path", "data/reminders.json"))
-        # Opt-in topic subscriptions (/subscribe migration|rwa-news|product).
-        from ..ops.subscriptions import SubscriptionBook
-
         self.subscriptions = SubscriptionBook(
             config.get("subscriptions.state_path", "data/subscriptions.json")
         )
-        # Win-back nudges for quiet, opted-in members (opt-in only, cooldowned).
-        from ..ops.winback import WinBackBook
-
         self.winback = WinBackBook(config.get("winback.state_path", "data/winback.json"))
-        # Per-user retention controls (privacy): whether to keep verbatim question
-        # text on the profile, and how many to keep.
-        self._retain_questions = bool(config.get("memory.retain_questions", True))
-        self._max_recent_q = int(config.get("memory.max_recent_questions", 8))
-        # Internal message log — every group message on the record (audit + context).
+        self.flywheel = ContentFlywheel(
+            repo=config.get("content.repo", "genedeyev/stobox-v15"),
+            token=_os.environ.get("GITHUB_TOKEN"),
+            state_path=config.get("content.state_path", "data/content_flywheel.json"),
+        )
+        self.email = EmailSender()
+
+    def _init_message_log(self, config: Config) -> None:
+        """Message log (audit + recall), per-user retention flags, FUD alarm."""
+        from ..moderation.fud_alarm import FudAlarm
         from ..ops.message_log import MessageLog
 
+        self._retain_questions = bool(config.get("memory.retain_questions", True))
+        self._max_recent_q = int(config.get("memory.max_recent_questions", 8))
         self.message_log_enabled = bool(config.get("message_log.enabled", True))
         self.message_log = MessageLog(
             config.get("message_log.state_path", "data/message_log.jsonl"),
@@ -160,38 +178,24 @@ class AgentEngine:
             retention_days=int(config.get("message_log.retention_days", 90)),
         )
         self._recall_enabled = bool(config.get("message_log.recall", True))
-        # Real-time FUD spike detector (immediate admin alert on coordinated FUD).
-        from ..moderation.fud_alarm import FudAlarm
-
         self.fud_alarm = FudAlarm(
             threshold=int(config.get("moderation.fud_alert.threshold", 3)),
             window_min=int(config.get("moderation.fud_alert.window_min", 10)),
             cooldown_min=int(config.get("moderation.fud_alert.cooldown_min", 30)),
         )
-        # Content flywheel — community question-gaps → blog outlines as issues.
-        import os as _os
 
-        from ..content import ContentFlywheel
-
-        self.flywheel = ContentFlywheel(
-            repo=config.get("content.repo", "genedeyev/stobox-v15"),
-            token=_os.environ.get("GITHUB_TOKEN"),
-            state_path=config.get("content.state_path", "data/content_flywheel.json"),
-        )
-        # Email follow-up (SMTP env-gated; degrades to CRM lead if unconfigured).
-        from ..ops.email import EmailSender
-
-        self.email = EmailSender()
-        # Engagement: XP / streaks / leaderboard.
+    def _init_engagement(self, config: Config) -> None:
+        """XP / streaks / leaderboard, AMA queue, blog announcement state."""
         from ..engagement import AMABook, XPBook
 
         self.xp = XPBook(config.get("engagement.xp_path", "data/xp.json"))
         self.ama = AMABook(config.get("engagement.ama_path", "data/ama.json"))
-        # Latest blog/learn posts discovered in the index (feeds [FRESHNESS] + /blog).
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
         self._announced_blog: set[str] | None = None   # None = not yet baselined
-        # Compliance guardrails (three-block prompt + deterministic rails).
+
+    def _init_guardrails(self, config: Config) -> None:
+        """Compliance guardrails: three-block prompt + deterministic rails."""
         from ..guardrails import ComplianceRails, PromptAssembler
 
         self.rails = ComplianceRails()
@@ -204,8 +208,10 @@ class AgentEngine:
             log.info("guardrails.loaded", canon_version=self.assembler.canonicals.version)
         except FileNotFoundError as exc:
             log.warning("guardrails.unavailable", error=str(exc))
-        # Live STBU market data (CoinGecko primary, CoinMarketCap fallback) — cached
-        # and injected into [FRESHNESS] as a grounded fact; also powers /price.
+
+    def _init_market(self, config: Config) -> None:
+        """Live STBU market data (CoinGecko primary, CMC fallback) — cached and
+        injected into [FRESHNESS] as a grounded fact; also powers /price."""
         from ..market import MarketData
 
         self.market: MarketData | None = None
@@ -215,7 +221,6 @@ class AgentEngine:
             except Exception as exc:  # noqa: BLE001 - never block boot on market setup
                 log.warning("market.init_failed", error=str(exc))
         self._market_line: str | None = None
-        self.last_sync: datetime | None = None
 
     # ------------------------------------------------------------------ #
     @classmethod
@@ -595,29 +600,88 @@ class AgentEngine:
         user_key = f"{msg.channel}:{msg.author.external_id}"
 
         # 1) Moderation (skip in private chats and for admins).
-        mod_alert = None
-        if not msg.is_private:
-            verdict = await self.moderator.evaluate(msg)
-            # Real sanction (delete/mute/ban) or active scam → block and handle.
-            if verdict.action != ModerationAction.NONE or verdict.category == "scam":
-                return await self._moderation_response(msg, verdict, thread_key, started)
-            # Benign alert-only (e.g. a team member's display name mimics "Stobox"):
-            # tell admins, but KEEP HELPING — never go silent on someone over a name.
-            if verdict.alert_admin:
-                mod_alert = {
-                    "category": verdict.category, "reason": verdict.reason,
-                    "offender_user_key": user_key,
-                    "offender_name": msg.author.display_name,
-                    "offender_id": msg.author.external_id,
-                }
+        blocked, mod_alert = await self._moderation_gate(msg, thread_key, started, user_key)
+        if blocked is not None:
+            return blocked
 
-        # 2) Working memory + long-term profile. Attribute the turn to its author
-        #    so a shared GROUP thread never blends two users' identities.
+        # 2+3) Working memory + long-term profile, then intent routing.
+        profile, routing = await self._remember_and_route(msg, thread_key, user_key)
+
+        # 4) FUD spike detection — recorded BEFORE the engage decision so a silent
+        #    FUD wave (messages we wouldn't otherwise answer) still alerts admins.
+        fud_alert = self._record_fud(msg, routing)
+
+        # 5) Decide whether to speak (avoid group spam).
+        if not self._should_engage(msg, routing):
+            return await self._declined(msg, routing, profile, fud_alert, mod_alert)
+
+        # 4b–4d) Deterministic pre-LLM gates: compliance intercepts, kill
+        # switch, rate limiting — each returns a finished static response.
+        gated = await self._pre_llm_gates(msg, routing, profile, thread_key, user_key, started)
+        if gated is not None:
+            return gated
+
+        # 5) Retrieve.
+        retrieved: list[RetrievedChunk] = []
+        if routing.needs_docs:
+            retrieved = await self.retriever.retrieve(msg.text)
+
+        # 6) Synthesize + 7) confidence gate.
+        response = await self._answer(msg, routing, retrieved, profile, thread_key)
+        if fud_alert:
+            response.meta["fud_alert"] = fud_alert
+            response.meta["fud_excerpt"] = msg.text[:200]
+        if mod_alert:
+            response.meta["mod_alert"] = mod_alert
+
+        # 7b) Engagement rewards for a genuinely helpful answer.
+        self._reward_engagement(msg, routing, response, profile, user_key)
+
+        # 8) Leads.
+        await self._handle_leads(msg, routing, profile, response)
+
+        # 9) Persist memory + log decision. Best-effort: the answer is already
+        # computed — a transient DB blip must not turn it into an apology
+        # message (the profile is also cached in-process, so a lost write heals).
+        if response.should_reply:
+            self.memory.add_turn(thread_key, "assistant", response.text)
+        try:
+            await self.memory.save_profile(profile)
+        except Exception as exc:  # noqa: BLE001
+            log.error("memory.save_profile_failed", user=user_key, error=str(exc))
+        await self._log(msg, routing, retrieved, response, user_key, started)
+        return response
+
+    # ---- handle() stages ------------------------------------------------ #
+    async def _moderation_gate(
+        self, msg: IncomingMessage, thread_key: str, started: float, user_key: str
+    ) -> tuple[AgentResponse | None, dict | None]:
+        """Returns (finished moderation response, benign admin alert)."""
+        if msg.is_private:
+            return None, None
+        verdict = await self.moderator.evaluate(msg)
+        # Real sanction (delete/mute/ban) or active scam → block and handle.
+        if verdict.action != ModerationAction.NONE or verdict.category == "scam":
+            return await self._moderation_response(msg, verdict, thread_key, started), None
+        # Benign alert-only (e.g. a team member's display name mimics "Stobox"):
+        # tell admins, but KEEP HELPING — never go silent on someone over a name.
+        if verdict.alert_admin:
+            return None, {
+                "category": verdict.category, "reason": verdict.reason,
+                "offender_user_key": user_key,
+                "offender_name": msg.author.display_name,
+                "offender_id": msg.author.external_id,
+            }
+        return None, None
+
+    async def _remember_and_route(
+        self, msg: IncomingMessage, thread_key: str, user_key: str
+    ) -> tuple[UserProfile, Routing]:
+        # Attribute the turn to its author so a shared GROUP thread never
+        # blends two users' identities.
         self.memory.add_turn(thread_key, "user", msg.text, name=msg.author.display_name)
         profile = await self.memory.get_profile(user_key, msg.author.display_name)
         profile.touch()
-
-        # 3) Route.
         routing = await self.router.route(msg.text, msg.reply_to_text)
         profile.language = routing.language
         if routing.persona != "unknown":
@@ -628,32 +692,37 @@ class AgentEngine:
             profile.add_interest(t)
         if routing.is_question and self._retain_questions:
             profile.record_question(msg.text, cap=self._max_recent_q)
+        return profile, routing
 
-        # 4) FUD spike detection — recorded BEFORE the engage decision so a silent
-        #    FUD wave (messages we wouldn't otherwise answer) still alerts admins.
-        #    Single skeptics never fire; only a coordinated spike does.
-        fud_alert = 0
-        if not msg.is_private and routing.sentiment == "fud":
-            fired, count = self.fud_alarm.record(msg.chat_id, datetime.now(UTC))
-            if fired:
-                fud_alert = count
+    def _record_fud(self, msg: IncomingMessage, routing: Routing) -> int:
+        """Coordinated-FUD counter; single skeptics never fire."""
+        if msg.is_private or routing.sentiment != "fud":
+            return 0
+        fired, count = self.fud_alarm.record(msg.chat_id, datetime.now(UTC))
+        return count if fired else 0
 
-        # 5) Decide whether to speak (avoid group spam).
-        if not self._should_engage(msg, routing):
-            await self.memory.save_profile(profile)
-            if fud_alert or mod_alert:
-                # Nothing to say publicly, but admins still get the heads-up
-                # (empty text ⇒ should_reply False ⇒ no public message).
-                meta: dict = {}
-                if fud_alert:
-                    meta.update(fud_alert=fud_alert, fud_excerpt=msg.text[:200])
-                if mod_alert:
-                    meta["mod_alert"] = mod_alert
-                return AgentResponse(text="", language=routing.language, meta=meta)
-            return None
+    async def _declined(
+        self, msg: IncomingMessage, routing: Routing, profile: UserProfile,
+        fud_alert: int, mod_alert: dict | None,
+    ) -> AgentResponse | None:
+        """Not engaging publicly — but admins still get any pending heads-up
+        (empty text ⇒ should_reply False ⇒ no public message)."""
+        await self.memory.save_profile(profile)
+        if fud_alert or mod_alert:
+            meta: dict = {}
+            if fud_alert:
+                meta.update(fud_alert=fud_alert, fud_excerpt=msg.text[:200])
+            if mod_alert:
+                meta["mod_alert"] = mod_alert
+            return AgentResponse(text="", language=routing.language, meta=meta)
+        return None
 
-        # 4b) Deterministic compliance pre-intercepts (seed phrase, prompt
-        #     injection, price speculation) — these must not reach the LLM.
+    async def _pre_llm_gates(
+        self, msg: IncomingMessage, routing: Routing, profile: UserProfile,
+        thread_key: str, user_key: str, started: float,
+    ) -> AgentResponse | None:
+        """Deterministic gates that answer WITHOUT the LLM: compliance
+        pre-intercepts, the kill switch, and rate limiting."""
         intercept = self.rails.pre_intercept(msg.text)
         if intercept:
             response = AgentResponse(
@@ -672,14 +741,12 @@ class AgentEngine:
             await self._log(msg, routing, [], response, user_key, started)
             return response
 
-        # 4c) Kill switch — incident mode: static FAQ only, no LLM.
-        if self.paused:
+        if self.paused:      # kill switch — incident mode: static FAQ only.
             response = self._static_response(msg, self._static_faq(), "paused")
             await self.memory.save_profile(profile)
             await self._log(msg, routing, [], response, user_key, started)
             return response
 
-        # 4d) Rate limiting + global spend cap — cheap static reply, no LLM.
         if not msg.author.is_admin:
             decision = self.rate_limiter.check(user_key)
             if not decision.allowed:
@@ -688,22 +755,14 @@ class AgentEngine:
                 await self.memory.save_profile(profile)
                 await self._log(msg, routing, [], response, user_key, started)
                 return response
+        return None
 
-        # 5) Retrieve.
-        retrieved: list[RetrievedChunk] = []
-        if routing.needs_docs:
-            retrieved = await self.retriever.retrieve(msg.text)
-
-        # 6) Synthesize + 7) confidence gate.
-        response = await self._answer(msg, routing, retrieved, profile, thread_key)
-        if fud_alert:
-            response.meta["fud_alert"] = fud_alert
-            response.meta["fud_excerpt"] = msg.text[:200]
-        if mod_alert:
-            response.meta["mod_alert"] = mod_alert
-
-        # 7b) Engagement rewards for a genuinely helpful answer (DM or group):
-        #     XP + daily streak, level-up and streak-milestone shout-outs.
+    def _reward_engagement(
+        self, msg: IncomingMessage, routing: Routing, response: AgentResponse,
+        profile: UserProfile, user_key: str,
+    ) -> None:
+        """XP + daily streak for a genuinely helpful answer, with level-up /
+        streak-milestone shout-outs; DM share-nudge cadence."""
         substantive = (
             response.should_reply
             and routing.needs_docs
@@ -712,37 +771,23 @@ class AgentEngine:
             and not response.meta.get("gated")
             and not response.meta.get("rails", {}).get("blocked")
         )
-        if substantive:
-            try:
-                streak, new_day = self.xp.touch(user_key, msg.author.display_name or "")
-                self.xp.award(user_key, 5, "helpful_answer", msg.author.display_name or "")
-                levelup = self.xp.check_levelup(user_key)
-                if levelup:
-                    response.meta["levelup"] = {"title": levelup, "name": msg.author.display_name}
-                if new_day and streak in (7, 30, 100):
-                    response.meta["streak_milestone"] = {"days": streak, "name": msg.author.display_name}
-            except Exception as exc:  # noqa: BLE001 - XP must never break a reply
-                log.warning("xp.touch_failed", error=str(exc))
-            # Share-with-a-friend cadence is a DM thing (never public).
-            if msg.is_private:
-                profile.helpful_answers += 1
-                if profile.helpful_answers % 4 == 0:
-                    response.meta["share_nudge"] = True
-
-        # 8) Leads.
-        await self._handle_leads(msg, routing, profile, response)
-
-        # 9) Persist memory + log decision. Best-effort: the answer is already
-        # computed — a transient DB blip must not turn it into an apology
-        # message (the profile is also cached in-process, so a lost write heals).
-        if response.should_reply:
-            self.memory.add_turn(thread_key, "assistant", response.text)
+        if not substantive:
+            return
         try:
-            await self.memory.save_profile(profile)
-        except Exception as exc:  # noqa: BLE001
-            log.error("memory.save_profile_failed", user=user_key, error=str(exc))
-        await self._log(msg, routing, retrieved, response, user_key, started)
-        return response
+            streak, new_day = self.xp.touch(user_key, msg.author.display_name or "")
+            self.xp.award(user_key, 5, "helpful_answer", msg.author.display_name or "")
+            levelup = self.xp.check_levelup(user_key)
+            if levelup:
+                response.meta["levelup"] = {"title": levelup, "name": msg.author.display_name}
+            if new_day and streak in (7, 30, 100):
+                response.meta["streak_milestone"] = {"days": streak, "name": msg.author.display_name}
+        except Exception as exc:  # noqa: BLE001 - XP must never break a reply
+            log.warning("xp.touch_failed", error=str(exc))
+        # Share-with-a-friend cadence is a DM thing (never public).
+        if msg.is_private:
+            profile.helpful_answers += 1
+            if profile.helpful_answers % 4 == 0:
+                response.meta["share_nudge"] = True
 
     # ------------------------------------------------------------------ #
     def _should_engage(self, msg: IncomingMessage, routing: Routing) -> bool:
@@ -793,8 +838,40 @@ class AgentEngine:
         profile: UserProfile,
         thread_key: str,
     ) -> AgentResponse:
-        history = self._format_history(thread_key)
-        context, citations = self._format_context(retrieved)
+        sys_msgs, user_prompt, reply_cap, citations = await self._build_reply_prompt(
+            msg, routing, retrieved, profile, thread_key
+        )
+        result = await self.reasoner.complete(
+            [*sys_msgs, ChatMessage("user", user_prompt)],
+            max_tokens=reply_cap,
+        )
+        self.rate_limiter.record_spend(result.output_tokens)
+        clean, score = self._score_reply(result.text, retrieved, citations)
+
+        response = AgentResponse(
+            text=clean[: self.max_reply],
+            confidence_score=score,
+            confidence=self.confidence.label(score),
+            citations=citations,
+            mode=routing.mode,
+            persona=profile.persona,
+            language=routing.language,
+            reply_to_message_id=msg.message_id,
+            meta={
+                "tokens_in": result.input_tokens,
+                "tokens_out": result.output_tokens,
+                "model": result.model,
+                "provider": result.provider,
+                "prompt_version": self.prompts.version_of("answer_synthesis", profile.user_key),
+            },
+        )
+
+        self._gate_low_confidence(msg, routing, response, clean, score)
+        self._apply_output_rails(msg, response)
+        return response
+
+    # ---- _answer() stages ------------------------------------------------ #
+    def _reply_user_context(self, msg: IncomingMessage, profile: UserProfile) -> str:
         user_context = self._user_summary(profile)
         # Verified community admins (Arevik, Gene, …) are teammates: treat their
         # in-chat guidance and corrections as authoritative — still bound by the
@@ -821,6 +898,23 @@ class AgentEngine:
                 "current speaker by their own name, and never assume they are someone who "
                 "spoke earlier or inherit another user's identity, claims, or admin status"
             )
+        return user_context
+
+    async def _build_reply_prompt(
+        self,
+        msg: IncomingMessage,
+        routing: Routing,
+        retrieved: list[RetrievedChunk],
+        profile: UserProfile,
+        thread_key: str,
+    ) -> tuple[list[ChatMessage], str, int, list[Citation]]:
+        """Select and render the reply prompt for this message's mode.
+
+        Returns (system messages, user prompt, reply token cap, citations).
+        """
+        history = self._format_history(thread_key)
+        context, citations = self._format_context(retrieved)
+        user_context = self._reply_user_context(msg, profile)
         # Refresh the live STBU market line so [FRESHNESS] carries the current price.
         await self._refresh_market()
         # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt,
@@ -884,8 +978,7 @@ class AgentEngine:
             )
 
         # Short answers by default; the full version only on explicit request.
-        detail = bool(msg.raw.get("detail"))
-        if detail:
+        if bool(msg.raw.get("detail")):
             reply_cap = 1600
         elif routing.sentiment in HOT_SENTIMENTS:
             reply_cap = 500          # calm + room for one grounding fact
@@ -893,12 +986,13 @@ class AgentEngine:
             reply_cap = 700
         else:
             reply_cap = 220
-        result = await self.reasoner.complete(
-            [*sys_msgs, ChatMessage("user", user_prompt)],
-            max_tokens=reply_cap,
-        )
-        self.rate_limiter.record_spend(result.output_tokens)
-        clean, self_conf, used_sources = self.confidence.parse(result.text)
+        return sys_msgs, user_prompt, reply_cap, citations
+
+    def _score_reply(
+        self, raw_text: str, retrieved: list[RetrievedChunk], citations: list[Citation]
+    ) -> tuple[str, float]:
+        """Parse the model's protocol trailer and compute the final confidence."""
+        clean, self_conf, used_sources = self.confidence.parse(raw_text)
         # Canonicals are authoritative grounding: an answer the model marks as
         # canonicals-based must not be IDK-gated for lacking retrieved chunks.
         canonical_grounded = any("canonical" in s.lower() for s in (used_sources or []))
@@ -913,62 +1007,52 @@ class AgentEngine:
         score = self.confidence.score(retrieved, self_conf, cited)
         if canonical_grounded and self_conf is not None:
             score = max(score, round(min(1.0, 0.2 + 0.8 * self_conf), 3))
+        return clean, score
 
-        response = AgentResponse(
-            text=clean[: self.max_reply],
-            confidence_score=score,
-            confidence=self.confidence.label(score),
-            citations=citations,
-            mode=routing.mode,
-            persona=profile.persona,
-            language=routing.language,
-            reply_to_message_id=msg.message_id,
-            meta={
-                "tokens_in": result.input_tokens,
-                "tokens_out": result.output_tokens,
-                "model": result.model,
-                "provider": result.provider,
-                "prompt_version": self.prompts.version_of("answer_synthesis", profile.user_key),
-            },
-        )
+    # The prompt mandates the English marker sentence, but models answering in
+    # the user's language sometimes translate it — match common translations
+    # too so a non-English IDK still triggers QA capture.
+    _IDK_MARKERS = (
+        "don't know based on the current documentation",
+        "do not know based on the current documentation",
+        "не знаю на основе текущей документации",            # ru
+        "не могу подтвердить это по текущей документации",   # ru
+        "не знаю на основі поточної документації",           # uk
+        "no lo sé según la documentación actual",            # es
+        "no puedo confirmarlo según la documentación",       # es
+    )
 
-        # Anti-hallucination gate — and the unanswered-question loop: capture
-        # the question, so admins can /answer it and the asker gets a follow-up.
-        # Fires on low confidence OR when the model itself declares it doesn't
-        # know (an "unclear answer" is an unanswered question too).
-        # The prompt mandates the English marker sentence, but models answering
-        # in the user's language sometimes translate it — match the common
-        # translations too so a non-English IDK still triggers QA capture.
-        _idk_markers = (
-            "don't know based on the current documentation",
-            "do not know based on the current documentation",
-            "не знаю на основе текущей документации",            # ru
-            "не могу подтвердить это по текущей документации",   # ru
-            "не знаю на основі поточної документації",           # uk
-            "no lo sé según la documentación actual",            # es
-            "no puedo confirmarlo según la documentación",       # es
-        )
-        model_idk = any(m in clean.lower() for m in _idk_markers)
-        if routing.needs_docs and (self.confidence.below_threshold(score) or model_idk):
-            response.text = _IDK["en"]   # English-only communication policy
-            response.confidence = Confidence.LOW
-            response.citations = []
-            response.escalate = True
-            response.meta["gated"] = True
-            try:
-                entry, is_new = self.qa.capture(
-                    msg.text, channel=msg.channel, chat_id=msg.chat_id,
-                    message_id=msg.message_id,
-                    user_key=f"{msg.channel}:{msg.author.external_id}",
-                    language=routing.language,
-                )
-                response.meta["qa"] = {"qid": entry.qid, "new": is_new,
-                                       "question": entry.question}
-            except Exception as exc:  # noqa: BLE001 - capture must never break replies
-                log.error("qa.capture_failed", error=str(exc))
+    def _gate_low_confidence(
+        self, msg: IncomingMessage, routing: Routing, response: AgentResponse,
+        clean: str, score: float,
+    ) -> None:
+        """Anti-hallucination gate — and the unanswered-question loop: capture
+        the question, so admins can /answer it and the asker gets a follow-up.
+        Fires on low confidence OR when the model itself declares it doesn't
+        know (an "unclear answer" is an unanswered question too)."""
+        model_idk = any(m in clean.lower() for m in self._IDK_MARKERS)
+        if not (routing.needs_docs and (self.confidence.below_threshold(score) or model_idk)):
+            return
+        response.text = _IDK["en"]   # English-only communication policy
+        response.confidence = Confidence.LOW
+        response.citations = []
+        response.escalate = True
+        response.meta["gated"] = True
+        try:
+            entry, is_new = self.qa.capture(
+                msg.text, channel=msg.channel, chat_id=msg.chat_id,
+                message_id=msg.message_id,
+                user_key=f"{msg.channel}:{msg.author.external_id}",
+                language=routing.language,
+            )
+            response.meta["qa"] = {"qid": entry.qid, "new": is_new,
+                                   "question": entry.question}
+        except Exception as exc:  # noqa: BLE001 - capture must never break replies
+            log.error("qa.capture_failed", error=str(exc))
 
-        # Deterministic compliance post-processing (blocks forbidden claims,
-        # appends disclaimer / anti-impersonation warning where required).
+    def _apply_output_rails(self, msg: IncomingMessage, response: AgentResponse) -> None:
+        """Deterministic compliance post-processing (blocks forbidden claims,
+        appends disclaimer / anti-impersonation warning where required)."""
         rail = self.rails.post_process(response.text, msg.text)
         response.text = rail.text[: self.max_reply]
         if rail.blocked:
@@ -990,7 +1074,6 @@ class AgentEngine:
             and not response.meta.get("gated")
             and not rail.blocked
         )
-        return response
 
     async def _handle_leads(
         self, msg: IncomingMessage, routing: Routing, profile: UserProfile, response: AgentResponse
