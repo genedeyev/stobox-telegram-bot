@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 from datetime import UTC, datetime
 from html import escape as html_escape
 from pathlib import Path
@@ -28,16 +29,24 @@ log = get_logger(__name__)
 DEFAULT_STATE_PATH = "data/proactive_state.json"
 
 
-async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2, **kwargs) -> str:
+async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2,
+                                  html: bool = False, **kwargs) -> str:
     """Send a message honoring Telegram's flood-wait signal.
 
     Telegram raises RetryAfter at ~30 msg/s globally (and per-chat limits);
-    swallowing it silently drops recipients from a blast. Returns:
+    swallowing it silently drops recipients from a blast. When ``html=True`` the
+    message is sent with HTML parse mode and, if Telegram rejects the markup,
+    retried once as stripped plain text — so a stray tag never surfaces raw in
+    the chat (the `<b>…</b>` bug) nor drops the post entirely. Returns:
       "ok"        — delivered
       "forbidden" — user blocked the bot / bot kicked (caller may unsubscribe)
       "failed"    — other error after retries (caller decides whether to retry later)
     """
-    from telegram.error import Forbidden, RetryAfter
+    from telegram.error import BadRequest, Forbidden, RetryAfter
+
+    if html:
+        kwargs.setdefault("parse_mode", "HTML")
+        kwargs.setdefault("disable_web_page_preview", True)
 
     for _ in range(retries + 1):
         try:
@@ -47,10 +56,30 @@ async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2, 
             await asyncio.sleep(float(exc.retry_after) + 0.5)
         except Forbidden:
             return "forbidden"
+        except BadRequest as exc:
+            if html:   # bad markup → send stripped plain text, don't lose the post
+                kwargs.pop("parse_mode", None)
+                try:
+                    await bot.send_message(chat_id, _strip_tags(text), **kwargs)
+                    return "ok"
+                except Exception as e2:  # noqa: BLE001
+                    log.warning("send.html_fallback_failed", chat=str(chat_id), error=str(e2))
+                    return "failed"
+            log.warning("send.failed", chat=str(chat_id), error=str(exc))
+            return "failed"
         except Exception as exc:  # noqa: BLE001 - deleted chat, bad id, network…
             log.warning("send.failed", chat=str(chat_id), error=str(exc))
             return "failed"
     return "failed"
+
+
+# Any HTML-like tag (letter or / after '<'), so the plain-text fallback removes
+# unsupported tags too (<h1>, <p>, …) — but leaves prose like "STBU < $1" alone.
+_TAG_RE = re.compile(r"</?[a-zA-Z][^>]*>")
+
+
+def _strip_tags(text: str) -> str:
+    return _TAG_RE.sub("", text or "")
 
 _FORMATS = [
     # Hero topics — weighted heavier so proactive content leans into STBU,
@@ -210,6 +239,10 @@ class ProactiveScheduler:
         self._countdown_last: str = str(state.get("countdown_last", ""))
         # Last updates-briefing text, to skip back-to-back identical broadcasts.
         self._updates_last: str = str(state.get("updates_last", ""))
+        # Last evangelist post time (ISO). PERSISTED so the post cadence is
+        # driven by wall-clock, not process uptime — otherwise every redeploy
+        # reset the "first post in 4h" timer and Stoby went silent for hours.
+        self._evangelist_last: str = str(state.get("evangelist_last", ""))
 
     def _save_state(self) -> None:
         from ...ops.statefile import save_json_atomic
@@ -218,6 +251,7 @@ class ProactiveScheduler:
             save_json_atomic(self._state_path, {
                 "countdown_last": self._countdown_last,
                 "updates_last": self._updates_last,
+                "evangelist_last": self._evangelist_last,
             })
         except Exception as exc:  # noqa: BLE001
             log.warning("proactive.state_save_failed", error=str(exc))
@@ -233,10 +267,14 @@ class ProactiveScheduler:
         # check can't).
         jq.run_repeating(self._heartbeat_job, interval=60, first=5)
         if cfg.get("proactive.evangelist.enabled", True):
-            hours = float(cfg.get("proactive.evangelist.interval_hours", 4))
-            jq.run_repeating(self._evangelist_job, interval=hours * 3600, first=hours * 3600)
+            hours = float(cfg.get("proactive.evangelist.interval_hours", 3))
+            # first=warmup (default 15 min), NOT the full interval: Stoby engages
+            # shortly after boot instead of hours later. The job's own wall-clock
+            # gap check (persisted _evangelist_last) prevents redeploy spam.
+            warmup = float(cfg.get("proactive.evangelist.warmup_seconds", 900))
+            jq.run_repeating(self._evangelist_job, interval=hours * 3600, first=warmup)
         if cfg.get("proactive.growth.revive_inactive", True):
-            jq.run_repeating(self._revival_job, interval=1800, first=1800)  # check every 30m
+            jq.run_repeating(self._revival_job, interval=1800, first=300)  # check ~5m then every 30m
         if cfg.get("observability.daily_digest", True):
             jq.run_repeating(self._digest_job, interval=24 * 3600, first=24 * 3600)
         # Daily knowledge reconciliation (ARCHITECTURE.md §2.2) at 04:00 UTC.
@@ -733,6 +771,19 @@ class ProactiveScheduler:
     async def _evangelist_job(self, context) -> None:
         if self._in_quiet_hours():
             return
+        # Wall-clock gap guard: skip if we already posted within ~90% of the
+        # interval (a redeploy fired the warmup timer again). Uptime-independent.
+        hours = float(self.engine.config.get("proactive.evangelist.interval_hours", 3))
+        now = datetime.now(UTC)
+        if self._evangelist_last:
+            try:
+                last = datetime.fromisoformat(self._evangelist_last)
+                if (now - last).total_seconds() < hours * 3600 * 0.9:
+                    return
+            except ValueError:
+                pass
+        if not self._known_chats():
+            return
         fmt = random.choice(_FORMATS)  # noqa: S311 - not security-sensitive
         if fmt.startswith("Poll"):
             await self._post_poll(context)
@@ -771,8 +822,10 @@ class ProactiveScheduler:
         self._recent_posts.append(fmt)
         chats = self._known_chats()
         for chat_id in chats:
-            await send_with_flood_control(context.bot, chat_id, rail.text[:4096])
+            await send_with_flood_control(context.bot, chat_id, rail.text[:4096], html=True)
             await asyncio.sleep(0.05)
+        self._evangelist_last = now.isoformat()
+        self._save_state()
         log.info("proactive.evangelist_posted", format=fmt, chats=len(chats))
 
     async def _post_poll(self, context) -> None:

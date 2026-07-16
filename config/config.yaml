@@ -115,8 +115,11 @@ proactive:
   state_path: data/proactive_state.json   # one-shot broadcast dedupe (survives restarts)
   evangelist:
     enabled: true
-    interval_hours: 4              # publish useful content every N hours
-    quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 (chat tz)
+    interval_hours: 3              # publish useful content every N hours (presence)
+    warmup_seconds: 900           # first post ~15 min after boot (NOT a full interval
+                                   # later — redeploys used to mute Stoby for hours);
+                                   # a persisted wall-clock gap guard prevents spam
+    quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 UTC
   migration_countdown:
     enabled: true                  # public STBU→Base countdown to groups; the job
                                    # ramps weekly → daily as 15 Sep approaches
@@ -132,10 +135,10 @@ proactive:
     include_blog: true             # latest blog/news post + link
   growth:
     revive_inactive: true
-    inactivity_minutes: 180        # after N min of silence, surface a blog post /
-                                   # fact (skips 00:00–07:00). Dial 120 for more
-                                   # presence, 240 for less.
-    max_unanswered_revivals: 2     # after N nudges nobody answers, go dormant
+    inactivity_minutes: 90         # after N min of silence, surface a blog post /
+                                   # fact / conversation starter (skips 00:00–07:00).
+                                   # Dial down for more presence, up for less.
+    max_unanswered_revivals: 3     # after N nudges nobody answers, go dormant
                                    # until a human speaks again (don't talk to a wall)
   blog_announcements:
     enabled: true                  # announce every newly published blog post
