@@ -41,12 +41,12 @@ def compute_migration_phase(
     now = now or datetime.now(UTC)
     today = now.date()
     m = canon.get("tokens.stbu.migration", {}) or {}
-    starts = _as_date(m.get("burns_count_from"))
+    starts = _as_date(m.get("burn_window_opens")) or _as_date(m.get("burns_count_from"))
     deadline = _as_date(m.get("burn_deadline"))
     claim = _as_date(m.get("claim_opens"))
 
     if starts and today < starts:
-        return MigrationPhase.PRE, f"Migration not yet open; burns count from {_fmt(starts)}."
+        return MigrationPhase.PRE, f"Burn window opens {_fmt(starts)}; not open yet."
     if deadline and today <= deadline:
         return (
             MigrationPhase.BURN_OPEN,

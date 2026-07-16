@@ -11,7 +11,7 @@
 #   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
-version: 2026-07-14.2
+version: 2026-07-16.1
 
 company:
   operating_entity: "Stobox Technologies Inc."
@@ -88,7 +88,8 @@ tokens:
     migration:
       pattern: "burn-and-mint, 1:1, same-wallet only"
       destination_chain: "Base"
-      burns_count_from: "2026-07-01"
+      burn_window_opens: "2026-07-20"       # the burn window OPENS on this date
+      burns_count_from: "2026-07-20"        # burns start when the window opens
       burn_deadline: "2026-09-15T23:59:00Z"
       claim_opens: "2026-09-16"
       supply_phrasing: '"fixed maximum supply of 250M" — final supply is whatever migrates, at most 250M'

@@ -215,10 +215,44 @@ class ProactiveScheduler:
         if not canon or not chats:
             return
         m = canon.get("tokens.stbu.migration", {}) or {}
+        window_open = _as_date(m.get("burn_window_opens")) or _as_date(m.get("burns_count_from"))
         deadline = _as_date(m.get("burn_deadline"))
         claims = _as_date(m.get("claim_opens"))
         today = datetime.now(UTC).date()
         if not deadline:
+            return
+
+        # Opening day → one "window is NOW OPEN" announcement.
+        if window_open and today == window_open and self._countdown_last != "opened":
+            self._countdown_last = "opened"
+            text = ("🟢 <b>The STBU → Base burn window is NOW OPEN!</b>\n\n"
+                    "Burn-and-mint, 1:1, <b>same wallet only</b> — consolidate all your STBU into "
+                    "one wallet first. Legacy V1 isn't eligible. Deadline: "
+                    f"{deadline.strftime('%d %b %Y')}, 23:59 UTC.\n\n"
+                    "Steps: /migrate  ·  Reminders: /remindme\n"
+                    "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
+            await self._broadcast(context, chats, text)
+            log.info("migration.window_opened", chats=len(chats))
+            return
+
+        # Before the window opens → count down to the OPENING (build the hype).
+        if window_open and today < window_open:
+            days = (window_open - today).days
+            if self._countdown_last == str(today) or not self._countdown_due(days, today):
+                return
+            when = ("<b>TODAY</b>" if days == 0 else
+                    "<b>tomorrow</b>" if days == 1 else f"in <b>{days} days</b>")
+            text = (
+                f"🔥 The <b>STBU → Base</b> burn window <b>OPENS {when}</b> — "
+                f"{window_open.strftime('%d %b %Y')}!\n\n"
+                "Get ready: consolidate all your STBU into <b>one wallet</b> now "
+                "(burn-and-mint will be 1:1, same wallet only). Legacy V1 isn't eligible.\n\n"
+                "Steps: /migrate  ·  Reminders: /remindme\n"
+                "⚠️ Stobox staff never DM you first; only trust links from stobox.io."
+            )
+            await self._broadcast(context, chats, text)
+            self._countdown_last = str(today)
+            log.info("migration.preopen_posted", days=days, chats=len(chats))
             return
 
         # After the deadline → one "claims open" announcement, then done.

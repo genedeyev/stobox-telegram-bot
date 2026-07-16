@@ -19,8 +19,10 @@ https://www.stobox.io/stbu.
 
 STBU is migrating to the Base network using a burn-and-mint process: 1:1, and to
 the **same wallet** only. Consolidate all STBU into one wallet before migrating.
-Legacy V1 tokens are not eligible. For the current migration status, dates, and
-the exact steps, use the /migrate command or check https://www.stobox.io.
+Legacy V1 tokens are not eligible. The **burn window opens 20 Jul 2026** and the
+burn **deadline is 15 Sep 2026, 23:59 UTC** (claims open the next day). For the
+current migration status and the exact steps, use the /migrate command or check
+https://www.stobox.io.
 
 ## Security
 
