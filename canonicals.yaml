@@ -21,6 +21,13 @@ company:
     administer tokenized real-world assets and securities.
   memberships:
     - "Verified Member of the STO Foundation"
+  # Achievements / momentum — share with pride, never hype, always grounded.
+  # As published on stobox.io (as-of Aug 2025); the crawl keeps these current.
+  achievements:
+    operating_since: 2018
+    clients: "100+ clients across 4 continents"
+    jurisdictions: "20+ jurisdictions supported"
+    assets_supported: "$305M+ in assets supported (as of Aug 2025)"
 
 products:
   # The three-layer lineup as published on stobox.io (llms-full.txt):
