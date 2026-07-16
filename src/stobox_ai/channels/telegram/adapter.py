@@ -83,6 +83,8 @@ class TelegramChannel(Channel):
         self.deleted_removed: int = 0
         # Rotates the "thinking" placeholder text so it never looks canned.
         self._think_i: int = 0
+        # Highest member-count milestone already celebrated, per chat.
+        self._member_milestones: dict[str, int] = {}
 
     async def start(self) -> None:
         from telegram.ext import (
@@ -337,6 +339,30 @@ class TelegramChannel(Channel):
             await message.reply_text(variants[len(names) % len(variants)])
         except Exception as exc:  # noqa: BLE001
             log.warning("telegram.welcome_failed", error=str(exc))
+        await self._member_milestone(context, chat)
+
+    _MEMBER_MILESTONES = (50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000)
+
+    async def _member_milestone(self, context, chat) -> None:
+        """Celebrate when the group crosses a member-count milestone."""
+        if chat is None:
+            return
+        try:
+            count = await context.bot.get_chat_member_count(chat.id)
+        except Exception:  # noqa: BLE001
+            return
+        crossed = max((m for m in self._MEMBER_MILESTONES if m <= count), default=0)
+        if crossed and crossed > self._member_milestones.get(str(chat.id), 0):
+            self._member_milestones[str(chat.id)] = crossed
+            try:
+                await context.bot.send_message(
+                    chat.id,
+                    f"🎉 We just crossed <b>{crossed:,} members</b>! Thanks for being "
+                    "part of the Stobox community — here's to the next milestone. 🚀",
+                    parse_mode="HTML",
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     def _remove_deleted_enabled(self) -> bool:
         return bool(self.engine.config.get("moderation.remove_deleted_accounts", True))
@@ -592,6 +618,28 @@ class TelegramChannel(Channel):
                     await self.reply_html(update.effective_message, text, markup)
         else:
             await self.reply_html(update.effective_message, text, markup)
+        # Milestone shout-out (level-up / streak) — a short public celebration.
+        await self._milestone_shout(context, update, response)
+
+    async def _milestone_shout(self, context, update, response) -> None:
+        lvl = response.meta.get("levelup")
+        streak = response.meta.get("streak_milestone")
+        who = ""
+        line = None
+        if lvl:
+            who = (lvl.get("name") or "").split()[:1]
+            name = who[0] if who else "You"
+            line = f"🎉 {name} just leveled up to <b>{lvl['title']}</b>! Keep it going. 🔥"
+        elif streak:
+            who = (streak.get("name") or "").split()[:1]
+            name = who[0] if who else "You"
+            line = f"🔥 {name} is on a <b>{streak['days']}-day streak</b> — respect!"
+        if not line:
+            return
+        try:
+            await context.bot.send_message(update.effective_chat.id, line, parse_mode="HTML")
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _handle_moderation(self, update, context, response) -> None:
         """Execute the graded action, DM the offender an explanation, and post a

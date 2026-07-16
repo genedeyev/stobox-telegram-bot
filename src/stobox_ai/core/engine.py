@@ -597,28 +597,32 @@ class AgentEngine:
         if mod_alert:
             response.meta["mod_alert"] = mod_alert
 
-        # 7b) Share-with-a-friend cadence: after every 4th genuinely helpful
-        #     answer (confident, not gated/blocked/escalated, in a DM), flag a
-        #     share nudge for the channel to render. Never on refusals.
-        if (
-            msg.is_private
-            and response.should_reply
+        # 7b) Engagement rewards for a genuinely helpful answer (DM or group):
+        #     XP + daily streak, level-up and streak-milestone shout-outs.
+        substantive = (
+            response.should_reply
+            and routing.needs_docs
             and response.confidence != Confidence.LOW
             and not response.escalate
             and not response.meta.get("gated")
             and not response.meta.get("rails", {}).get("blocked")
-        ):
-            profile.helpful_answers += 1
-            if profile.helpful_answers % 4 == 0:
-                response.meta["share_nudge"] = True
-            # Engagement: daily streak + XP for a substantive interaction.
+        )
+        if substantive:
             try:
                 streak, new_day = self.xp.touch(user_key, msg.author.display_name or "")
                 self.xp.award(user_key, 5, "helpful_answer", msg.author.display_name or "")
-                if new_day and streak in (3, 7, 14, 30):
-                    response.meta["streak_milestone"] = streak
+                levelup = self.xp.check_levelup(user_key)
+                if levelup:
+                    response.meta["levelup"] = {"title": levelup, "name": msg.author.display_name}
+                if new_day and streak in (7, 30, 100):
+                    response.meta["streak_milestone"] = {"days": streak, "name": msg.author.display_name}
             except Exception as exc:  # noqa: BLE001 - XP must never break a reply
                 log.warning("xp.touch_failed", error=str(exc))
+            # Share-with-a-friend cadence is a DM thing (never public).
+            if msg.is_private:
+                profile.helpful_answers += 1
+                if profile.helpful_answers % 4 == 0:
+                    response.meta["share_nudge"] = True
 
         # 8) Leads.
         await self._handle_leads(msg, routing, profile, response)

@@ -54,6 +54,7 @@ class UserXP:
     streak: int = 0
     best_streak: int = 0
     last_active: str = ""          # yyyy-mm-dd
+    notified_level: int = 0        # highest level index already celebrated
 
 
 class XPBook:
@@ -94,6 +95,19 @@ class XPBook:
         self._save()
         log.info("xp.award", user=user_key, points=points, reason=reason, total=rec.xp)
         return rec.xp
+
+    def check_levelup(self, user_key: str) -> str | None:
+        """If the user has crossed into a new level since last celebrated, return
+        the new title (and mark it), else None. Fire-and-forget for shout-outs."""
+        rec = self.users.get(user_key)
+        if not rec:
+            return None
+        idx, title = level_for(rec.xp)
+        if idx > rec.notified_level:
+            rec.notified_level = idx
+            self._save()
+            return title
+        return None
 
     def get(self, user_key: str) -> UserXP | None:
         return self.users.get(user_key)
