@@ -160,10 +160,46 @@ class PgVectorStore(VectorStore):
                 )
                 """
             )
+            # Dimension guard: CREATE TABLE IF NOT EXISTS is a no-op on an
+            # existing table, so changing the embedding model/dimensions used
+            # to leave a mismatched vector column — every upsert then failed
+            # forever with only a log line. Detect the mismatch and rebuild
+            # (the corpus is fully reconstructible: local docs + daily resync).
+            cur = await conn.execute(
+                "SELECT atttypmod FROM pg_attribute "
+                "WHERE attrelid = 'kb_chunks'::regclass AND attname = 'embedding'"
+            )
+            row = await cur.fetchone()
+            existing_dim = row[0] if row else None
+            if existing_dim is not None and existing_dim != self._dim:
+                log.error("kb.embedding_dim_changed_rebuilding",
+                          stored=existing_dim, configured=self._dim)
+                await conn.execute("DROP TABLE kb_chunks")
+                await conn.execute(
+                    f"""
+                    CREATE TABLE kb_chunks (
+                        chunk_id     TEXT PRIMARY KEY,
+                        doc_id       TEXT NOT NULL,
+                        content_hash TEXT,
+                        ordinal      INT,
+                        section      TEXT,
+                        text         TEXT NOT NULL,
+                        summary      TEXT,
+                        keywords     TEXT[],
+                        embedding    vector({self._dim}),
+                        meta         JSONB
+                    )
+                    """
+                )
             await conn.execute("CREATE INDEX IF NOT EXISTS kb_doc_idx ON kb_chunks(doc_id)")
+            # HNSW, not ivfflat: ivfflat trains its centroids at CREATE INDEX
+            # time — built on an empty table (as it was at first boot) it gives
+            # degraded recall for the corpus's whole life. HNSW has no training
+            # step and stays accurate as rows arrive.
+            await conn.execute("DROP INDEX IF EXISTS kb_vec_idx")
             await conn.execute(
-                "CREATE INDEX IF NOT EXISTS kb_vec_idx ON kb_chunks "
-                "USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+                "CREATE INDEX IF NOT EXISTS kb_vec_hnsw_idx ON kb_chunks "
+                "USING hnsw (embedding vector_cosine_ops)"
             )
 
     async def upsert(self, chunks: list[Chunk]) -> None:

@@ -228,6 +228,10 @@ class ProactiveScheduler:
             log.warning("proactive.no_job_queue", hint="install python-telegram-bot[job-queue]")
             return
         cfg = self.engine.config
+        # Liveness heartbeat — the container HEALTHCHECK stats this file's
+        # mtime, catching a wedged event loop / dead job queue (an `import`
+        # check can't).
+        jq.run_repeating(self._heartbeat_job, interval=60, first=5)
         if cfg.get("proactive.evangelist.enabled", True):
             hours = float(cfg.get("proactive.evangelist.interval_hours", 4))
             jq.run_repeating(self._evangelist_job, interval=hours * 3600, first=hours * 3600)
@@ -278,6 +282,14 @@ class ProactiveScheduler:
         if cfg.get("proactive.content.enabled", True):
             jq.run_repeating(self._content_job, interval=7 * 24 * 3600, first=6 * 3600)
         log.info("proactive.scheduled")
+
+    async def _heartbeat_job(self, context) -> None:
+        import os
+
+        try:
+            Path(os.environ.get("HEARTBEAT_FILE", "/tmp/stobox-heartbeat")).touch()
+        except OSError:  # pragma: no cover - read-only fs etc.
+            pass
 
     async def _content_job(self, context) -> None:
         """DM admins a weekly preview of blog outlines drafted from question-gaps."""
@@ -672,6 +684,13 @@ class ProactiveScheduler:
             log.info("winback.nudged", sent=sent, inactive_days=inactive_days)
 
     async def _resync_job(self, context) -> None:
+        # Nightly housekeeping rides the same 04:00 tick: decision-log retention
+        # (rows carry verbatim member questions — PII must not grow forever).
+        try:
+            days = int(self.engine.config.get("observability.decision_retention_days", 90))
+            await self.engine.decisions.prune(days)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("proactive.decision_prune_failed", error=str(exc))
         try:
             results = await self.engine.sync_knowledge()
         except Exception as exc:  # noqa: BLE001
@@ -712,14 +731,17 @@ class ProactiveScheduler:
             context=context_text or "(general Stobox knowledge)",
         )
         # Use the assembled [CORE]+[CANONICALS]+[FRESHNESS] prompt so proactive
-        # posts are grounded in the same canonical facts as replies; the legacy
-        # system_base is only the fallback when guardrail files are absent.
-        system = self.engine.system_prompt() or self.engine.prompts.render(
-            "system_base", persona="beginner", mode=Mode.EVANGELIST.value
-        )
+        # posts are grounded in the same canonical facts as replies (split so
+        # the stable prefix prompt-caches); legacy system_base is the fallback.
+        sys_msgs = self.engine.system_messages() or [ChatMessage(
+            "system",
+            self.engine.prompts.render(
+                "system_base", persona="beginner", mode=Mode.EVANGELIST.value
+            ),
+        )]
         try:
             result = await self.engine.reasoner.complete(
-                [ChatMessage("system", system), ChatMessage("user", prompt)]
+                [*sys_msgs, ChatMessage("user", prompt)]
             )
         except Exception as exc:  # noqa: BLE001
             log.error("proactive.evangelist_failed", error=str(exc), exc_info=True)

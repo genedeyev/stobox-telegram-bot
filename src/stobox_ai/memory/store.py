@@ -79,6 +79,18 @@ class MemoryStore:
     async def save_profile(self, profile: UserProfile) -> None:
         self._profiles[profile.user_key] = profile
 
+    async def delete_profile(self, user_key: str) -> None:
+        """GDPR erasure: forget everything held about this user."""
+        self._profiles.pop(user_key, None)
+
+    def forget_threads(self, fragment: str) -> int:
+        """Drop conversation windows whose thread key contains ``fragment``
+        (e.g. the user's DM chat id) — part of the erasure path."""
+        keys = [k for k in self._convos if fragment in k]
+        for k in keys:
+            self._convos.pop(k, None)
+        return len(keys)
+
     async def close(self) -> None:  # pragma: no cover - symmetry with Pg
         pass
 
@@ -138,6 +150,11 @@ class PgMemoryStore(MemoryStore):
                 """,
                 (profile.user_key, _profile_to_json(profile)),
             )
+
+    async def delete_profile(self, user_key: str) -> None:
+        await super().delete_profile(user_key)
+        async with self._pool.connection() as conn:
+            await conn.execute("DELETE FROM user_profiles WHERE user_key=%s", (user_key,))
 
 
 async def build_memory_store(config: Config) -> MemoryStore:

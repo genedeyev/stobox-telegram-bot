@@ -125,6 +125,19 @@ class MessageLog:
             return len(self.chats.get(str(chat_id), []))
         return sum(len(v) for v in self.chats.values())
 
+    def purge_user(self, user_id: str) -> int:
+        """GDPR erasure: drop every logged message from this user, all chats."""
+        uid = str(user_id)
+        removed = 0
+        for bucket in self.chats.values():
+            before = len(bucket)
+            bucket[:] = [m for m in bucket if m.user_id != uid]
+            removed += before - len(bucket)
+        if removed:
+            self._compact()
+            log.info("msglog.user_purged", user=uid, removed=removed)
+        return removed
+
     # -- pruning + persistence ----------------------------------------- #
     def _prune(self, bucket: list[LoggedMessage]) -> None:
         cutoff = (_now() - self.retention).isoformat()
@@ -145,24 +158,43 @@ class MessageLog:
         if not self.path.exists():
             return
         try:
-            for line in self.path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                m = LoggedMessage(**json.loads(line))
-                self.chats.setdefault(m.chat_id, []).append(m)
-            for bucket in self.chats.values():
-                self._prune(bucket)
-            self._compact()                          # trim the on-disk file to the pruned set
-        except Exception as exc:  # noqa: BLE001
+            lines = self.path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
             log.error("msglog.load_failed", error=str(exc))
+            return
+        from ..util import filter_dataclass_kwargs
+
+        bad = 0
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Per-line tolerance: one truncated append (unclean shutdown) must
+            # not abandon the whole history AND the compaction that bounds it.
+            try:
+                m = LoggedMessage(**filter_dataclass_kwargs(LoggedMessage, json.loads(line)))
+            except Exception:  # noqa: BLE001
+                bad += 1
+                continue
+            self.chats.setdefault(m.chat_id, []).append(m)
+        if bad:
+            log.warning("msglog.skipped_bad_lines", count=bad)
+        for bucket in self.chats.values():
+            self._prune(bucket)
+        self._compact()                          # trim the on-disk file to the pruned set
 
     def _compact(self) -> None:
+        import os
+
+        # Atomic: write the compacted log to a temp file, then swap it in — a
+        # crash mid-compaction must never destroy the whole retained history.
+        tmp = self.path.with_name(self.path.name + ".tmp")
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("w", encoding="utf-8") as f:
+            with tmp.open("w", encoding="utf-8") as f:
                 for bucket in self.chats.values():
                     for m in bucket:
                         f.write(json.dumps(asdict(m)) + "\n")
+            os.replace(tmp, self.path)
         except Exception as exc:  # noqa: BLE001
             log.error("msglog.compact_failed", error=str(exc))

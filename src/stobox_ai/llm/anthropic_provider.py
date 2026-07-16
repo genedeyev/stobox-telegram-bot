@@ -51,7 +51,7 @@ class AnthropicProvider(LLMProvider):
     ) -> LLMResult:
         from anthropic import BadRequestError
 
-        system = "\n\n".join(m.content for m in messages if m.role == "system")
+        system_texts = [m.content for m in messages if m.role == "system" and m.content]
         convo = [
             {"role": m.role, "content": m.content}
             for m in messages
@@ -63,8 +63,18 @@ class AnthropicProvider(LLMProvider):
             "max_tokens": max_tokens or self.max_tokens,
         }
         # Only send `system` when present — system=None is a 400 on the API.
-        if system:
-            kwargs["system"] = system
+        # Multiple system messages = (stable…, dynamic) convention: everything
+        # before the last is a stable prefix ([CORE]+[CANONICALS], ~8K tokens)
+        # marked with cache_control so Anthropic prompt-caches it — otherwise
+        # it's re-billed at the full input rate on every single call.
+        if len(system_texts) > 1:
+            kwargs["system"] = [
+                {"type": "text", "text": t, "cache_control": {"type": "ephemeral"}}
+                if i < len(system_texts) - 1 else {"type": "text", "text": t}
+                for i, t in enumerate(system_texts)
+            ]
+        elif system_texts:
+            kwargs["system"] = system_texts[0]
         if not self._no_temperature:
             kwargs["temperature"] = self.temperature if temperature is None else temperature
 

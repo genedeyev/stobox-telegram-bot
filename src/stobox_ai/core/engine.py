@@ -243,7 +243,10 @@ class AgentEngine:
                 await sync_sources(indexer, config)
             except Exception as exc:  # noqa: BLE001 - never block boot on a crawl
                 log.error("boot.sync_failed", error=str(exc))
-        retriever = HybridRetriever(indexer.store, indexer.embedder, config, reasoner)
+        # Rerank + multi-hop follow-up generation are cheap classification-style
+        # calls — run them on the classifier model, not the expensive reasoner
+        # (they used to add two full-price reasoner round-trips per question).
+        retriever = HybridRetriever(indexer.store, indexer.embedder, config, classifier)
         memory = await build_memory_store(config)
         from ..moderation import StrikeBook
 
@@ -409,13 +412,42 @@ class AgentEngine:
             lines.append(f"\n(Couldn't reach: {', '.join(h.label for h in errored)} — try again.)")
         return "\n".join(lines)
 
+    async def forget_user(self, channel: str, external_id: str) -> dict:
+        """GDPR Art. 17 erasure: purge everything keyed to this user — profile,
+        conversation memory, logged messages, decisions, XP, subscriptions,
+        reminders, win-back history. Best-effort per store; returns counts."""
+        user_key = f"{channel}:{external_id}"
+        out = {"profile": False, "messages": 0, "decisions": 0, "threads": 0}
+        try:
+            await self.memory.delete_profile(user_key)
+            out["profile"] = True
+        except Exception as exc:  # noqa: BLE001
+            log.error("forget.profile_failed", user=user_key, error=str(exc))
+        out["threads"] = self.memory.forget_threads(external_id)
+        try:
+            out["messages"] = self.message_log.purge_user(external_id)
+        except Exception as exc:  # noqa: BLE001
+            log.error("forget.msglog_failed", user=user_key, error=str(exc))
+        try:
+            out["decisions"] = await self.decisions.purge_user(user_key)
+        except Exception as exc:  # noqa: BLE001
+            log.error("forget.decisions_failed", user=user_key, error=str(exc))
+        self.xp.remove(user_key)
+        # DM-keyed opt-ins (reminders/subscriptions/winback use the chat id,
+        # which for a DM is the user id).
+        self.reminders.unsubscribe(external_id)
+        self.subscriptions.unsubscribe_all(external_id)
+        self.winback.forget(external_id)
+        log.info("forget.user_erased", user=user_key, **{k: v for k, v in out.items()})
+        return out
+
     async def draft_answer(self, question: str) -> str:
         """Best-effort PROPOSED answer for an unanswered question, for admin
         review only (never sent to users). Grounded in retrieval + canonicals;
         returns "" when there's nothing solid to draft from."""
         retrieved = await self.retriever.retrieve(question)
         context, _ = self._format_context(retrieved)
-        system = self.system_prompt() or ""
+        sys_msgs = self.system_messages() or [ChatMessage("system", "")]
         prompt = (
             "An admin will REVIEW this — it is NOT sent to users. Draft the best "
             "canonical answer to the community question below, grounded ONLY in "
@@ -428,7 +460,7 @@ class AgentEngine:
         )
         try:
             result = await self.reasoner.complete(
-                [ChatMessage("system", system), ChatMessage("user", prompt)],
+                [*sys_msgs, ChatMessage("user", prompt)],
                 max_tokens=400,
             )
         except Exception as exc:  # noqa: BLE001
@@ -541,6 +573,20 @@ class AgentEngine:
         if not self.assembler:
             return None
         return self.assembler.assemble(self.build_freshness())
+
+    def system_messages(self) -> list[ChatMessage] | None:
+        """The system prompt split into (stable, dynamic) messages.
+
+        The stable [CORE]+[CANONICALS] prefix (~8K tokens) goes in its own
+        message so providers can mark it for prompt caching; only the small
+        [FRESHNESS] tail changes per request. None without guardrail files.
+        """
+        if not self.assembler:
+            return None
+        return [
+            ChatMessage("system", self.assembler.stable_prefix()),
+            ChatMessage("system", self.build_freshness()),
+        ]
 
     # ------------------------------------------------------------------ #
     async def handle(self, msg: IncomingMessage) -> AgentResponse | None:
@@ -777,11 +823,12 @@ class AgentEngine:
             )
         # Refresh the live STBU market line so [FRESHNESS] carries the current price.
         await self._refresh_market()
-        # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt;
-        # fall back to the legacy persona prompt if guardrail files are absent.
-        system = self.system_prompt() or self.prompts.render(
+        # Prefer the assembled [CORE]+[CANONICALS]+[FRESHNESS] system prompt,
+        # split (stable, dynamic) so the Anthropic provider prompt-caches the
+        # big stable prefix; fall back to the legacy persona prompt.
+        sys_msgs = self.system_messages() or [ChatMessage("system", self.prompts.render(
             "system_base", persona=profile.persona, mode=routing.mode.value
-        )
+        ))]
 
         from ..agents.router import HOT_SENTIMENTS
 
@@ -847,7 +894,7 @@ class AgentEngine:
         else:
             reply_cap = 220
         result = await self.reasoner.complete(
-            [ChatMessage("system", system), ChatMessage("user", user_prompt)],
+            [*sys_msgs, ChatMessage("user", user_prompt)],
             max_tokens=reply_cap,
         )
         self.rate_limiter.record_spend(result.output_tokens)

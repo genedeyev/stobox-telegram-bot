@@ -1121,6 +1121,26 @@ async def appeal_cmd(update, context) -> None:
     )
 
 
+async def forgetme_cmd(update, context) -> None:
+    """GDPR erasure (Art. 17): delete everything stored about the requester —
+    profile, conversation memory, logged messages, decisions, XP, opt-ins."""
+    if update.effective_chat.type != "private":
+        await update.effective_message.reply_text(
+            "For your privacy, please run /forgetme in a direct message with me."
+        )
+        return
+    if not _cooldown_ok(update, "forgetme", 60):
+        return
+    user = update.effective_user
+    result = await _engine(context).forget_user("telegram", str(user.id))
+    await update.effective_message.reply_text(
+        "🧹 Done. I've deleted your profile, conversation memory, logged messages, "
+        f"XP, subscriptions and reminders ({result['messages']} logged messages, "
+        f"{result['decisions']} analytics records removed). If you message me "
+        "again, I'll start completely fresh."
+    )
+
+
 async def pending_cmd(update, context) -> None:
     if not _is_admin(update, context):
         return
@@ -1433,6 +1453,7 @@ def registry() -> dict:
         "feedback": feedback_cmd,
         "language": language_cmd,
         "status": status_cmd,
+        "forgetme": forgetme_cmd,
         # admin
         "reindex": reindex_cmd,
         "stats": stats_cmd,

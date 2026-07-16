@@ -41,6 +41,11 @@ class WinBackBook:
             return True
         return (_now() - last).days >= cooldown_days
 
+    def forget(self, chat_id: str) -> None:
+        """GDPR erasure: drop this chat's nudge history."""
+        if self.last_nudged.pop(str(chat_id), None) is not None:
+            self._save()
+
     def mark_nudged(self, chat_id: str) -> None:
         self.last_nudged[chat_id] = _now().isoformat()
         self._save()

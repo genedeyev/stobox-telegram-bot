@@ -108,6 +108,13 @@ class XPBook:
             return title
         return None
 
+    def remove(self, user_key: str) -> bool:
+        """GDPR erasure: drop the user's XP record entirely."""
+        existed = self.users.pop(user_key, None) is not None
+        if existed:
+            self._save()
+        return existed
+
     def get(self, user_key: str) -> UserXP | None:
         return self.users.get(user_key)
 

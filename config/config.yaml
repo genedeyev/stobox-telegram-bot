@@ -86,10 +86,9 @@ confidence:
 # --- Memory ------------------------------------------------------------------
 memory:
   conversation_window: 12          # recent turns kept in working context
-  long_term: true                  # per-user durable profile
-  summarize_after_turns: 20
   # Per-user retention (privacy). Turn retain_questions off to stop keeping any
-  # verbatim question text on profiles; lower the cap to keep fewer.
+  # verbatim question text on profiles; lower the cap to keep fewer. Users can
+  # erase everything about themselves with /forgetme (GDPR Art. 17).
   retain_questions: true
   max_recent_questions: 8          # was 15 — tightened
 
@@ -98,33 +97,14 @@ memory:
 # Retains message text on purpose — turn off to disable entirely.
 message_log:
   enabled: true
+  state_path: data/message_log.jsonl
   retention_days: 90               # keep ~3 months of history
   cap_per_chat: 5000               # hard per-chat ceiling (safety, beyond the age window)
   recall: true                     # feed older, relevant messages into Stoby's answers
 
-# --- Agent behaviour / modes -------------------------------------------------
-agent:
-  default_persona: auto            # auto-detect, or force one of personas below
-  personas:
-    - developer
-    - investor
-    - founder
-    - lawyer
-    - enterprise
-    - retail
-    - beginner
-    - journalist
-    - partner
-    - regulator
-  modes:
-    community_manager: true
-    technical_expert: true
-    sales_assistant: true
-    moderator: true
-    product_evangelist: true
-
 # --- Proactive engagement ----------------------------------------------------
 proactive:
+  state_path: data/proactive_state.json   # one-shot broadcast dedupe (survives restarts)
   evangelist:
     enabled: true
     interval_hours: 4              # publish useful content every N hours
@@ -154,6 +134,15 @@ proactive:
     interval_minutes: 10           # how often to check for new posts (cheap diff)
     chat_ids: []                   # extra chats to announce in (e.g. the community
                                    # group id); groups the bot has seen are included
+  reminders:
+    enabled: true                  # opt-in /remindme deadline blasts (hourly check)
+  winback:
+    enabled: true                  # gentle check-in for quiet, opted-in subscribers
+    inactive_days: 14              # quiet for N days → candidate
+    cooldown_days: 45              # never nudge the same person more often than this
+    max_per_tick: 20               # cap per 6h check
+  content:
+    enabled: true                  # weekly content-ideas preview to admins
 
 # --- Moderation --------------------------------------------------------------
 moderation:
@@ -164,9 +153,16 @@ moderation:
   strike_decay_days: 30            # strikes older than this stop counting
   strikes_path: data/strikes.json  # persisted (mount /app/data volume in prod)
   announce_actions: false          # post a public note on mute/ban (default: quiet)
+  mute_minutes: 60                 # default mute duration for graded actions
+  remove_deleted_accounts: true    # auto-kick deleted (ghost) accounts from groups
   flood:
     max_messages: 5
     per_seconds: 10
+  # Coordinated-FUD spike alarm → immediate admin DM.
+  fud_alert:
+    threshold: 3                   # N FUD-flagged messages…
+    window_min: 10                 # …within this window trigger the alert
+    cooldown_min: 30               # min gap between alerts per chat
   # Impersonation defense: display names containing these terms (from a
   # non-allowlisted account) are flagged. Add team names to protect.
   protected_terms: [stobox, support, admin, moderator, official, team]
@@ -178,6 +174,19 @@ moderation:
 engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
   ama_path: data/ama.json          # AMA question queue
+
+# --- Community loops: state file locations (all under the /app/data volume) --
+qa:
+  state_path: data/qa_register.json      # unanswered-question register
+reminders:
+  state_path: data/reminders.json        # /remindme subscriptions + delivery ledger
+subscriptions:
+  state_path: data/subscriptions.json    # /subscribe topic opt-ins
+winback:
+  state_path: data/winback.json          # win-back nudge cooldowns
+content:
+  repo: genedeyev/stobox-v15             # GitHub repo for content-flywheel issues
+  state_path: data/content_flywheel.json # filed-theme dedup
 
 # --- Live market data (STBU price / market cap / volume, /price) -------------
 # CoinGecko is the primary source and works with NO key (free tier). Optional
@@ -206,12 +215,10 @@ chain:
 guardrails:
   system_prompt: SYSTEM-PROMPT.md       # [CORE] behavior — changed only via PR
   canonicals: canonicals.yaml           # [CANONICALS] facts — changed only via PR
-  golden: evals/golden.yaml             # regression gate before index promotion
 
 # --- Leads / sales -----------------------------------------------------------
 leads:
   enabled: true
-  qualify_on_intent: true
   # Until the CRM is connected, qualified MQLs are emailed here (needs SMTP_*).
   mql_inbox: info@stobox.io
   # Optional: set CRM_WEBHOOK_URL when the Twenty CRM connector is ready; the same
@@ -219,19 +226,14 @@ leads:
   crm_webhook: ${CRM_WEBHOOK_URL:-}
   crm_source: telegram-bot
 
-# --- Languages ---------------------------------------------------------------
-languages:
-  auto_detect: true
-  default: en
-  supported: [en, ru, uk, es, fr, de, ar, zh, ja, pt, it, ro]
+# Language handling is automatic (langdetect + classifier per message); the
+# rails carry ru/uk/es patterns and the answer language mirrors the user's.
 
 # --- Channels (adapters over the reusable core) ------------------------------
 channels:
   telegram:
     enabled: true
-    handle_private: true
-    handle_groups: true
-    handle_channels: true
+    state_path: data/telegram_state.json  # known chats + celebrated milestones
 
 # --- Rate limiting / abuse ---------------------------------------------------
 limits:
@@ -242,5 +244,6 @@ limits:
 
 # --- Observability -----------------------------------------------------------
 observability:
-  log_decisions: true              # log retrieval, reasoning meta, sources, confidence
   daily_digest: true
+  decision_retention_days: 90      # Postgres decision_log rows (hold verbatim
+                                   # member questions) pruned nightly past this age

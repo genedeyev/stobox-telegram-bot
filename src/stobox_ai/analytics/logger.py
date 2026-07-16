@@ -60,6 +60,75 @@ class DecisionLog:
         items = list(self._ring)
         return items[-last_n:] if last_n else items
 
+    async def backfill(self, limit: int | None = None) -> int:
+        """Rehydrate the ring from Postgres at boot. Without this, every deploy
+        reset the analytics window — the daily digest, weekly FAQ, and content
+        flywheel only saw post-restart data."""
+        if not self._pool:
+            return 0
+        limit = limit or self._ring.maxlen or 5000
+        try:
+            async with self._pool.connection() as conn:
+                cur = await conn.execute(
+                    "SELECT data FROM decision_log ORDER BY id DESC LIMIT %s", (limit,)
+                )
+                rows = await cur.fetchall()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("decision.backfill_failed", error=str(exc))
+            return 0
+        from ..util import filter_dataclass_kwargs
+
+        restored = 0
+        for (data,) in reversed(rows):           # oldest → newest into the ring
+            try:
+                d = data if isinstance(data, dict) else json.loads(data)
+                d = filter_dataclass_kwargs(Decision, d)
+                if isinstance(d.get("at"), str):
+                    d["at"] = datetime.fromisoformat(d["at"])
+                self._ring.append(Decision(**d))
+                restored += 1
+            except Exception:  # noqa: BLE001 - a malformed old row is skipped
+                continue
+        if restored:
+            log.info("decision.backfilled", rows=restored)
+        return restored
+
+    async def prune(self, days: int = 90) -> int:
+        """Retention: decision rows hold verbatim user questions (PII) — they
+        must not accumulate forever."""
+        if not self._pool:
+            return 0
+        try:
+            async with self._pool.connection() as conn:
+                cur = await conn.execute(
+                    "DELETE FROM decision_log WHERE at < now() - make_interval(days => %s)",
+                    (days,),
+                )
+                removed = cur.rowcount or 0
+            if removed:
+                log.info("decision.pruned", removed=removed, retention_days=days)
+            return removed
+        except Exception as exc:  # noqa: BLE001
+            log.warning("decision.prune_failed", error=str(exc))
+            return 0
+
+    async def purge_user(self, user_key: str) -> int:
+        """GDPR erasure: remove this user's decisions from ring and Postgres."""
+        kept = [d for d in self._ring if d.user_key != user_key]
+        removed = len(self._ring) - len(kept)
+        self._ring.clear()
+        self._ring.extend(kept)
+        if self._pool:
+            try:
+                async with self._pool.connection() as conn:
+                    cur = await conn.execute(
+                        "DELETE FROM decision_log WHERE data->>'user_key' = %s", (user_key,)
+                    )
+                    removed += cur.rowcount or 0
+            except Exception as exc:  # noqa: BLE001
+                log.warning("decision.purge_failed", error=str(exc))
+        return removed
+
     async def record(self, d: Decision) -> None:
         self._ring.append(d)
         log.info(
@@ -139,7 +208,14 @@ async def build_decision_log(config: Config) -> DecisionLog:
                     "CREATE TABLE IF NOT EXISTS decision_log "
                     "(id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ, data JSONB)"
                 )
-            return DecisionLog(pool)
+                # Retention pruning + digests query by time — without this
+                # index every such query is a full table scan.
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS decision_at_idx ON decision_log(at)"
+                )
+            dlog = DecisionLog(pool)
+            await dlog.backfill()
+            return dlog
         except Exception as exc:  # noqa: BLE001
             log.warning("decision.pg_failed", error=str(exc))
             if pool is not None:
