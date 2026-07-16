@@ -28,3 +28,4 @@ data/
 .idea/
 .vscode/
 .coverage
+evals/last_report.json

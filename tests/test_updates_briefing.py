@@ -168,6 +168,20 @@ async def test_briefing_respects_toggles():
 
 
 @pytest.mark.asyncio
+async def test_briefing_drops_migration_when_countdown_already_posted():
+    """No double migration post: if the public countdown already fired today, the
+    briefing omits its migration block (but still carries market + blog)."""
+    eng = _Engine(canon=_Canon(MIGRATION), snap=_snapshot(),
+                  posts=[{"title": "Post", "url": "https://s/b"}])
+    sched = pro.ProactiveScheduler(eng, app=None)
+    sched._countdown_last = "2026-08-01"          # countdown posted today
+    text = await _build(sched, eng, date(2026, 8, 1))
+    assert text is not None
+    assert "OPEN" not in text and "burn deadline" not in text   # migration suppressed
+    assert "not advice" in text and "https://s/b" in text       # market + blog remain
+
+
+@pytest.mark.asyncio
 async def test_briefing_none_when_nothing_resolves():
     eng = _Engine(canon=_Canon({}), snap=None, posts=[])
     sched = pro.ProactiveScheduler(eng, app=None)

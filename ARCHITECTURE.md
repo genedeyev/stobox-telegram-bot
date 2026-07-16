@@ -193,9 +193,12 @@ asked. This sits on top of the existing proactive jobs (evangelist, revival, mig
 countdown, blog-announce) as a single, reliable, curated feed.
 
 - **"What's new at Stobox" briefing** (`ProactiveScheduler._updates_briefing_job`) — posted to
-  known community groups on a **fixed daily schedule, twice a day** by default (09:00 and 17:00
-  UTC; `proactive.updates.times`). `_build_updates_briefing()` composes up to three grounded
-  blocks, each individually toggleable in config:
+  known community groups on a **fixed daily schedule, twice a day** by default (12:00 and 18:00
+  UTC; `proactive.updates.times`). Times sit **after** the 09:00 migration countdown so the two
+  never collide, and the briefing **drops its migration block on days the countdown already
+  posted** (`_countdown_last == today`) — migration is never announced twice in one day.
+  `_build_updates_briefing()` composes up to three grounded blocks, each individually toggleable
+  in config:
   - **Migration status** (`include_migration`) — one line from `migration_status_line()`, a pure
     helper grounded in the canonical `burn_window_opens` / `burn_deadline` / `claim_opens` dates.
     Phases: counts down to the window opening → to the burn deadline → announces claims-open →

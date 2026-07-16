@@ -345,11 +345,14 @@ class ProactiveScheduler:
         nothing substantive resolves. Never raises — a broken source is skipped."""
         cfg = self.engine.config.section("proactive.updates")
         blocks: list[str] = []
+        today = datetime.now(UTC).date()
 
-        # 1) Migration status — the single most time-sensitive update.
-        if cfg.get("include_migration", True):
+        # 1) Migration status — the single most time-sensitive update. Skip it when
+        #    the dedicated public countdown already posted a dated reminder to these
+        #    same groups today, so migration isn't announced twice in one day.
+        if cfg.get("include_migration", True) and self._countdown_last != str(today):
             canon = self.engine.assembler.canonicals if self.engine.assembler else None
-            line = migration_status_line(canon, datetime.now(UTC).date())
+            line = migration_status_line(canon, today)
             if line:
                 blocks.append(line)
 

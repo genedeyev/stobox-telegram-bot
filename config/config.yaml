@@ -135,7 +135,10 @@ proactive:
   updates:
     enabled: true                  # "What's new at Stobox" — Stoby INITIATES with a
                                    # curated briefing to groups on a fixed schedule
-    times: ["09:00", "17:00"]      # UTC; twice daily (add/remove entries to retune)
+    times: ["12:00", "18:00"]      # UTC; twice daily. Deliberately AFTER the 09:00
+                                   # migration countdown so they never collide — and
+                                   # the briefing drops its migration line on days the
+                                   # countdown already posted (no double migration post)
     include_migration: true        # STBU→Base migration status line (canonical dates)
     include_market: true           # live STBU price/mcap/24h (CoinGecko, framed)
     include_blog: true             # latest blog/news post + link
