@@ -218,3 +218,62 @@ async def test_github_docs_only_when_include_code_false():
     src = GitHubSource(repos=["o/r"], branch="main", include_code=False)
     docs = await src.fetch(fetcher)
     assert {d.meta.extra["path"] for d in docs} == {"docs/guide.md"}
+
+
+# --------------------------------------------------------------------------- #
+# Pagination walk (full blog archive) + GitHub budget/priority rules
+# --------------------------------------------------------------------------- #
+def _listing(*hrefs, title="Blog"):
+    links = "".join(f'<a href="{h}">post</a>' for h in hrefs)
+    return (f"<html><head><title>{title}</title></head><body><main>"
+            f"<p>{'Stobox blog archive listing page with posts. ' * 10}</p>"
+            f"{links}</main></body></html>")
+
+
+def _post(title):
+    return (f"<html><head><title>{title}</title></head><body><main>"
+            f"<p>{'Deep tokenization insight from the Stobox team. ' * 12}</p>"
+            "</main></body></html>")
+
+
+@pytest.mark.asyncio
+async def test_web_paginate_walks_archive_until_dry():
+    fetcher = FakeFetcher(text={
+        "https://s.io/blog": _listing("/blog/a"),
+        "https://s.io/blog/page/2": _listing("/blog/b"),
+        "https://s.io/blog/page/3": _listing("/blog/c"),
+        # page/4 404s → walk stops
+        "https://s.io/blog/a": _post("Post A"),
+        "https://s.io/blog/b": _post("Post B"),
+        "https://s.io/blog/c": _post("Post C"),
+    })
+    src = WebSource(seeds=["https://s.io/blog"], allow_domains=["s.io"],
+                    max_pages=50, max_depth=2, delay_seconds=0,
+                    paginate=["https://s.io/blog/page/{n}"])
+    docs = await src.fetch(fetcher)
+    titles = {d.meta.title for d in docs}
+    # Every archived post is captured, including ones only reachable via pagination.
+    assert {"Post A", "Post B", "Post C"} <= titles
+    # The walk stopped at the 404 (no runaway enumeration).
+    assert "https://s.io/blog/page/5" not in fetcher.calls
+
+
+def test_github_want_includes_licenses_excludes_junk():
+    src = GitHubSource(org="X")
+    assert src._want("LICENSE")
+    assert src._want("NOTICE")
+    assert src._want("docs/CHANGELOG")
+    assert src._want("contracts/Token.sol")
+    assert not src._want("node_modules/lodash/index.js")
+    assert not src._want("frontend/dist/app.min.js")
+    assert not src._want("package-lock.json")
+    assert not src._want("build/output.js")
+
+
+def test_github_priority_orders_docs_then_contracts_then_code():
+    p = GitHubSource._priority
+    assert p("LICENSE") == 0 and p("README.md") == 0 and p("CHANGELOG") == 0
+    assert p("contracts/STV3.sol") == 1
+    assert p("src/app.ts") == 2
+    ordered = sorted(["src/app.ts", "contracts/STV3.sol", "LICENSE"], key=p)
+    assert ordered == ["LICENSE", "contracts/STV3.sol", "src/app.ts"]

@@ -13,6 +13,8 @@ API rate limit.
 
 from __future__ import annotations
 
+import re
+
 from ...logging import get_logger
 from ..models import DocMeta, Document
 from .base import Fetcher, Source
@@ -22,6 +24,19 @@ log = get_logger(__name__)
 _API = "https://api.github.com"
 _RAW = "https://raw.githubusercontent.com"
 _DOC_EXT = {".md", ".markdown", ".rst", ".txt", ".adoc"}
+# Extensionless files that matter: licenses/copyright ("all copyrights"),
+# notices, changelogs ("all updates"), and bare READMEs.
+_SPECIAL_NAMES = {"license", "licence", "copying", "notice", "readme",
+                  "changelog", "changes", "authors", "codeowners"}
+# Generated/vendored noise — huge, worthless for retrieval, and it used to eat
+# the whole file budget before real content was reached.
+_SKIP_PATH = re.compile(
+    r"(^|/)(node_modules|dist|build|out|vendor|artifacts|coverage|__pycache__|"
+    r"\.next|\.git|test/fixtures?)(/|$)"
+    r"|package-lock\.json$|yarn\.lock$|pnpm-lock\.yaml$|\.min\.(js|css)$"
+    r"|\.(map|lock|snap)$",
+    re.I,
+)
 
 
 class GitHubSource(Source):
@@ -35,6 +50,7 @@ class GitHubSource(Source):
         include_ext: list[str] | None = None,
         include_code: bool = True,
         max_files: int = 500,
+        max_files_per_repo: int = 120,
         token: str | None = None,
     ) -> None:
         self.org = org
@@ -43,6 +59,10 @@ class GitHubSource(Source):
         self.include_ext = {e.lower() for e in (include_ext or [])} or None
         self.include_code = include_code
         self.max_files = max_files
+        # Fairness: the global cap used to be consumed repo-by-repo in listing
+        # order, so one giant frontend repo starved every repo after it —
+        # including the smart contracts. Each repo now gets a bounded share.
+        self.max_files_per_repo = max_files_per_repo
         self.token = token
 
     def _headers(self) -> dict[str, str]:
@@ -85,39 +105,77 @@ class GitHubSource(Source):
         log.info("github.discovered", org=self.org, repos=[r for _, r, _ in out])
         return out
 
+    async def _default_branch(self, fetcher: Fetcher, owner: str, repo: str) -> str | None:
+        status, data = await fetcher.get_json(
+            f"{_API}/repos/{owner}/{repo}", headers=self._headers()
+        )
+        if status == 200 and isinstance(data, dict):
+            return data.get("default_branch")
+        return None
+
     async def _fetch_repo(
         self, fetcher: Fetcher, owner: str, repo: str, branch: str
     ) -> list[Document]:
-        status, tree = await fetcher.get_json(
-            f"{_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1", headers=self._headers()
-        )
+        async def _tree(b: str):
+            return await fetcher.get_json(
+                f"{_API}/repos/{owner}/{repo}/git/trees/{b}?recursive=1",
+                headers=self._headers())
+
+        status, tree = await _tree(branch)
         if status == 403:
             log.warning("github.rate_limited", hint="set GITHUB_TOKEN for higher limits")
             return []
+        # A pinned repo (or a stale default) can miss the real branch — main vs
+        # master. Ask the API for the actual default and retry once, so no repo
+        # is silently skipped over a branch-name guess.
+        if status == 404 and not self.branch:
+            real = await self._default_branch(fetcher, owner, repo)
+            if real and real != branch:
+                branch = real
+                status, tree = await _tree(branch)
         if status != 200 or not isinstance(tree, dict):
-            log.warning("github.tree_failed", repo=f"{owner}/{repo}", status=status)
+            log.warning("github.tree_failed", repo=f"{owner}/{repo}", branch=branch, status=status)
             return []
 
+        # Value-ordered ingestion within the repo's budget: docs + licenses/
+        # changelogs first, then smart contracts, then other source.
+        wanted = sorted(
+            (node["path"] for node in tree.get("tree", [])
+             if node.get("type") == "blob" and self._want(node["path"])),
+            key=self._priority,
+        )
         docs: list[Document] = []
-        for node in tree.get("tree", []):
-            if node.get("type") != "blob":
-                continue
-            path = node["path"]
-            if not self._want(path):
-                continue
+        cap = min(self.max_files_per_repo, self.max_files)
+        for path in wanted[: cap * 2]:      # small over-scan for empty/missing files
             raw_status, content, _ = await fetcher.get_text(f"{_RAW}/{owner}/{repo}/{branch}/{path}")
             if raw_status != 200 or not content.strip():
                 continue
             docs.append(self._to_doc(owner, repo, branch, path, content))
-            if len(docs) >= self.max_files:
+            if len(docs) >= cap:
                 break
         return docs
 
+    @staticmethod
+    def _priority(path: str) -> int:
+        low = path.lower()
+        base = low.rsplit("/", 1)[-1].split(".")[0]
+        ext = low[low.rfind("."):] if "." in low else ""
+        if base in _SPECIAL_NAMES or ext in _DOC_EXT:
+            return 0                         # docs, LICENSE, CHANGELOG, README
+        if ext == ".sol":
+            return 1                         # smart contracts — highest-value code
+        return 2
+
     def _want(self, path: str) -> bool:
         low = path.lower()
+        if _SKIP_PATH.search(low):
+            return False
         ext = low[low.rfind("."):] if "." in low else ""
         if self.include_ext is not None:
             return ext in self.include_ext
+        base = low.rsplit("/", 1)[-1].split(".")[0]
+        if base in _SPECIAL_NAMES:
+            return True                      # LICENSE / NOTICE / CHANGELOG / README
         if ext in _DOC_EXT:
             return True
         return self.include_code and self._looks_like_code(ext)

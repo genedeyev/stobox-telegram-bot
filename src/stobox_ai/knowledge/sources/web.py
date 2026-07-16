@@ -47,6 +47,7 @@ class WebSource(Source):
         max_depth: int = 3,
         delay_seconds: float = 0.3,
         category: str = "website",
+        paginate: list[str] | None = None,
     ) -> None:
         self.seeds = [_clean_url(s) for s in seeds]
         self.allow = {d.lower() for d in (allow_domains or [_host(s) for s in seeds])}
@@ -54,6 +55,10 @@ class WebSource(Source):
         self.max_depth = max_depth
         self.delay = delay_seconds
         self.category = category
+        # URL templates with {n} (e.g. ".../blog/page/{n}") walked n=2,3,… until
+        # the site stops serving new links — paginated archives (the blog!) are
+        # invisible to sitemap/llms discovery and too deep for bounded BFS.
+        self.paginate = paginate or []
         self._robots: dict[str, RobotFileParser] = {}
 
     async def fetch(self, fetcher: Fetcher) -> list[Document]:
@@ -68,6 +73,27 @@ class WebSource(Source):
                 frontier += [(u, 0) for u in discovered]
             else:
                 frontier.append((seed, 0))
+
+        # Walk paginated archives: enumerate listing pages, harvest their links
+        # into the frontier at depth 1 (the listings themselves are navigation,
+        # not content). Stops at the first page that adds nothing new.
+        seen_links: set[str] = set()
+        for pattern in self.paginate:
+            for n in range(2, 201):
+                url = _clean_url(pattern.format(n=n))
+                status, html, final_url = await self._safe_get(fetcher, url)
+                if status != 200 or not html:
+                    break
+                visited.add(url)
+                _, links = self._parse(_clean_url(final_url), html)
+                fresh = [ln for ln in {_clean_url(x) for x in links}
+                         if ln not in seen_links and ln not in visited]
+                if not fresh:
+                    break
+                seen_links.update(fresh)
+                frontier += [(ln, 1) for ln in fresh]
+                if self.delay:
+                    await asyncio.sleep(self.delay)
 
         while frontier and len(docs) < self.max_pages:
             url, depth = frontier.pop(0)

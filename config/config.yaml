@@ -46,14 +46,20 @@ knowledge:
     web:
       enabled: true
       # No sitemap on stobox.io; the crawler auto-discovers the page inventory
-      # from llms-full.txt, then fetches each page.
+      # from llms-full.txt, then fetches each page. Blog posts are NOT in
+      # llms-full.txt — the paginate walk below enumerates the whole archive
+      # (24+ listing pages) so every post is indexed.
       # docs.stobox.io is DEPRECATED (301→www) and is NOT a source of truth —
       # it's excluded from allow_domains so it's never crawled or ingested.
       seeds:
         - https://www.stobox.io/
+        - https://www.stobox.io/blog
+      paginate:
+        - "https://www.stobox.io/blog/page/{n}"   # full blog archive, n=2,3,…
       allow_domains: [stobox.io, www.stobox.io]
-      max_pages: 200
-      max_depth: 3
+      max_pages: 900               # ~92 site pages + the full blog archive (live
+                                   # discovery found 742 URLs; headroom for growth)
+      max_depth: 4
       delay_seconds: 0.3
     github:
       enabled: true
@@ -62,7 +68,9 @@ knowledge:
       branch: null                 # null = each repo's default branch
       include_ext: null            # null = docs (.md/.rst/.txt) + code (see include_code)
       include_code: true           # ingest Solidity/TS/… source, not just docs
-      max_files: 500
+      max_files: 2000              # global budget across the org
+      max_files_per_repo: 120      # fairness: one giant repo can't starve the rest;
+                                   # within a repo: docs/LICENSE/CHANGELOG → .sol → code
   chunking:
     strategy: semantic             # semantic | recursive
     target_tokens: 400

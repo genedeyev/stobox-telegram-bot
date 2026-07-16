@@ -48,6 +48,7 @@ def build_sources(config: Config) -> list[Source]:
                 max_pages=int(web.get("max_pages", 200)),
                 max_depth=int(web.get("max_depth", 3)),
                 delay_seconds=float(web.get("delay_seconds", 0.3)),
+                paginate=web.get("paginate") or [],
             )
         )
 
@@ -61,6 +62,7 @@ def build_sources(config: Config) -> list[Source]:
                 include_ext=gh.get("include_ext"),
                 include_code=bool(gh.get("include_code", True)),
                 max_files=int(gh.get("max_files", 500)),
+                max_files_per_repo=int(gh.get("max_files_per_repo", 120)),
                 token=os.environ.get("GITHUB_TOKEN") or None,
             )
         )
