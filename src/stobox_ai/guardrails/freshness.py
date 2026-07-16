@@ -83,10 +83,18 @@ class FreshnessBuilder:
         lines = ["## [FRESHNESS] — live runtime state", ""]
         lines.append(f"- Current date (UTC): {now.strftime('%d %B %Y')}")
         if self.last_sync:
-            lines.append(
+            line = (
                 f"- Knowledge index last synced: {self.last_sync.strftime('%d %B %Y %H:%M UTC')}"
                 + (f" (corpus {self.corpus_hash[:12]})" if self.corpus_hash else "")
             )
+            # The daily resync runs at 04:00 UTC — anything older than ~30h
+            # means a sync was missed. Tell the model so it hedges recency
+            # claims instead of presenting a stale corpus as fresh.
+            if (now - self.last_sync).total_seconds() > 30 * 3600:
+                line += (" — STALE: more than a day old. Do not claim the index is "
+                         "fresh; hedge recency-sensitive answers and suggest "
+                         "stobox.io for the very latest.")
+            lines.append(line)
         else:
             lines.append("- Knowledge index last synced: unknown")
 

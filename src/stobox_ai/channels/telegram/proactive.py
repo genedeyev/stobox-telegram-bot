@@ -690,7 +690,29 @@ class ProactiveScheduler:
             results = await self.engine.sync_knowledge()
         except Exception as exc:  # noqa: BLE001
             log.error("proactive.resync_failed", error=str(exc), exc_info=True)
+            # A silently-missed resync leaves the corpus a day stale until the
+            # next 04:00 tick. Alert admins and retry in 30 minutes (transient
+            # network/API failures are the common case) — max 3 retries per day
+            # so a real outage doesn't loop-and-ping forever.
+            self._resync_failures = getattr(self, "_resync_failures", 0) + 1
+            adapter = self.app.bot_data.get("adapter")
+            jq = getattr(self.app, "job_queue", None)
+            if self._resync_failures <= 3:
+                if adapter:
+                    await adapter.dm_admins(
+                        context,
+                        f"⚠️ Daily knowledge resync FAILED ({str(exc)[:150]}). "
+                        f"Retry {self._resync_failures}/3 in 30 min — or run /sync now.")
+                if jq is not None:
+                    jq.run_once(self._resync_job, when=1800)
+            elif adapter:
+                await adapter.dm_admins(
+                    context,
+                    "⛔ Knowledge resync failed 3 retries — giving up until the next "
+                    "04:00 UTC run. The corpus is marked stale in [FRESHNESS]; "
+                    "run /sync once the underlying issue is fixed.")
             return
+        self._resync_failures = 0
         total = sum(results.values())
         log.info("proactive.resync", results=results, total=total)
         adapter = self.app.bot_data.get("adapter")
