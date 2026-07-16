@@ -32,16 +32,23 @@ def test_bands():
 
 def test_result_text_has_cta_and_disclaimer():
     s = axis.Session()
-    _answer(s, [1, 1, 2, 3, 0])       # fund, EU, ready, $50M+, this quarter → strong
+    _answer(s, [1, 1, 2, 3, 0])       # fund, EU, ready → Raisable (not Compass)
     text = axis.result_text(s, "Gene")
-    assert "Readiness Score" in text and axis.READINESS_URL in text
+    assert axis.RAISABLE_URL in text          # stage "ready" routes to the Raise layer
     assert "not investment advice" in text.lower()
     assert "Gene" in text
-    # Early band still routes to the Readiness Score.
+    # Exploring → assess first with the Readiness Score.
     early = axis.Session()
     _answer(early, [0, 0, 0, 0, 3])   # exploring everywhere → early
     assert axis.band(early.score) == "early"
     assert axis.READINESS_URL in axis.result_text(early)
+
+
+def test_next_step_routes_by_stage():
+    assert axis.next_step("raising")[1] == axis.APP_URL
+    assert axis.next_step("ready")[1] == axis.RAISABLE_URL
+    assert axis.next_step("exploring")[1] == axis.READINESS_URL
+    assert axis.next_step("have_asset")[1] == axis.READINESS_URL
 
 
 def test_every_question_has_options():

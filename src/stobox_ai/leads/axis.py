@@ -11,7 +11,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-READINESS_URL = "https://www.stobox.io/compass"
+READINESS_URL = "https://www.stobox.io/compass"      # Compass layer / Readiness Score
+APP_URL = "https://app.stobox.io"                     # sign up / start in the product
+RAISABLE_URL = "https://www.stobox.io/raisable"       # Raisable layer / raise capital
+
+
+def next_step(stage: str) -> tuple[str, str]:
+    """The right next destination for where they are — not always Compass."""
+    if stage == "raising":                            # already raising → just start
+        return ("jump into the product and get started", APP_URL)
+    if stage == "ready":                              # ready to raise → the Raise layer
+        return ("explore raising capital with Raisable", RAISABLE_URL)
+    # exploring / have the asset → assess first
+    return ("see exactly where you stand with the free Readiness Score", READINESS_URL)
 
 
 @dataclass(slots=True)
@@ -100,9 +112,9 @@ def result_text(session: Session, first_name: str = "") -> str:
             f"totally fine — the best first move is to see where {asset} stands."
         ),
     }[b]
+    label, url = next_step(a.get("stage", ""))
     cta = (
-        f" The clean next move is the free Readiness Score — 25 quick questions, no card, "
-        f"same method Compass uses: {READINESS_URL}. Or if you'd rather just talk it through "
+        f" The clean next move: {label} — {url}. Or if you'd rather just talk it through "
         "with the team, drop your email with <code>/email</code> and I'll pass it along."
     )
     return f"{hi}{cta}\n\n<i>This is information, not investment advice.</i>"
