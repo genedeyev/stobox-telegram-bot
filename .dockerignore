@@ -1,0 +1,16 @@
+# Keep secrets, live state, VCS, and local tooling out of the build context.
+.env
+.env.*
+data/
+.git/
+.github/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.DS_Store
+tests/
+scripts/
+examples/
+AUDIT-REPORT.md

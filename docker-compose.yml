@@ -33,7 +33,9 @@ services:
     volumes:
       - ./docs:/app/docs:ro          # mount docs read-only; hot-reindex on change
       - ./config:/app/config:ro
+      - botdata:/app/data            # persistent: strikes, reminders, XP, known chats
     restart: unless-stopped
 
 volumes:
   pgdata:
+  botdata:

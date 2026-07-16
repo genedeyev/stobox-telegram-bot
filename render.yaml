@@ -8,6 +8,13 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerCommand: python -m stobox_ai
+    # Persistent disk for data/ (strikes, reminder ledgers, XP, QA register,
+    # known chats). Without it every deploy wipes moderation history and
+    # re-fires reminder blasts.
+    disk:
+      name: stobox-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       - key: STOBOX_ENV
         value: production
