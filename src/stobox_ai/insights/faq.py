@@ -55,8 +55,13 @@ class WeeklyFAQ:
         return entries
 
     async def _answer_cluster(self, question: str, frequency: int) -> FAQEntry:
+        from ..agents.confidence import top_relevance
+
         retrieved = await self.retriever.retrieve(question)
-        top = retrieved[0].score if retrieved else 0.0
+        # Gap detection needs ABSOLUTE relevance — the fused score is normalized
+        # to ~1.0 whenever anything is retrieved, which under-reported doc gaps.
+        semantic = getattr(self.retriever.embedder, "name", "") != "local-hash"
+        top = top_relevance(retrieved, semantic_embeddings=semantic)
         if not retrieved or top < self.threshold:
             return FAQEntry(
                 question=question,
@@ -79,6 +84,11 @@ class WeeklyFAQ:
                 [ChatMessage("user", prompt)], temperature=0.2, max_tokens=350
             )
             answer = result.text.strip()
+            # FAQ output is designed for publication ⇒ run the compliance rails
+            # (forbidden-claim block, impostor scrub, disclaimers). Stateless.
+            from ..guardrails import ComplianceRails
+
+            answer = ComplianceRails().post_process(answer, question).text
         except Exception as exc:  # noqa: BLE001
             log.warning("faq.answer_failed", error=str(exc))
             answer = "(Answer generation failed.)"

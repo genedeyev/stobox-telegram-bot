@@ -31,13 +31,20 @@ IMPERSONATION_WARNING = (
 )
 
 _SEED_TERMS = re.compile(
-    r"\b(seed[\s-]?phrase|secret[\s-]?phrase|recovery[\s-]?phrase|private[\s-]?key|mnemonic)\b",
+    r"\b(seed[\s-]?phrase|secret[\s-]?phrase|recovery[\s-]?phrase|private[\s-]?key|mnemonic)\b"
+    # ru/uk/es — the community speaks 12 languages; the deterministic rails must
+    # fire on the highest-risk security topics in the biggest non-English ones too.
+    r"|\b(сид|сід)[\s-]?фраз|\bсекретн(ая|а)\s+фраз|\bфраза\s+(восстановления|відновлення)"
+    r"|\bприватн(ый|ий)\s+ключ|\bмнемоник|\bмнемонік"
+    r"|\bfrase\s+(semilla|de\s+recuperaci[oó]n)|\bclave\s+privada\b",
     re.I,
 )
 _INJECTION = re.compile(
     r"\b(ignore|disregard|forget|override)\b.{0,40}\b(instruction|instructions|rules|prompt|"
     r"guardrail)\b|(system\s+prompt)|(developer\s+mode)|(reveal|print|show|repeat).{0,20}"
-    r"(your\s+)?(system\s+)?prompt|jailbreak|DAN\b",
+    # Bare "DAN" used to catch users literally named Dan — require jailbreak context.
+    r"(your\s+)?(system\s+)?prompt|jailbreak|\b(act\s+as|you\s+are|enable|pretend\s+to\s+be)\s+DAN\b"
+    r"|\bDAN\s+mode\b",
     re.I,
 )
 _ADMIN_CLAIM = re.compile(r"\b(admin|developer|owner|ceo)\s+(here|says|mode)\b", re.I)
@@ -45,13 +52,28 @@ _SPECULATION = re.compile(
     r"\b(moon|pump|10x|100x|1000x|price\s+target|to\s+the\s+moon|when\s+moon)\b"
     r"|\b(will|going\s+to|gonna)\b[^.?!]{0,40}\b(worth|price|value|go\s+up|moon|"
     r"pump|rise|\$\s?\d)\b"
-    r"|\bhow\s+high\b|\bexpected\s+(price|value|return|roi)\b",
+    r"|\bhow\s+high\b|\bexpected\s+(price|value|return|roi)\b"
+    # ru: "прогноз цены", "сколько будет стоить", "цена вырастет", "на луну"
+    r"|\bпрогноз\s+(цены|ціни)|\bсколько\s+будет\s+стоить|\bск[іi]льки\s+коштуватиме"
+    r"|\bцена\s+(вырастет|упад[её]т)|\bц[іi]на\s+(зросте|впаде)|\bна\s+луну\b|\bдо\s+луны\b"
+    # es: "predicción de(l) precio", "a cuánto llegará", "cuánto va a valer"
+    r"|\bpredicci[oó]n\s+de(l)?\s+precio|\ba\s+cu[aá]nto\s+llegar[aá]"
+    r"|\bcu[aá]nto\s+va\s+a\s+valer",
     re.I,
 )
 _BUY_SELL = re.compile(
     r"\bshould\s+i\s+(buy|sell|hold|invest|ape|dump)\b|\bis\s+it\s+a\s+good\s+"
     r"(time\s+to\s+)?(buy|investment|sell)\b|\bworth\s+(buying|investing)\b|"
-    r"\bhow\s+much\s+should\s+i\s+(buy|invest)\b",
+    r"\bhow\s+much\s+should\s+i\s+(buy|invest)\b"
+    # ru: "стоит ли покупать/продавать…", "надо ли покупать…"
+    r"|\b(стоит|надо|нужно)\s+ли\s+(мне\s+)?(покупать|купить|продать|продавать|"
+    r"инвестировать|держать|вкладывать)"
+    # uk: "чи варто купувати…"
+    r"|\bчи\s+(варто|треба)\s+(мені\s+)?(купувати|купити|продати|продавати|"
+    r"інвестувати|тримати|вкладати)"
+    # es: "¿debería comprar…?", "vale la pena invertir…", "conviene comprar…"
+    r"|\bdeber[ií]a\s+(comprar|vender|invertir)\b|\bvale\s+la\s+pena\s+(comprar|invertir)"
+    r"|\bconviene\s+(comprar|vender|invertir)\b",
     re.I,
 )
 

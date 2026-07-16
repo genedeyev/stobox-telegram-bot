@@ -109,8 +109,11 @@ class QARegister:
         data = load_json_guarded(self.path, label="qa")
         if data is None:
             return
+        from ..util import filter_dataclass_kwargs
+
         try:
-            self.entries = {int(k): QAEntry(**v) for k, v in data.items()}
+            self.entries = {int(k): QAEntry(**filter_dataclass_kwargs(QAEntry, v))
+                            for k, v in data.items()}
         except Exception as exc:  # noqa: BLE001 - corrupt state must not kill boot
             log.error("qa.state_load_failed", error=str(exc))
 

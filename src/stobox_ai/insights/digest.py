@@ -89,7 +89,11 @@ class DailyDigest:
             ),
         ]
         try:
-            return (await self.reasoner.complete(msg, temperature=0.2, max_tokens=200)).text
+            text = (await self.reasoner.complete(msg, temperature=0.2, max_tokens=200)).text
+            from ..guardrails import ComplianceRails
+
+            rail = ComplianceRails().post_process(text, "")
+            return None if rail.blocked else rail.text
         except Exception as exc:  # noqa: BLE001
             log.warning("digest.narrative_failed", error=str(exc))
             return None

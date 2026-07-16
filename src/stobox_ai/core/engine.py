@@ -111,6 +111,11 @@ class AgentEngine:
         self.confidence = ConfidenceEngine(
             threshold=float(config.get("confidence.threshold", 0.55)),
             require_citations=bool(config.get("confidence.require_citations", True)),
+            # Raw cosine is only a trustworthy absolute signal with a real
+            # semantic embedder — the offline hash embedder's cosines are noise.
+            semantic_embeddings=(
+                getattr(retriever.embedder, "name", "") != "local-hash"
+            ),
         )
         self.max_reply = int(config.get("limits.max_reply_chars", 3500))
         # Operational safety: rate limiting + spend cap + kill switch (§7).
@@ -224,7 +229,7 @@ class AgentEngine:
         try:
             await indexer.index_directory(config.get("knowledge.docs_path", "docs"))
         except Exception as exc:  # noqa: BLE001
-            log.error("boot.index_failed", error=str(exc))
+            log.error("boot.index_failed", error=str(exc), exc_info=True)
         # Optionally pull remote sources (stobox.io + GitHub) at startup.
         import os as _os
 
@@ -341,6 +346,11 @@ class AgentEngine:
             ci = int(q["correct_index"])
             explanation = str(q.get("explanation", ""))[:190]
             if len(options) == 4 and 0 <= ci < 4:
+                # Public poll content ⇒ same forbidden-claim rails as replies.
+                combined = " ".join([question, *options, explanation])
+                if self.rails.post_process(combined, "").blocked:
+                    log.warning("quiz.blocked_by_rails")
+                    return None
                 return {"question": question, "options": options,
                         "correct_index": ci, "explanation": explanation}
         except Exception as exc:  # noqa: BLE001
@@ -676,10 +686,15 @@ class AgentEngine:
         # 8) Leads.
         await self._handle_leads(msg, routing, profile, response)
 
-        # 9) Persist memory + log decision.
+        # 9) Persist memory + log decision. Best-effort: the answer is already
+        # computed — a transient DB blip must not turn it into an apology
+        # message (the profile is also cached in-process, so a lost write heals).
         if response.should_reply:
             self.memory.add_turn(thread_key, "assistant", response.text)
-        await self.memory.save_profile(profile)
+        try:
+            await self.memory.save_profile(profile)
+        except Exception as exc:  # noqa: BLE001
+            log.error("memory.save_profile_failed", user=user_key, error=str(exc))
         await self._log(msg, routing, retrieved, response, user_key, started)
         return response
 
@@ -839,8 +854,15 @@ class AgentEngine:
         clean, self_conf, used_sources = self.confidence.parse(result.text)
         # Canonicals are authoritative grounding: an answer the model marks as
         # canonicals-based must not be IDK-gated for lacking retrieved chunks.
-        canonical_grounded = any("canonical" in s.lower() for s in used_sources)
-        cited = bool(citations) or canonical_grounded
+        canonical_grounded = any("canonical" in s.lower() for s in (used_sources or []))
+        # "Cited" = the model itself claims grounding. An explicit "SOURCES: none"
+        # is the model admitting the answer is unsupported — discount it even when
+        # retrieval returned chunks. Only when the model omitted the protocol line
+        # entirely do we fall back to "did retrieval provide anything".
+        if used_sources is not None:
+            cited = bool(used_sources) or canonical_grounded
+        else:
+            cited = bool(citations) or canonical_grounded
         score = self.confidence.score(retrieved, self_conf, cited)
         if canonical_grounded and self_conf is not None:
             score = max(score, round(min(1.0, 0.2 + 0.8 * self_conf), 3))
@@ -867,7 +889,19 @@ class AgentEngine:
         # the question, so admins can /answer it and the asker gets a follow-up.
         # Fires on low confidence OR when the model itself declares it doesn't
         # know (an "unclear answer" is an unanswered question too).
-        model_idk = "don't know based on the current documentation" in clean.lower()
+        # The prompt mandates the English marker sentence, but models answering
+        # in the user's language sometimes translate it — match the common
+        # translations too so a non-English IDK still triggers QA capture.
+        _idk_markers = (
+            "don't know based on the current documentation",
+            "do not know based on the current documentation",
+            "не знаю на основе текущей документации",            # ru
+            "не могу подтвердить это по текущей документации",   # ru
+            "не знаю на основі поточної документації",           # uk
+            "no lo sé según la documentación actual",            # es
+            "no puedo confirmarlo según la documentación",       # es
+        )
+        model_idk = any(m in clean.lower() for m in _idk_markers)
         if routing.needs_docs and (self.confidence.below_threshold(score) or model_idk):
             response.text = _IDK["en"]   # English-only communication policy
             response.confidence = Confidence.LOW

@@ -57,6 +57,39 @@ def strip_html(text: str) -> str:
     """Plain-text fallback when Telegram rejects the HTML parse."""
     return _HTML_TAGS.sub("", text)
 
+
+def split_for_telegram(text: str, limit: int = 4096) -> list[str]:
+    """Split a long message into <=limit chunks on paragraph → line → hard
+    boundaries. A blind ``text[:4096]`` can bisect an HTML tag (send fails →
+    formatting lost) or silently drop the citations/compliance footer; splitting
+    on natural boundaries keeps every part parseable and nothing truncated."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return [text] if text else []
+    parts: list[str] = []
+    current = ""
+    for para in text.split("\n\n"):
+        while len(para) > limit:          # single oversized paragraph → by line/hard
+            cut = para.rfind("\n", 0, limit)
+            if cut < limit // 2:
+                cut = para.rfind(" ", 0, limit)
+            if cut < limit // 2:
+                cut = limit
+            head, para = para[:cut].rstrip(), para[cut:].lstrip()
+            if current:
+                parts.append(current)
+                current = ""
+            parts.append(head)
+        joined = f"{current}\n\n{para}" if current else para
+        if len(joined) <= limit:
+            current = joined
+        else:
+            parts.append(current)
+            current = para
+    if current:
+        parts.append(current)
+    return parts
+
 _CHAT_TYPES = {
     "private": ChatType.PRIVATE,
     "group": ChatType.GROUP,
@@ -321,7 +354,7 @@ class TelegramChannel(Channel):
         try:
             response = await self.engine.handle(incoming)
         except Exception as exc:  # noqa: BLE001
-            log.error("telegram.handle_failed", error=str(exc))
+            log.error("telegram.handle_failed", error=str(exc), exc_info=True)
             # Never fail silently in a DM — tell the user and move on.
             apology = (
                 "Sorry — something went wrong on my side processing that. "
@@ -507,23 +540,27 @@ class TelegramChannel(Channel):
         await inline.answer([result], cache_time=30, is_personal=True)
 
     async def reply_html(self, message, text: str, reply_markup=None) -> None:
-        """Send with Telegram HTML parse mode; fall back to stripped plain text
-        if the model produced HTML Telegram won't accept (one bad tag would
-        otherwise kill the whole message)."""
+        """Send with Telegram HTML parse mode, splitting messages over the 4096
+        limit on paragraph boundaries (buttons go on the final part). Falls back
+        to stripped plain text per part if the model produced HTML Telegram
+        won't accept (one bad tag would otherwise kill the whole message)."""
         from telegram.constants import ParseMode
         from telegram.error import BadRequest
 
-        try:
-            await message.reply_text(
-                text[:4096], parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True, reply_markup=reply_markup,
-            )
-        except BadRequest as exc:
-            log.warning("telegram.html_fallback", error=str(exc))
-            await message.reply_text(
-                strip_html(text)[:4096], disable_web_page_preview=True,
-                reply_markup=reply_markup,
-            )
+        parts = split_for_telegram(text) or [""]
+        for i, part in enumerate(parts):
+            markup = reply_markup if i == len(parts) - 1 else None
+            try:
+                await message.reply_text(
+                    part, parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True, reply_markup=markup,
+                )
+            except BadRequest as exc:
+                log.warning("telegram.html_fallback", error=str(exc))
+                await message.reply_text(
+                    strip_html(part), disable_web_page_preview=True,
+                    reply_markup=markup,
+                )
 
     def _answer_buttons(self, response, question: str, is_private: bool):
         """Progressive-disclosure buttons under a substantive answer: More
@@ -662,22 +699,31 @@ class TelegramChannel(Channel):
         )
         if placeholder:
             # Morph the "checking…" message into the answer (no second bubble).
+            # Long answers: the placeholder becomes part 1, the rest follow as
+            # separate messages with the buttons on the final one.
             from telegram.constants import ParseMode
             from telegram.error import BadRequest
 
+            parts = split_for_telegram(text) or [""]
+            first_markup = markup if len(parts) == 1 else None
             try:
                 await placeholder.edit_text(
-                    text[:4096], parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True, reply_markup=markup,
+                    parts[0], parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True, reply_markup=first_markup,
                 )
             except BadRequest:
                 try:
                     await placeholder.edit_text(
-                        strip_html(text)[:4096], disable_web_page_preview=True,
-                        reply_markup=markup,
+                        strip_html(parts[0]), disable_web_page_preview=True,
+                        reply_markup=first_markup,
                     )
                 except Exception:  # noqa: BLE001
                     await self.reply_html(update.effective_message, text, markup)
+                    parts = []   # everything already sent via the fallback
+            if len(parts) > 1:
+                await self.reply_html(
+                    update.effective_message, "\n\n".join(parts[1:]), markup
+                )
         else:
             await self.reply_html(update.effective_message, text, markup)
         # Milestone shout-out (level-up / streak) — a short public celebration.
@@ -1178,4 +1224,6 @@ class TelegramChannel(Channel):
         return out
 
     async def _on_error(self, update, context) -> None:
-        log.error("telegram.error", error=str(context.error))
+        # exc_info gives the full traceback — `str(exc)` alone made production
+        # errors ("'x'") nearly undebuggable.
+        log.error("telegram.error", error=str(context.error), exc_info=context.error)

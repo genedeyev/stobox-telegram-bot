@@ -37,6 +37,27 @@ def _is_admin(update, context) -> bool:
     return _adapter(context).is_admin(update.effective_user)
 
 
+# Per-user command cooldowns. /support, /report and /appeal fan out a DM to
+# EVERY admin and /check burns 4 chain-RPC calls — none of them pass through
+# the engine's rate limiter, so without this one hostile user in a public
+# group could flood every admin's inbox in a tight loop.
+_CMD_LAST: dict[str, float] = {}
+
+
+def _cooldown_ok(update, cmd: str, seconds: float) -> bool:
+    import time
+
+    user = update.effective_user
+    key = f"{cmd}:{user.id if user else '?'}"
+    now = time.monotonic()
+    if now - _CMD_LAST.get(key, -seconds) < seconds:
+        return False
+    if len(_CMD_LAST) > 5000:   # crude bound; entries are tiny
+        _CMD_LAST.clear()
+    _CMD_LAST[key] = now
+    return True
+
+
 # --------------------------------------------------------------------------- #
 # Interactive user guide (/guide) — button-navigated "what can Stoby do"
 # --------------------------------------------------------------------------- #
@@ -364,6 +385,9 @@ async def check_cmd(update, context) -> None:
             "🔒 I only read public balances — never share your seed phrase or private key.",
             parse_mode="HTML",
         )
+        return
+    if not _cooldown_ok(update, "check", 20):
+        await update.effective_message.reply_text("One check at a time — try again in a few seconds.")
         return
     await update.effective_message.reply_text("🔎 Checking the chains…")
     report = await _engine(context).check_wallet(addr)
@@ -739,6 +763,11 @@ async def contact_cmd(update, context) -> None:
 
 
 async def support_cmd(update, context) -> None:
+    if not _cooldown_ok(update, "support", 120):
+        await update.effective_message.reply_text(
+            "The team has already been flagged — hold tight, someone will follow up."
+        )
+        return
     adapter = _adapter(context)
     for admin_id in adapter.admins:
         try:
@@ -755,6 +784,11 @@ async def support_cmd(update, context) -> None:
 
 
 async def report_cmd(update, context) -> None:
+    if not _cooldown_ok(update, "report", 60):
+        await update.effective_message.reply_text(
+            "Got it — your previous report is already with the team."
+        )
+        return
     text = " ".join(context.args) if context.args else "(no details)"
     for admin_id in _adapter(context).admins:
         try:
@@ -1064,6 +1098,11 @@ async def modstats_cmd(update, context) -> None:
 
 async def appeal_cmd(update, context) -> None:
     """User contests a moderation action → routed to admins."""
+    if not _cooldown_ok(update, "appeal", 300):
+        await update.effective_message.reply_text(
+            "Your appeal is already with the admins — they'll review it fairly."
+        )
+        return
     user = update.effective_user
     reason = " ".join(context.args) if context.args else "(no details given)"
     for admin_id in _adapter(context).admins:

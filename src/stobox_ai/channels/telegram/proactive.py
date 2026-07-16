@@ -675,7 +675,7 @@ class ProactiveScheduler:
         try:
             results = await self.engine.sync_knowledge()
         except Exception as exc:  # noqa: BLE001
-            log.error("proactive.resync_failed", error=str(exc))
+            log.error("proactive.resync_failed", error=str(exc), exc_info=True)
             return
         total = sum(results.values())
         log.info("proactive.resync", results=results, total=total)
@@ -711,7 +711,10 @@ class ProactiveScheduler:
             recent="\n".join(self._recent_posts[-5:]) or "(none)",
             context=context_text or "(general Stobox knowledge)",
         )
-        system = self.engine.prompts.render(
+        # Use the assembled [CORE]+[CANONICALS]+[FRESHNESS] prompt so proactive
+        # posts are grounded in the same canonical facts as replies; the legacy
+        # system_base is only the fallback when guardrail files are absent.
+        system = self.engine.system_prompt() or self.engine.prompts.render(
             "system_base", persona="beginner", mode=Mode.EVANGELIST.value
         )
         try:
@@ -719,15 +722,20 @@ class ProactiveScheduler:
                 [ChatMessage("system", system), ChatMessage("user", prompt)]
             )
         except Exception as exc:  # noqa: BLE001
-            log.error("proactive.evangelist_failed", error=str(exc))
+            log.error("proactive.evangelist_failed", error=str(exc), exc_info=True)
+            return
+        # PUBLIC output ⇒ same deterministic compliance rails as the reply path.
+        # A post asserting a forbidden claim is dropped, never broadcast.
+        rail = self.engine.rails.post_process(result.text, "")
+        if rail.blocked:
+            log.error("proactive.evangelist_blocked", violations=rail.violations)
             return
         self._recent_posts.append(fmt)
-        for chat_id in self._known_chats():
-            try:
-                await context.bot.send_message(chat_id, result.text[:4096])
-            except Exception:  # noqa: BLE001
-                pass
-        log.info("proactive.evangelist_posted", format=fmt, chats=len(self._known_chats()))
+        chats = self._known_chats()
+        for chat_id in chats:
+            await send_with_flood_control(context.bot, chat_id, rail.text[:4096])
+            await asyncio.sleep(0.05)
+        log.info("proactive.evangelist_posted", format=fmt, chats=len(chats))
 
     async def _post_poll(self, context) -> None:
         """Quiz night — post a native Telegram quiz poll to active groups. Correct

@@ -26,11 +26,27 @@ def _profile_to_json(p: UserProfile) -> str:
     return json.dumps(d)
 
 
-def _profile_from_json(raw: str | dict) -> UserProfile:
-    d = raw if isinstance(raw, dict) else json.loads(raw)
-    d["first_seen"] = datetime.fromisoformat(d["first_seen"])
-    d["last_interaction"] = datetime.fromisoformat(d["last_interaction"])
-    return UserProfile(**d)
+def _profile_from_json(raw: str | dict, user_key: str = "",
+                       display_name: str | None = None) -> UserProfile:
+    """Hydrate a stored profile, tolerating schema drift.
+
+    Unknown keys (fields since removed/renamed) are dropped, and any residual
+    failure yields a FRESH profile instead of raising — a stale row must never
+    make the bot stop answering an existing user.
+    """
+    from ..util import filter_dataclass_kwargs
+
+    try:
+        d = raw if isinstance(raw, dict) else json.loads(raw)
+        d = filter_dataclass_kwargs(UserProfile, d)
+        if "first_seen" in d:
+            d["first_seen"] = datetime.fromisoformat(d["first_seen"])
+        if "last_interaction" in d:
+            d["last_interaction"] = datetime.fromisoformat(d["last_interaction"])
+        return UserProfile(**d)
+    except Exception as exc:  # noqa: BLE001
+        log.error("memory.profile_hydrate_failed", user=user_key or "?", error=str(exc))
+        return UserProfile(user_key=user_key, display_name=display_name)
 
 
 class MemoryStore:
@@ -104,7 +120,7 @@ class PgMemoryStore(MemoryStore):
             )
             row = await cur.fetchone()
         profile = (
-            _profile_from_json(row[0])
+            _profile_from_json(row[0], user_key, display_name)
             if row
             else UserProfile(user_key=user_key, display_name=display_name)
         )

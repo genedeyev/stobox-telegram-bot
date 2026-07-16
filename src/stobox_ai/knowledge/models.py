@@ -67,7 +67,13 @@ class Document:
 @dataclass(slots=True)
 class RetrievedChunk:
     chunk: Chunk
+    # Fused ranking score — RELATIVE (min-max normalized per query): great for
+    # ordering, meaningless as evidence strength (the top hit is always ~1.0).
     score: float
     vector_score: float = 0.0
     bm25_score: float = 0.0
+    # ABSOLUTE signals — safe to threshold against:
+    #   raw_score    — raw cosine similarity from the vector leg (0 if BM25-only)
+    #   rerank_score — the LLM reranker's 0..1 relevance judgment (None if not run)
+    raw_score: float = 0.0
     rerank_score: float | None = None

@@ -129,8 +129,11 @@ class XPBook:
         data = load_json_guarded(self.path, label="xp")
         if data is None:
             return
+        from ..util import filter_dataclass_kwargs
+
         try:
-            self.users = {k: UserXP(**v) for k, v in data.items()}
+            self.users = {k: UserXP(**filter_dataclass_kwargs(UserXP, v))
+                          for k, v in data.items()}
         except Exception as exc:  # noqa: BLE001
             log.error("xp.load_failed", error=str(exc))
 

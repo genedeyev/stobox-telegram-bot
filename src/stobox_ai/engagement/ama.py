@@ -115,10 +115,15 @@ class AMABook:
         data = load_json_guarded(self.path, label="ama")
         if data is None:
             return
+        from ..util import filter_dataclass_kwargs
+
         try:
             self.open = data.get("open", False)
             self.topic = data.get("topic", "")
-            self.questions = {int(k): AMAQuestion(**v) for k, v in data.get("questions", {}).items()}
+            self.questions = {
+                int(k): AMAQuestion(**filter_dataclass_kwargs(AMAQuestion, v))
+                for k, v in data.get("questions", {}).items()
+            }
         except Exception as exc:  # noqa: BLE001
             log.error("ama.load_failed", error=str(exc))
 

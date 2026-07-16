@@ -81,6 +81,10 @@ async def sync_sources(
     fetcher = fetcher or HttpxFetcher()
     results: dict[str, int] = {}
     try:
+        # Content-hash gate, same as index_directory: without it every daily
+        # resync deleted + re-chunked + RE-EMBEDDED the entire remote corpus
+        # (~hundreds of unchanged docs of recurring embedding spend).
+        existing = await indexer.store.doc_hashes()
         for source in sources:
             try:
                 documents = await source.fetch(fetcher)
@@ -88,11 +92,15 @@ async def sync_sources(
                 log.error("sync.source_failed", source=source.name, error=str(exc))
                 results[source.name] = 0
                 continue
-            chunks = 0
+            chunks = skipped = 0
             for doc in documents:
+                if existing.get(doc.doc_id) == doc.content_hash:
+                    skipped += 1
+                    continue
                 chunks += await indexer.index_document(doc)
             results[source.name] = chunks
-            log.info("sync.indexed", source=source.name, docs=len(documents), chunks=chunks)
+            log.info("sync.indexed", source=source.name, docs=len(documents),
+                     chunks=chunks, unchanged_skipped=skipped)
     finally:
         if owns_fetcher:
             await fetcher.aclose()

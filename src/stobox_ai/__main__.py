@@ -64,7 +64,7 @@ async def run() -> None:
                 log.info("boot.background_sync_done", results=results,
                          chunks=await engine.retriever.store.count())
             except Exception as exc:  # noqa: BLE001
-                log.error("boot.background_sync_failed", error=str(exc))
+                log.error("boot.background_sync_failed", error=str(exc), exc_info=True)
 
         sync_task = asyncio.create_task(_bg_sync())
 

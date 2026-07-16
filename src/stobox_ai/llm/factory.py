@@ -8,10 +8,45 @@ from __future__ import annotations
 
 from ..config import Config, get_secrets
 from ..logging import get_logger
-from .base import EmbeddingProvider, LLMProvider
+from .base import ChatMessage, EmbeddingProvider, LLMProvider, LLMResult
 from .local import EchoLLM, LocalHashEmbeddings
 
 log = get_logger(__name__)
+
+
+class FallbackProvider(LLMProvider):
+    """Runtime cross-provider failover.
+
+    The factory's build-time fallback only covers a MISSING primary (no key /
+    no SDK). This wrapper covers a primary that exists but is DOWN: when the
+    primary exhausts its own retries (outage, 5xx storm, timeout), the same
+    request is tried once on the secondary — making the config promise
+    "fallback provider used if the primary errors out" actually true.
+    """
+
+    def __init__(self, primary: LLMProvider, secondary: LLMProvider) -> None:
+        super().__init__(primary.model, primary.temperature, primary.max_tokens)
+        self.name = primary.name
+        self.primary = primary
+        self.secondary = secondary
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMResult:
+        try:
+            return await self.primary.complete(
+                messages, temperature=temperature, max_tokens=max_tokens
+            )
+        except Exception as exc:  # noqa: BLE001 - primary retries are exhausted
+            log.error("reasoner.failover", primary=self.primary.name,
+                      secondary=self.secondary.name, error=str(exc))
+            return await self.secondary.complete(
+                messages, temperature=temperature, max_tokens=max_tokens
+            )
 
 
 def _reasoner(provider: str, model: str, temperature: float, max_tokens: int) -> LLMProvider | None:
@@ -33,21 +68,21 @@ def _reasoner(provider: str, model: str, temperature: float, max_tokens: int) ->
 
 def build_reasoner(config: Config) -> LLMProvider:
     r = config.section("llm.reasoning")
+    temperature = float(r.get("temperature", 0.3))
+    max_tokens = int(r.get("max_tokens", 1200))
     primary = _reasoner(
-        r.get("provider", "anthropic"),
-        r.get("model", "claude-opus-4-8"),
-        float(r.get("temperature", 0.3)),
-        int(r.get("max_tokens", 1200)),
+        r.get("provider", "anthropic"), r.get("model", "claude-opus-4-8"),
+        temperature, max_tokens,
     )
+    fb = _reasoner(
+        r.get("fallback_provider", "openai"), r.get("fallback_model", "gpt-4.1"),
+        temperature, max_tokens,
+    )
+    if primary and fb:
+        # Both configured → runtime failover on primary outages.
+        return FallbackProvider(primary, fb)
     if primary:
         return primary
-    # Try configured fallback provider before giving up on real reasoning.
-    fb = _reasoner(
-        r.get("fallback_provider", "openai"),
-        r.get("fallback_model", "gpt-4.1"),
-        float(r.get("temperature", 0.3)),
-        int(r.get("max_tokens", 1200)),
-    )
     if fb:
         log.warning("reasoner.fallback", provider=fb.name)
         return fb

@@ -88,6 +88,7 @@ class HybridRetriever:
         vec = await self.store.search(q_emb, self.top_k)
         bm = await self._bm25_search(query)
 
+        raw_scores = {c.chunk_id: float(s) for c, s in vec}   # absolute cosine sim
         vec_scores = _minmax({c.chunk_id: s for c, s in vec})
         bm_scores = _minmax({c.chunk_id: s for c, s in bm})
         by_id: dict[str, Chunk] = {c.chunk_id: c for c, _ in vec}
@@ -98,7 +99,8 @@ class HybridRetriever:
             vs, bs = vec_scores.get(cid, 0.0), bm_scores.get(cid, 0.0)
             trust = chunk.meta.confidence if chunk.meta else 1.0
             score = (self.vec_w * vs + self.bm25_w * bs) * trust
-            fused[cid] = RetrievedChunk(chunk=chunk, score=score, vector_score=vs, bm25_score=bs)
+            fused[cid] = RetrievedChunk(chunk=chunk, score=score, vector_score=vs,
+                                        bm25_score=bs, raw_score=raw_scores.get(cid, 0.0))
         return fused
 
     async def retrieve(self, query: str) -> list[RetrievedChunk]:
@@ -162,13 +164,17 @@ class HybridRetriever:
         ]
         try:
             raw = await self.reasoner.complete_json(msg, max_tokens=300)
-            scores = extract_json(raw) or {}
-            for i, rc in enumerate(candidates):
-                rc.rerank_score = float(scores.get(str(i), 0.0))
-            # Blend original fused score with rerank to stay robust to LLM noise.
-            candidates.sort(
-                key=lambda r: 0.5 * (r.rerank_score or 0.0) + 0.5 * r.score, reverse=True
-            )
+            scores = extract_json(raw)
+            # Only stamp rerank scores when the LLM actually produced them —
+            # a failed parse must leave rerank_score=None, never a fake 0.0
+            # (the confidence gate treats rerank_score as an absolute signal).
+            if isinstance(scores, dict) and scores:
+                for i, rc in enumerate(candidates):
+                    rc.rerank_score = float(scores.get(str(i), 0.0))
+                # Blend original fused score with rerank to stay robust to LLM noise.
+                candidates.sort(
+                    key=lambda r: 0.5 * (r.rerank_score or 0.0) + 0.5 * r.score, reverse=True
+                )
         except Exception as exc:  # noqa: BLE001
             log.warning("retrieval.rerank_failed", error=str(exc))
         return candidates

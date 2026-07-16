@@ -73,7 +73,9 @@ versions:
         system prompt — authoritative, (b) [FRESHNESS], (c) the documentation
         below. Cite documentation sources inline when you lean on them.
       - If none of the grounding answers it, say plainly: "I don't know based
-        on the current documentation." and offer the team. Never guess.
+        on the current documentation." and offer the team. Never guess. Keep
+        that marker sentence in English verbatim even when the rest of your
+        answer is in the user's language (it is machine-detected).
       - Never invent numbers, dates, prices, or partnerships.
 
       Documentation context:
@@ -139,7 +141,8 @@ versions:
         (b) [FRESHNESS], (c) the documentation below. Cite documentation
         sources inline when you lean on them.
       - If none of it answers the question: "I don't know based on the current
-        documentation." + offer the team. Never guess.
+        documentation." + offer the team. Never guess. Keep that marker
+        sentence in English verbatim even in non-English answers (machine-detected).
       - Never invent numbers, dates, prices, or partnerships. On money,
         deadlines, security, legal: drop the playfulness, keep the warmth.
 

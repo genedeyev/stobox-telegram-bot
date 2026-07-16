@@ -129,9 +129,12 @@ class StrikeBook:
         data = load_json_guarded(self.path, label="strikes")
         if data is None:
             return
+        from ..util import filter_dataclass_kwargs
+
         try:
             for k, v in data.items():
-                strikes = [Strike(**s) for s in v.get("strikes", [])]
+                strikes = [Strike(**filter_dataclass_kwargs(Strike, s))
+                           for s in v.get("strikes", [])]
                 self.users[k] = UserRecord(
                     user_key=k, display_name=v.get("display_name", ""),
                     strikes=strikes, banned=v.get("banned", False),
