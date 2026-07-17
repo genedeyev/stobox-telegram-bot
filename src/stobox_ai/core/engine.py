@@ -192,6 +192,7 @@ class AgentEngine:
         self.ama = AMABook(config.get("engagement.ama_path", "data/ama.json"))
         self.blog_posts: list[dict] = []
         self._blog_index: dict[str, str] = {}          # url -> title (all known posts)
+        self._blog_dates: dict[str, str] = {}          # url -> ISO publish date
         self._announced_blog: set[str] | None = None   # None = not yet baselined
 
     def _init_guardrails(self, config: Config) -> None:
@@ -513,20 +514,44 @@ class AgentEngine:
         await self.refresh_blog_posts()
         return results
 
+    def _blog_share_since(self) -> str:
+        """ISO cutoff (YYYY-MM-DD): Stoby only SHARES blog links published on or
+        after this date — never surfaces stale archive posts proactively."""
+        return str(self.config.get("knowledge.blog.share_since", "2026-06-15"))
+
     async def refresh_blog_posts(self, limit: int = 5) -> None:
-        """Collect the freshest blog/digest URLs from the index for [FRESHNESS]
-        and /blog. Best-effort — empty until a web sync has run."""
+        """Collect blog/digest URLs (with publish dates) from the index for
+        [FRESHNESS] and /blog. Best-effort — empty until a web sync has run.
+        `blog_posts` is the SHAREABLE set: dated on/after the share cutoff,
+        newest first. Old/undated posts stay in the index for answering but are
+        never proactively shared."""
         try:
             chunks = await self.retriever.store.all_chunks()
         except Exception:  # noqa: BLE001
             return
-        seen: dict[str, str] = {}
+        titles: dict[str, str] = {}
+        dates: dict[str, str] = {}
         for c in chunks:
             url = c.meta.source_url if c.meta else None
-            if url and "/blog" in url and url.rstrip("/") != "https://www.stobox.io/blog":
-                seen.setdefault(url, c.meta.title)
-        self._blog_index = seen
-        self.blog_posts = [{"title": t, "url": u} for u, t in list(seen.items())[:limit]]
+            if url and "/blog/" in url and url.rstrip("/") != "https://www.stobox.io/blog":
+                titles.setdefault(url, c.meta.title)
+                pub = (c.meta.extra or {}).get("published") if c.meta else None
+                if pub and url not in dates:
+                    dates[url] = pub
+        self._blog_index = titles
+        self._blog_dates = dates
+        self.blog_posts = self._shareable_blog_posts()[:limit]
+
+    def _shareable_blog_posts(self) -> list[dict]:
+        """Blog posts dated on/after the share cutoff, newest first. Undated
+        posts are excluded — we never proactively share a link we can't date."""
+        since = self._blog_share_since()
+        out = [
+            {"title": self._blog_index[u], "url": u, "published": d}
+            for u, d in self._blog_dates.items()
+            if d >= since and u in self._blog_index
+        ]
+        return sorted(out, key=lambda p: p["published"], reverse=True)
 
     def pop_new_blog_posts(self) -> list[dict]:
         """New posts since the last check. The FIRST call after boot baselines
@@ -541,13 +566,24 @@ class AgentEngine:
             self._announced_blog = set(current)
             log.info("blog.baseline", known_posts=len(current))
             return []
+        # Announce genuinely-new posts, but still honor the share cutoff so a
+        # freshly-indexed OLD archive post never triggers an announcement.
+        since = self._blog_share_since()
         new = [u for u in current if u not in self._announced_blog]
-        return [{"url": u, "title": current[u]} for u in new]
+        out = []
+        for u in new:
+            pub = self._blog_dates.get(u)
+            if pub and pub < since:
+                self._announced_blog.add(u)   # suppress silently; never re-check
+                continue
+            out.append({"url": u, "title": current[u]})
+        return out
 
     def all_blog_posts(self) -> list[dict]:
-        """Every blog/learn post known from the index — the archive to draw on
-        for quiet-time sharing (not just the freshest few)."""
-        return [{"url": u, "title": t} for u, t in self._blog_index.items()]
+        """SHAREABLE blog posts (dated on/after the share cutoff, newest first)
+        — the set quiet-time revival draws on. Deliberately NOT the full archive:
+        Stoby must never proactively surface a stale post."""
+        return self._shareable_blog_posts()
 
     def mark_blog_announced(self, url: str) -> None:
         if self._announced_blog is None:

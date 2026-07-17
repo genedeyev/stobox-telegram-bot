@@ -26,6 +26,18 @@ _BINARY_DOC = re.compile(r"\.(pdf|docx?|pptx?|xlsx?)(\?|$)", re.I)
 _SITEMAP_LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
 # URLs embedded in llms.txt (markdown links or bare) — strip trailing punctuation.
 _URL_IN_TEXT = re.compile(r"https?://[^\s)\]<>\"']+")
+# Publish date: JSON-LD "datePublished" (stobox blog) or <meta article:published_time>.
+_PUBLISHED = re.compile(
+    r'"datePublished"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})'
+    r'|(?:article:published_time|og:published_time)["\']?\s*(?:content=)?["\']([0-9]{4}-[0-9]{2}-[0-9]{2})',
+    re.I,
+)
+
+
+def _extract_published(html: str) -> str | None:
+    """ISO date (YYYY-MM-DD) a page was published, from JSON-LD or OG meta."""
+    m = _PUBLISHED.search(html)
+    return (m.group(1) or m.group(2)) if m else None
 
 
 def _host(url: str) -> str:
@@ -188,6 +200,7 @@ class WebSource(Source):
     def _parse(self, url: str, html: str) -> tuple[Document | None, list[str]]:
         from bs4 import BeautifulSoup
 
+        published = _extract_published(html)   # from raw HTML, before we strip scripts
         soup = BeautifulSoup(html, "html.parser")
         # Collect links before stripping structure.
         links = []
@@ -205,6 +218,7 @@ class WebSource(Source):
             return None, links
 
         category = "documentation" if "docs." in _host(url) else self.category
+        extra = {"published": published} if published else {}
         meta = DocMeta(
             title=title[:200],
             source_file=f"web://{url}",
@@ -212,5 +226,6 @@ class WebSource(Source):
             category=category,
             product="Stobox",
             visibility="public",
+            extra=extra,
         )
         return Document(meta=meta, text=text), links

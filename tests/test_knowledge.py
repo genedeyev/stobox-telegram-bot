@@ -107,3 +107,47 @@ async def test_index_directory_does_not_prune_remote_docs(tmp_path):
     remaining = {c.meta.source_file for c in await store.all_chunks()}
     assert all("://" in s for s in remaining), "local doc pruned, remote kept"
     assert len(remaining) == 2
+
+
+def test_web_extracts_published_date():
+    from stobox_ai.knowledge.sources.web import _extract_published
+    assert _extract_published('{"datePublished":"2026-02-02T09:46:52.000+00:00"}') == "2026-02-02"
+    assert _extract_published('<meta property="article:published_time" content="2026-06-20T08:00:00Z">') == "2026-06-20"
+    assert _extract_published("<html>no date here</html>") is None
+
+
+@pytest.mark.asyncio
+async def test_blog_sharing_respects_share_since_cutoff(config):
+    from stobox_ai.core.engine import AgentEngine
+    from stobox_ai.knowledge.models import Chunk, DocMeta
+
+    eng = await AgentEngine.create(config)
+    dim = eng.retriever.embedder.dimensions
+
+    def mk(url, title, pub):
+        extra = {"published": pub} if pub else {}
+        return Chunk(doc_id=url, text="body " * 30, ordinal=0, embedding=[0.0] * dim,
+                     meta=DocMeta(title=title, source_file=f"web://{url}",
+                                  source_url=url, extra=extra))
+
+    await eng.retriever.store.upsert([
+        mk("https://www.stobox.io/blog/old", "Old Feb post", "2026-02-02"),
+        mk("https://www.stobox.io/blog/june", "June post", "2026-06-20"),
+        mk("https://www.stobox.io/blog/july", "July post", "2026-07-10"),
+        mk("https://www.stobox.io/blog/undated", "Undated", None),
+    ])
+    await eng.refresh_blog_posts()
+
+    shared = eng.all_blog_posts()
+    urls = {p["url"] for p in shared}
+    assert "https://www.stobox.io/blog/june" in urls
+    assert "https://www.stobox.io/blog/july" in urls
+    assert "https://www.stobox.io/blog/old" not in urls        # pre-cutoff
+    assert "https://www.stobox.io/blog/undated" not in urls    # can't verify recency
+    # Newest first.
+    assert [p["published"] for p in shared] == sorted(
+        (p["published"] for p in shared), reverse=True)
+    # A pre-cutoff post is never announced as "new" either.
+    eng._announced_blog = {"https://www.stobox.io/blog/june", "https://www.stobox.io/blog/july"}
+    assert all(p["url"] != "https://www.stobox.io/blog/old"
+               for p in eng.pop_new_blog_posts())

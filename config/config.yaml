@@ -32,6 +32,12 @@ llm:
 # --- Knowledge / RAG ---------------------------------------------------------
 knowledge:
   docs_path: ${DOCS_PATH:-docs}
+  blog:
+    # Stoby only SHARES blog links published on/after this date — the whole
+    # archive stays indexed for ANSWERING, but proactive shares (revival,
+    # "what's new", /blog, [FRESHNESS]) never surface a stale post. Raise/lower
+    # as new posts land. (Publish dates are read from each page's JSON-LD.)
+    share_since: "2026-06-15"
   watch: true                      # hot re-index on file changes
   sync_on_boot: false              # BLOCKING sync before start (rarely wanted)
   background_sync_on_boot: true    # auto-load the live corpus right after boot (non-blocking)
