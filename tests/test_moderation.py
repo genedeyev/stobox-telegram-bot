@@ -172,3 +172,29 @@ async def test_scam_link_still_bans_not_just_deletes(config, tmp_path):
     mod = _mod(config, tmp_path)
     v = await mod.evaluate(_msg("claim your airdrop, connect wallet at https://evil.io"))
     assert v.category == "scam" and v.action == ModerationAction.BAN
+
+
+@pytest.mark.asyncio
+async def test_trusted_third_party_links_allowed_subdomains_too(config, tmp_path):
+    """Gene-confirmed allowlist (explorers, market data, news) — domain +
+    subdomains pass for regular members; lookalikes still don't."""
+    mod = _mod(config, tmp_path)
+    cases = [
+        "verify on etherscan.io/tx/0xabc",
+        "sepolia.etherscan.io/address/0x1",
+        "price https://www.coingecko.com/en/coins/stobox-token",
+        "read https://www.coindesk.com/markets/x",
+        "data at rwa.xyz/protocols",
+        "base explorer basescan.org/token/0x",
+    ]
+    for i, text in enumerate(cases):     # distinct uids so we don't trip flood
+        v = await mod.evaluate(_msg(text, uid=f"u{i}"))
+        assert v.action == ModerationAction.NONE, f"trusted link deleted: {text}"
+
+
+@pytest.mark.asyncio
+async def test_lookalike_of_trusted_domain_still_deleted(config, tmp_path):
+    mod = _mod(config, tmp_path)
+    for text in ["scam https://scam-etherscan.io/x", "fake etherscan.io.evil.com/x"]:
+        v = await mod.evaluate(_msg(text))
+        assert v.category == "external_link" and v.delete, f"lookalike allowed: {text}"

@@ -181,7 +181,9 @@ moderation:
   # are always allowed; the entries below add the official off-domain handles.
   link_policy:
     enabled: true
-    allow:                         # host, or host/path-prefix (exact official handles)
+    # host = domain + all subdomains allowed; host/path = exact official handle.
+    allow:
+      # -- official Stobox off-domain handles --
       - x.com/StoboxCompany
       - t.me/stobox_community
       - youtube.com/@stobox
@@ -189,6 +191,25 @@ moderation:
       - github.com/StoboxTechnologies
       - facebook.com/stoboxforbusiness
       - stobox-platform.medium.com
+      # -- trusted third-party (confirmed by Gene): explorers & on-chain tools --
+      - etherscan.io
+      - basescan.org
+      - bscscan.com
+      - polygonscan.com
+      - arbiscan.io
+      - blockscout.com
+      - dune.com
+      - defillama.com
+      # -- market data --
+      - coingecko.com
+      - coinmarketcap.com
+      - dexscreener.com
+      - dextools.io
+      # -- crypto / RWA news --
+      - coindesk.com
+      - cointelegraph.com
+      - theblock.co
+      - rwa.xyz
   # Coordinated-FUD spike alarm → immediate admin DM.
   fud_alert:
     threshold: 3                   # N FUD-flagged messages…

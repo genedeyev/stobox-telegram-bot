@@ -91,7 +91,9 @@ class LinkPolicy:
         # Stobox-owned domain — any subdomain, any path.
         if host == "stobox.io" or host.endswith(".stobox.io"):
             return True
-        if host in self._hosts:
+        # Trusted whole hosts — match the domain and any subdomain
+        # (sepolia.etherscan.io, api.coingecko.com, …).
+        if any(host == h or host.endswith("." + h) for h in self._hosts):
             return True
         segs = [s for s in p.path.split("/") if s]
         seg1 = segs[0].lower() if segs else ""
