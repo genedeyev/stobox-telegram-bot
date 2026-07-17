@@ -175,6 +175,20 @@ moderation:
   flood:
     max_messages: 5
     per_seconds: 10
+  # Link allowlist: a NON-admin may only post official Stobox links — any other
+  # link is removed (message deleted, friendly DM). Admins (Gene/Arevik, i.e.
+  # TELEGRAM_ADMIN_USER_IDS) can post anything. stobox.io + all its subdomains
+  # are always allowed; the entries below add the official off-domain handles.
+  link_policy:
+    enabled: true
+    allow:                         # host, or host/path-prefix (exact official handles)
+      - x.com/StoboxCompany
+      - t.me/stobox_community
+      - youtube.com/@stobox
+      - linkedin.com/company/stobox
+      - github.com/StoboxTechnologies
+      - facebook.com/stoboxforbusiness
+      - stobox-platform.medium.com
   # Coordinated-FUD spike alarm → immediate admin DM.
   fud_alert:
     threshold: 3                   # N FUD-flagged messages…

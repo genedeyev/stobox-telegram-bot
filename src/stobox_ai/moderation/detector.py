@@ -104,6 +104,13 @@ class Moderator:
         self.team_names = [t.lower() for t in (m.get("team_names") or [])]
         self.allowlist = {str(x) for x in (m.get("impersonation_allowlist") or [])}
         self._slur_re = self._build_slur_re(m.get("blocklist_path"))
+        # Link allowlist: only official Stobox links survive from a non-admin;
+        # every other link is removed (admins are exempt — see evaluate()).
+        from .links import LinkPolicy
+
+        lp = m.section("link_policy")
+        self.link_policy_enabled = bool(lp.get("enabled", True))
+        self.links = LinkPolicy(lp.get("allow") or [])
 
     def _build_slur_re(self, blocklist_path):
         terms = list(_HARD_SLURS_SEED)
@@ -148,6 +155,16 @@ class Moderator:
         for pat in _SCAM_PATTERNS:
             if pat.search(text):
                 return self._sanction(user_key, "scam", 0.98, msg, f"pattern:{pat.pattern[:24]}")
+
+        # 2b) Link allowlist — only official Stobox links survive from a non-admin.
+        # Admins already returned at the top of evaluate(), so any link here is
+        # from a regular user. Runs after scam patterns so a phishing link bans
+        # rather than merely deletes.
+        if self.link_policy_enabled:
+            bad = self.links.disallowed(text)
+            if bad:
+                return self._sanction(user_key, "external_link", 0.95, msg,
+                                      f"non-official link: {bad[0][:60]}")
 
         # 3) LLM classifier for nuance.
         scores = await self._classify(text)
@@ -208,7 +225,16 @@ class Moderator:
                 "⚠️ Let's keep it constructive and respectful. "
                 "Repeated issues can lead to a mute."
             )
-        dm_text = self._dm(step.action, human, count, step.mute_minutes)
+        if category == "external_link":
+            # Soft, non-punitive: this is hygiene, not a strike-shaming.
+            dm_text = (
+                "🗑 Heads-up: your message was removed because this group only allows "
+                "official Stobox links (anything on stobox.io). It's a scam-prevention "
+                "rule — nothing personal. Feel free to repost your point without the "
+                "outside link, and reply /appeal if you think this was a mistake."
+            )
+        else:
+            dm_text = self._dm(step.action, human, count, step.mute_minutes)
         log.info("moderation.sanction", category=category, action=step.action.value,
                  strike=count, user=user_key, score=round(score, 2))
         return ModerationVerdict(

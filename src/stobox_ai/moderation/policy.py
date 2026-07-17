@@ -42,6 +42,11 @@ POLICY: dict[str, list[Step]] = {
     "harassment":  [Step(_D, delete=True), Step(_M, 60, delete=True),
                     Step(_M, 1440, delete=True), Step(_B, delete=True)],
     "sexual_nsfw": [Step(_D, delete=True), Step(_M, 1440, delete=True), Step(_B, delete=True)],
+    # Non-official link from a non-admin → remove the message, every time, but
+    # never escalate to mute/ban on the link alone (a good-faith member sharing
+    # a news article shouldn't be punished — just kept to official links). Repeat
+    # SCAM links are still caught by the scam ladder above (ban).
+    "external_link": [Step(_D, delete=True)],
     # Assume good faith: a first ad/spam post gets a friendly WARN (message stays),
     # then escalates to delete/mute/ban only if it keeps happening. Don't crack
     # down on a newcomer's one clumsy link — save enforcement for real offenders.
@@ -70,6 +75,7 @@ REASONS = {
     "doxxing": "sharing someone's private personal information",
     "harassment": "targeted harassment or a personal insult",
     "sexual_nsfw": "sexual or NSFW content",
+    "external_link": "a non-official link (this group allows only official stobox.io links)",
     "advertising": "unsolicited advertising / promotion",
     "spam": "spam",
     "flood": "flooding the chat",

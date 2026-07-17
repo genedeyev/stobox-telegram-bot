@@ -123,3 +123,52 @@ async def test_admins_and_casual_profanity_pass(config, tmp_path):
     # Casual profanity, no target, no slur → deterministic layer clears it; the
     # echo classifier returns nothing → not flagged.
     assert not (await mod.evaluate(_msg("wtf this gas fee is insane lol"))).flagged
+
+
+# --------------------------------------------------------------------------- #
+# Link allowlist: official Stobox links stay, others are removed, admins exempt
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_official_stobox_link_from_user_is_kept(config, tmp_path):
+    mod = _mod(config, tmp_path)
+    for text in [
+        "great read https://www.stobox.io/blog/x",
+        "migrate at app.stobox.io/migrate",
+        "join t.me/stobox_community",
+        "our X https://x.com/StoboxCompany",
+    ]:
+        v = await mod.evaluate(_msg(text))
+        assert v.action == ModerationAction.NONE, f"official link deleted: {text}"
+
+
+@pytest.mark.asyncio
+async def test_non_official_link_from_user_is_deleted(config, tmp_path):
+    mod = _mod(config, tmp_path)
+    v = await mod.evaluate(_msg("check this out https://example.com/great-deal"))
+    assert v.category == "external_link"
+    assert v.action == ModerationAction.DELETE and v.delete
+    assert not v.alert_admin                 # quiet hygiene, not an admin ping
+    assert "official Stobox links" in v.dm_text
+
+
+@pytest.mark.asyncio
+async def test_bare_domain_scam_link_deleted(config, tmp_path):
+    mod = _mod(config, tmp_path)
+    v = await mod.evaluate(_msg("sync your wallet at wallet-validate.io"))
+    assert v.category == "external_link" and v.delete
+
+
+@pytest.mark.asyncio
+async def test_admin_may_post_any_link(config, tmp_path):
+    mod = _mod(config, tmp_path)
+    v = await mod.evaluate(_msg("here's a news piece https://coindesk.com/x", admin=True))
+    assert v.action == ModerationAction.NONE   # Gene/Arevik exempt
+
+
+@pytest.mark.asyncio
+async def test_scam_link_still_bans_not_just_deletes(config, tmp_path):
+    """A phishing link is caught by the scam ladder (ban), not the softer
+    external_link rule."""
+    mod = _mod(config, tmp_path)
+    v = await mod.evaluate(_msg("claim your airdrop, connect wallet at https://evil.io"))
+    assert v.category == "scam" and v.action == ModerationAction.BAN
