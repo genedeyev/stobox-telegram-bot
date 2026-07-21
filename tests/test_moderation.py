@@ -221,9 +221,33 @@ async def test_coexist_does_not_delete_links_or_ban(config, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_coexist_still_flags_scam_to_admins(config, tmp_path):
+async def test_coexist_does_nothing_on_scam(config, tmp_path):
+    """Arevik's directive: on scam, Stoby does NOTHING (not even an admin ping) —
+    ChatKeeper's filters handle it, and Stoby's detection deleted relevant msgs."""
     mod = _mod(config, tmp_path, enforce=False)
     v = await mod.evaluate(_msg("DM me to recover your funds, I'm from support"))
-    assert v.action == ModerationAction.NONE      # no ban/delete by Stoby
-    assert v.alert_admin                           # but admins are flagged
-    assert v.category == "scam"
+    assert v.action == ModerationAction.NONE and not v.alert_admin and not v.flagged
+
+
+@pytest.mark.asyncio
+async def test_admin_impersonator_banned_even_in_coexist(config, tmp_path):
+    """The ONE enforcement Stoby keeps in coexist: a non-admin whose display
+    name copies an admin is banned + deleted immediately (Arevik)."""
+    mod = _mod(config, tmp_path, enforce=False)
+    v = await mod.evaluate(_msg("hey friends, DM me for help",
+                                name="Arevik | Support @ Stobox", uid="666"))
+    assert v.category == "admin_impersonation"
+    assert v.action == ModerationAction.BAN and v.delete and v.alert_admin
+    # A prefixed/variant copy is also caught.
+    v2 = await mod.evaluate(_msg("hi", name="Ross Shemeliak (Stobox)", uid="667"))
+    assert v2.action == ModerationAction.BAN
+
+
+@pytest.mark.asyncio
+async def test_real_admin_with_admin_name_not_banned(config, tmp_path):
+    """The real admin (verified by ID) posting under their own name is never
+    flagged — they're exempt at the top of evaluate()."""
+    mod = _mod(config, tmp_path, enforce=False)
+    v = await mod.evaluate(_msg("hello team", name="Arevik | Support @ Stobox",
+                                uid="111", admin=True))
+    assert v.action == ModerationAction.NONE and not v.flagged

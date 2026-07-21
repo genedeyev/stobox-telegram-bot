@@ -380,7 +380,14 @@ class TelegramChannel(Channel):
 
     async def _on_new_members(self, update, context) -> None:
         """Greet new group members by name. Skips bots; a mass-join (>5 at
-        once) is treated as a possible raid — no welcome, admins pinged."""
+        once) is treated as a possible raid — no welcome, admins pinged.
+        COEXIST: disabled by default — ChatKeeper welcomes new members (Arevik)."""
+        if not self.engine.config.get("channels.telegram.welcome_new_members", False):
+            # Still track the chat so proactive posting works; don't greet.
+            chat = update.effective_chat
+            if chat:
+                self.remember_chat(chat.id)
+            return
         message = update.effective_message
         chat = update.effective_chat
         joined = message.new_chat_members or []
@@ -780,9 +787,13 @@ class TelegramChannel(Channel):
         action = response.moderation
 
         # 1) Execute (delete → mute → ban), tolerant of missing admin rights.
+        deleted = True
         try:
             if m.get("delete") and action != ModerationAction.NONE:
-                await msg.delete()
+                try:
+                    await msg.delete()
+                except Exception:  # noqa: BLE001 - couldn't delete (perms/too old)
+                    deleted = False
             if action == ModerationAction.MUTE:
                 from telegram import ChatPermissions
 
@@ -802,6 +813,19 @@ class TelegramChannel(Channel):
         if response.text:
             try:
                 await msg.reply_text(response.text)
+            except Exception:  # noqa: BLE001
+                pass
+
+        # 2b) Admin-impersonator we couldn't delete → post the public warning so
+        #     members don't engage with the still-visible scam message (Arevik:
+        #     "if the message is not deleted immediately, the warning is relevant").
+        if m.get("category") == "admin_impersonation" and not deleted:
+            try:
+                await context.bot.send_message(
+                    chat.id,
+                    "⚠️ This account is impersonating a Stobox admin — do NOT engage "
+                    "or DM it, and please report it. Stobox staff never DM you first.",
+                )
             except Exception:  # noqa: BLE001
                 pass
 

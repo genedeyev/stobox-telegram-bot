@@ -119,6 +119,10 @@ message_log:
 # --- Proactive engagement ----------------------------------------------------
 proactive:
   state_path: data/proactive_state.json   # one-shot broadcast dedupe (survives restarts)
+  # Arevik: post ONLY to the community group — NOT Ross's announcement channel,
+  # NOT the Stoby AI Chat. Set to the community group's numeric id(s) to lock it
+  # down; empty = every group Stoby is active in (channels are already excluded).
+  group_ids: []
   evangelist:
     enabled: true
     interval_hours: 3              # publish useful content every N hours (presence)
@@ -178,7 +182,7 @@ moderation:
   strikes_path: data/strikes.json  # persisted (mount /app/data volume in prod)
   announce_actions: false          # post a public note on mute/ban (default: quiet)
   mute_minutes: 60                 # default mute duration for graded actions
-  remove_deleted_accounts: true    # auto-kick deleted (ghost) accounts from groups
+  remove_deleted_accounts: false   # COEXIST: ChatKeeper face-control does this
   flood:
     max_messages: 5
     per_seconds: 10
@@ -224,8 +228,16 @@ moderation:
     threshold: 3                   # N FUD-flagged messages…
     window_min: 10                 # …within this window trigger the alert
     cooldown_min: 30               # min gap between alerts per chat
-  # Impersonation defense: display names containing these terms (from a
-  # non-allowlisted account) are flagged. Add team names to protect.
+  # ADMIN impersonation → ALWAYS ban+delete, even in coexist mode (Arevik's
+  # exception): a non-admin whose display name copies one of these exact admin
+  # names is a scammer (real admins are exempt by verified ID). Match the exact
+  # display names your admins use.
+  protected_admin_names:
+    - "Arevik | Support @ Stobox"
+    - "Gene Deyev | Founder @Stobox"
+    - "Ross Shemeliak"
+  # Impersonation defense (only when enforce=true): display names containing
+  # these terms from a non-allowlisted account are flagged.
   protected_terms: [stobox, support, admin, moderator, official, team]
   team_names: []                   # e.g. ["gene deyev", "ross shemeliak"]
   impersonation_allowlist: []      # numeric user ids that legitimately use these terms
@@ -235,10 +247,10 @@ moderation:
 engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
   ama_path: data/ama.json          # AMA question queue
-  # In GROUPS Stoby only replies when directly addressed (name/@mention/reply).
-  # Set true to also let it answer clear, unaddressed Stobox questions — off by
-  # default so it doesn't read as spam (Arevik's rule: don't answer every message).
-  answer_unaddressed_questions: false
+  # Arevik: "answer a question when tagged OR when it sees a question" — but not
+  # every message/greeting/chatter. So Stoby answers clear, Stobox-relevant
+  # questions even when not tagged, and stays silent on everything else.
+  answer_unaddressed_questions: true
 
 # --- Community loops: state file locations (all under the /app/data volume) --
 qa:
@@ -299,6 +311,7 @@ channels:
   telegram:
     enabled: true
     state_path: data/telegram_state.json  # known chats + celebrated milestones
+    welcome_new_members: false     # COEXIST: ChatKeeper welcomes new members
     answer_buttons: false             # inline buttons under answers (More detail /
                                       # Continue in DM / Share). Off: Stoby reads as a
                                       # person, not a bot — users just ask for more.

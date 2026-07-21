@@ -797,7 +797,12 @@ class ProactiveScheduler:
     def _known_chats(self) -> set[str]:
         # COPY, not the adapter's live set: jobs iterate this across awaits while
         # handlers may concurrently add chats ("set changed size during iteration").
-        return set(getattr(self.app.bot_data.get("adapter"), "known_chats", ()))
+        chats = set(getattr(self.app.bot_data.get("adapter"), "known_chats", ()))
+        # Arevik: post ONLY to the community group. If group_ids is configured,
+        # restrict to those; otherwise every known group (channels never enter
+        # known_chats, so Ross's announcement channel is already excluded).
+        allow = {str(c) for c in (self.engine.config.get("proactive.group_ids") or [])}
+        return (chats & allow) if allow else chats
 
     def _in_quiet_hours(self) -> bool:
         rng = self.engine.config.get("proactive.evangelist.quiet_hours", [0, 7])

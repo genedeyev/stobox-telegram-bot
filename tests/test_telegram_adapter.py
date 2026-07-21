@@ -171,7 +171,22 @@ async def test_to_incoming_maps_fields(channel):
 # Welcome path: HTML-escaped names, ghost skip, raid guard
 # --------------------------------------------------------------------------- #
 
+def _enable_welcome(channel):
+    channel.engine.config.raw.setdefault("channels", {}).setdefault(
+        "telegram", {})["welcome_new_members"] = True
+
+
+async def test_welcome_disabled_by_default_coexist(channel):
+    """COEXIST default: Stoby does NOT welcome — ChatKeeper does (Arevik)."""
+    msg = FakeMessage()
+    msg.new_chat_members = [_user(uid=8, first_name="Newbie")]
+    await channel._on_new_members(_update(msg, _chat(), msg.new_chat_members[0]),
+                                  SimpleNamespace(bot=FakeBot()))
+    assert not msg.replies                                   # silent
+
+
 async def test_welcome_escapes_hostile_display_name(channel):
+    _enable_welcome(channel)   # when explicitly enabled, escaping still holds
     evil = _user(uid=8, first_name='<a href="https://scam">Stobox Support</a>')
     msg = FakeMessage()
     msg.new_chat_members = [evil]
@@ -184,6 +199,7 @@ async def test_welcome_escapes_hostile_display_name(channel):
 
 
 async def test_mass_join_suppresses_welcome_and_pings_admins(channel):
+    _enable_welcome(channel)
     msg = FakeMessage()
     msg.new_chat_members = [_user(uid=100 + i, first_name=f"u{i}") for i in range(7)]
     bot = FakeBot()

@@ -104,12 +104,12 @@ async def test_engine_ignores_untagged_fud_by_default(config):
 
 
 @pytest.mark.asyncio
-async def test_should_engage_group_is_addressed_only(config):
-    """Groups: engage only when addressed. Unaddressed — even relevant FUD or a
-    clear question — stays silent unless answer_unaddressed_questions is on."""
+async def test_should_engage_answers_questions_not_chatter(config):
+    """Arevik's rule: answer a question (tagged OR clear unaddressed Stobox
+    question), but never react to greetings, FUD, or general chatter."""
     from stobox_ai.agents.router import Routing
 
-    engine = await AgentEngine.create(config)
+    engine = await AgentEngine.create(config)   # config default: answer questions ON
 
     def _m(addressed, text="stobox rug incoming"):
         return IncomingMessage(
@@ -122,16 +122,16 @@ async def test_should_engage_group_is_addressed_only(config):
     q_msg = _m(False, "how does the STBU migration work?")
     # Addressed → always engage.
     assert engine._should_engage(_m(True), fud) is True
-    # Unaddressed FUD → silent (removed the auto-calm reflex).
+    # Unaddressed FUD / chatter → silent (no auto-calm, no reacting to everything).
     assert engine._should_engage(_m(False), fud) is False
-    # Unaddressed question → silent by default…
-    assert engine._should_engage(q_msg, question) is False
-    # …unless the team opts in.
-    engine.config.raw.setdefault("engagement", {})["answer_unaddressed_questions"] = True
+    # Unaddressed but a CLEAR Stobox question → engage ("when it sees a question").
+    assert engine._should_engage(q_msg, question) is True
+    # Turning the flag off makes even questions addressed-only.
+    engine.config.raw["engagement"]["answer_unaddressed_questions"] = False
     try:
-        assert engine._should_engage(q_msg, question) is True
+        assert engine._should_engage(q_msg, question) is False
     finally:
-        engine.config.raw["engagement"]["answer_unaddressed_questions"] = False
+        engine.config.raw["engagement"]["answer_unaddressed_questions"] = True
 
 
 @pytest.mark.asyncio
@@ -177,20 +177,38 @@ async def test_mql_summary_emitted_once(config):
 
 
 @pytest.mark.asyncio
-async def test_benign_impersonation_still_answers(config):
-    """A team member whose name mimics 'Stobox' gets answered, not silently flagged."""
+async def test_admin_impersonator_is_banned(config):
+    """A NON-admin whose name copies an admin is banned + deleted (Arevik's
+    exception — the one enforcement Stoby keeps in coexist mode)."""
     from stobox_ai.core.types import ModerationAction
 
     engine = await AgentEngine.create(config)
     m = IncomingMessage(
         author=Author(external_id="99", display_name="Arevik | Support @ Stobox"),
+        text="DM me for help with your wallet", chat_id="g", chat_type=ChatType.GROUP,
+        message_id="1", raw={"addressed": True},
+    )
+    r = await engine.handle(m)
+    assert r is not None
+    assert r.moderation == ModerationAction.BAN
+    assert r.meta.get("category") == "admin_impersonation"
+
+
+@pytest.mark.asyncio
+async def test_ordinary_user_answered_without_moderation(config):
+    """COEXIST: a normal member asking a question is answered; Stoby takes no
+    moderation action on ordinary messages (ChatKeeper handles moderation)."""
+    from stobox_ai.core.types import ModerationAction
+
+    engine = await AgentEngine.create(config)
+    m = IncomingMessage(
+        author=Author(external_id="42", display_name="Curious Member"),
         text="how does the STBU migration work?", chat_id="g", chat_type=ChatType.GROUP,
         message_id="1", raw={"addressed": True},
     )
     r = await engine.handle(m)
-    assert r is not None and r.text.strip()          # answered — NOT blocked
-    assert r.meta.get("mod_alert")                    # admins still get the heads-up
-    assert r.moderation == ModerationAction.NONE      # no public sanction
+    assert r is not None and r.text.strip()
+    assert r.moderation == ModerationAction.NONE
 
 
 def test_is_greeting():

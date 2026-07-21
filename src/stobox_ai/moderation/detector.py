@@ -115,6 +115,13 @@ class Moderator:
         lp = m.section("link_policy")
         self.link_policy_enabled = bool(lp.get("enabled", True))
         self.links = LinkPolicy(lp.get("allow") or [])
+        # Admin-impersonation is ALWAYS enforced (ban+delete), even in coexist
+        # mode — Arevik's explicit exception. These are the exact admin display
+        # names; a non-admin using one is a scammer (real admins are exempt by
+        # verified ID). High precision → safe to auto-ban.
+        self.protected_admin_names = [
+            t.lower().strip() for t in (m.get("protected_admin_names") or []) if t.strip()
+        ]
 
     def _build_slur_re(self, blocklist_path):
         terms = list(_HARD_SLURS_SEED)
@@ -132,8 +139,21 @@ class Moderator:
     async def evaluate(self, msg: IncomingMessage) -> ModerationVerdict:
         if not self.enabled or self.level == "off" or msg.author.is_admin:
             return ModerationVerdict()
-        text = msg.text or ""
         user_key = f"{msg.channel}:{msg.author.external_id}"
+
+        # 0) Admin impersonation — ALWAYS acted on (ban + delete), even in
+        #    coexist mode. Real admins already returned above (verified by ID),
+        #    so a display name copying an admin here is a scammer.
+        if self._is_admin_impersonator(msg.author):
+            return self._impersonation_ban(user_key, msg)
+
+        # COEXIST: ChatKeeper owns everything else — filters, stop-words,
+        # face-control, scams, spam. Stoby detects nothing further and never
+        # deletes/bans/mutes (Arevik: Stoby was removing relevant messages).
+        if not self.enforce:
+            return ModerationVerdict()
+
+        text = msg.text or ""
 
         # 1) Impersonation (identity-based).
         imp = self._impersonation(msg.author)
@@ -179,6 +199,30 @@ class Moderator:
         return ModerationVerdict(scores=scores)
 
     # ------------------------------------------------------------------ #
+    def _is_admin_impersonator(self, author: Author) -> bool:
+        """Display name contains an exact protected ADMIN name. Real admins are
+        exempt (they returned at the top of evaluate, verified by ID), so a match
+        here is an impersonator."""
+        if not self.protected_admin_names:
+            return False
+        name = " ".join((author.display_name or "").lower().split())
+        return bool(name) and any(pan in name for pan in self.protected_admin_names)
+
+    def _impersonation_ban(self, user_key: str, msg: IncomingMessage) -> ModerationVerdict:
+        self.strikes.add(user_key, "admin_impersonation",
+                         display_name=msg.author.display_name or "",
+                         chat_id=msg.chat_id, excerpt=(msg.text or "")[:160])
+        self.strikes.set_banned(user_key, True, msg.author.display_name or "")
+        log.info("moderation.admin_impersonator_banned", user=user_key,
+                 name=msg.author.display_name)
+        return ModerationVerdict(
+            action=ModerationAction.BAN, category="admin_impersonation", score=0.99,
+            reason=f"display name '{msg.author.display_name}' impersonates an admin",
+            delete=True, alert_admin=True,
+            warn_text="",   # public warning is adapter-side, only if delete fails
+            dm_text="",
+        )
+
     def _impersonation(self, author: Author) -> bool:
         if str(author.external_id) in self.allowlist:
             return False
@@ -215,17 +259,7 @@ class Moderator:
 
     def _sanction(self, user_key: str, category: str, score: float,
                   msg: IncomingMessage, reason: str, scores=None) -> ModerationVerdict:
-        # Coexist mode: don't act — ChatKeeper enforces. Only flag an ACTIVE
-        # scam/impersonation to admins (a heads-up, not a punishment); nobody's
-        # message is deleted, muted, or banned by Stoby.
-        if not self.enforce:
-            alert = category in ("scam", "phishing", "impersonation")
-            if not alert:
-                return ModerationVerdict(scores=scores or {})   # NONE, no action
-            return ModerationVerdict(
-                category=category, score=score, alert_admin=True,
-                reason=reason or pol.reason_text(category), scores=scores or {},
-            )
+        # Only reached when enforce=True (evaluate returns early otherwise).
         count = self.strikes.add(
             user_key, category, display_name=msg.author.display_name or "",
             chat_id=msg.chat_id, excerpt=(msg.text or "")[:160],
