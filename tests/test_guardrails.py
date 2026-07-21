@@ -57,9 +57,10 @@ def test_migration_phase_transitions():
     # Deadline is 14 Sep 23:59:59 UTC (burn BEFORE 15 Sep 00:00); claims open 15 Sep.
     assert compute_migration_phase(canon, _dt("2026-09-14"))[0] == MigrationPhase.BURN_OPEN
     assert compute_migration_phase(canon, _dt("2026-09-15"))[0] == MigrationPhase.CLAIMS_OPEN
-    # Message includes the absolute deadline while the window is open.
+    # Message phrases the deadline as the blog does: "before 15 September 2026,
+    # 00:00 UTC" (the cutover), not "14 Sep 23:59" — same instant, no confusion.
     _, text = compute_migration_phase(canon, _dt("2026-08-01"))
-    assert "14 September 2026" in text and "Base" in text
+    assert "before 15 September 2026, 00:00 UTC" in text and "Base" in text
 
 
 # --------------------------------------------------------------------------- #

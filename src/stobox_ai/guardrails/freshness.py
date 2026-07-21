@@ -35,6 +35,18 @@ def _fmt(d: date) -> str:
     return d.strftime("%d %B %Y")
 
 
+def burn_before_phrase(deadline: date, fmt: str = "%d %B %Y") -> str:
+    """Phrase the burn deadline exactly as the published blog does — 'before
+    <cutover> 00:00 UTC' — so Stoby never says '14 Sep 23:59' while holders read
+    'before 15 September' on the site (the 14-vs-15 confusion causes disputes).
+    The stored deadline is the last instant BEFORE the cutover, so the cutover
+    date is deadline + 1 day (also the claim-open day; it's a clean cutover)."""
+    from datetime import timedelta
+
+    cutover = deadline + timedelta(days=1)
+    return f"before {cutover.strftime(fmt)}, 00:00 UTC"
+
+
 def compute_migration_phase(
     canon: Canonicals, now: datetime | None = None
 ) -> tuple[MigrationPhase, str]:
@@ -50,8 +62,8 @@ def compute_migration_phase(
     if deadline and today <= deadline:
         return (
             MigrationPhase.BURN_OPEN,
-            f"Burn window is OPEN. Deadline: {_fmt(deadline)} 23:59 UTC. "
-            f"Burn-and-mint, 1:1, same-wallet only, destination chain Base.",
+            f"Burn window is OPEN. Burn {burn_before_phrase(deadline)} — minting on "
+            f"Base opens the same instant. Burn-and-mint, 1:1, same-wallet only.",
         )
     if claim and today < claim:
         return (

@@ -20,6 +20,7 @@ from html import escape as html_escape
 from pathlib import Path
 
 from ...core.types import Mode
+from ...guardrails.freshness import burn_before_phrase as _burn_before
 from ...llm.base import ChatMessage
 from ...logging import get_logger
 
@@ -173,7 +174,7 @@ def migration_status_line(canon, today) -> str | None:
     if today <= deadline:
         days = (deadline - today).days
         return (f"⏳ <b>STBU → Base migration is OPEN</b> — burn deadline <b>{_in(days)}</b> "
-                f"({deadline.strftime('%d %b %Y')}, 23:59 UTC). Burn-and-mint, 1:1, same "
+                f"(burn {_burn_before(deadline, '%d %b %Y')}). Burn-and-mint, 1:1, same "
                 "wallet only. Steps: /migrate")
     # After the deadline.
     if claims and today >= claims:
@@ -383,8 +384,8 @@ class ProactiveScheduler:
             self._save_state()
             text = ("🟢 <b>The STBU → Base burn window is NOW OPEN!</b>\n\n"
                     "Burn-and-mint, 1:1, <b>same wallet only</b> — consolidate all your STBU into "
-                    "one wallet first. Legacy V1 isn't eligible. Deadline: "
-                    f"{deadline.strftime('%d %b %Y')}, 23:59 UTC.\n\n"
+                    "one wallet first. Legacy V1 isn't eligible. Burn "
+                    f"{_burn_before(deadline, '%d %b %Y')} — minting opens the same instant.\n\n"
                     "Steps: /migrate  ·  Reminders: /remindme\n"
                     "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
             await self._broadcast(context, chats, text)
@@ -430,8 +431,8 @@ class ProactiveScheduler:
         when = ("<b>TODAY</b>" if days == 0 else
                 "<b>tomorrow</b>" if days == 1 else f"in <b>{days} days</b>")
         text = (
-            f"⏳ The <b>STBU → Base</b> burn deadline is {when} — "
-            f"{deadline.strftime('%d %b %Y')}, 23:59 UTC.\n\n"
+            f"⏳ The <b>STBU → Base</b> burn deadline is {when} — burn "
+            f"{_burn_before(deadline, '%d %b %Y')} (minting opens the same instant).\n\n"
             "Burn-and-mint, 1:1, <b>same wallet only</b>. Consolidate all your STBU into one "
             "wallet first; legacy V1 isn't eligible.\n\n"
             "Steps: /migrate  ·  Personal reminders: /remindme\n"
@@ -544,7 +545,7 @@ class ProactiveScheduler:
                 blast = (
                     f"burn-{days_left}",
                     f"⏰ <b>STBU migration reminder</b> — the burn deadline is "
-                    f"<b>{when}</b> ({deadline.strftime('%d %B %Y')} 23:59 UTC).\n\n"
+                    f"<b>{when}</b>: burn {_burn_before(deadline, '%d %B %Y')}.\n\n"
                     "Burn-and-mint, 1:1, same wallet only. Consolidate all STBU into "
                     "one wallet first. Legacy V1 tokens are not eligible. Full steps: "
                     "/migrate\n\n" + IMPERSONATION_WARNING +

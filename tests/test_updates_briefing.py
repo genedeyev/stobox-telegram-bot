@@ -35,7 +35,8 @@ def test_migration_line_before_window_counts_down_to_open():
 
 def test_migration_line_open_counts_down_to_deadline():
     line = migration_status_line(_Canon(MIGRATION), date(2026, 8, 1))
-    assert "OPEN" in line and "burn deadline" in line and "14 Sep 2026" in line
+    # Phrased as the blog does: "before 15 Sep 2026, 00:00 UTC" (the cutover).
+    assert "OPEN" in line and "burn deadline" in line and "before 15 Sep 2026, 00:00 UTC" in line
 
 
 def test_migration_line_deadline_day_is_today():
