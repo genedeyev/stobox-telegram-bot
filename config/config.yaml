@@ -160,6 +160,7 @@ proactive:
     max_per_tick: 20               # cap per 6h check
   content:
     enabled: true                  # weekly content-ideas preview to admins
+    time: "08:30"                  # UTC daily tick; self-gates to once every 7 days
 
 # --- Moderation --------------------------------------------------------------
 # COEXIST MODE: ChatKeeperBot is the community moderator (filters, stop-words,
@@ -312,5 +313,7 @@ limits:
 # --- Observability -----------------------------------------------------------
 observability:
   daily_digest: true
+  digest_time: "08:00"             # UTC — admins get the daily community digest
+                                   # at this fixed time (run_daily, redeploy-proof)
   decision_retention_days: 90      # Postgres decision_log rows (hold verbatim
                                    # member questions) pruned nightly past this age

@@ -30,6 +30,17 @@ log = get_logger(__name__)
 DEFAULT_STATE_PATH = "data/proactive_state.json"
 
 
+def _parse_hhmm(value, default=(8, 0)) -> tuple[int, int]:
+    """Parse 'HH:MM' → (hour, minute); fall back on bad input."""
+    try:
+        hh, mm = (int(x) for x in str(value).split(":", 1))
+        if 0 <= hh < 24 and 0 <= mm < 60:
+            return hh, mm
+    except (ValueError, TypeError):
+        pass
+    return default
+
+
 async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2,
                                   html: bool = False, **kwargs) -> str:
     """Send a message honoring Telegram's flood-wait signal.
@@ -244,6 +255,8 @@ class ProactiveScheduler:
         # driven by wall-clock, not process uptime — otherwise every redeploy
         # reset the "first post in 4h" timer and Stoby went silent for hours.
         self._evangelist_last: str = str(state.get("evangelist_last", ""))
+        # Last weekly content-preview time (ISO) — same redeploy-proofing.
+        self._content_last: str = str(state.get("content_last", ""))
 
     def _save_state(self) -> None:
         from ...ops.statefile import save_json_atomic
@@ -253,6 +266,7 @@ class ProactiveScheduler:
                 "countdown_last": self._countdown_last,
                 "updates_last": self._updates_last,
                 "evangelist_last": self._evangelist_last,
+                "content_last": self._content_last,
             })
         except Exception as exc:  # noqa: BLE001
             log.warning("proactive.state_save_failed", error=str(exc))
@@ -277,7 +291,13 @@ class ProactiveScheduler:
         if cfg.get("proactive.growth.revive_inactive", True):
             jq.run_repeating(self._revival_job, interval=1800, first=300)  # check ~5m then every 30m
         if cfg.get("observability.daily_digest", True):
-            jq.run_repeating(self._digest_job, interval=24 * 3600, first=24 * 3600)
+            # run_daily at a FIXED UTC time — NOT first=24h. With first=interval
+            # every redeploy reset the timer, so the digest effectively never
+            # fired (Arevik: "haven't seen it"). Daily jobs must be wall-clock.
+            from datetime import time as _time
+
+            hh, mm = _parse_hhmm(cfg.get("observability.digest_time", "08:00"))
+            jq.run_daily(self._digest_job, time=_time(hh, mm, tzinfo=UTC))
         # Daily knowledge reconciliation (ARCHITECTURE.md §2.2) at 04:00 UTC.
         if cfg.get("knowledge.daily_resync", True):
             from datetime import time as _time
@@ -307,19 +327,23 @@ class ProactiveScheduler:
         if updates.get("enabled", True):
             from datetime import time as _time
 
-            for hhmm in updates.get("times", ["09:00", "17:00"]):
-                try:
-                    hh, mm = (int(x) for x in str(hhmm).split(":", 1))
-                    jq.run_daily(self._updates_briefing_job,
-                                 time=_time(hh, mm, tzinfo=UTC))
-                except (ValueError, TypeError):
+            for hhmm in updates.get("times", ["12:00", "18:00"]):
+                hh, mm = _parse_hhmm(hhmm, default=(-1, -1))
+                if hh < 0:
                     log.warning("proactive.updates_bad_time", value=hhmm)
+                    continue
+                jq.run_daily(self._updates_briefing_job, time=_time(hh, mm, tzinfo=UTC))
         # Opt-in win-back: check quiet subscribers a few times a day.
         if cfg.get("proactive.winback.enabled", True):
             jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
         # Weekly content-ideas preview to admins (from community question-gaps).
         if cfg.get("proactive.content.enabled", True):
-            jq.run_repeating(self._content_job, interval=7 * 24 * 3600, first=6 * 3600)
+            # Weekly admin content preview — also wall-clock (run_daily; the job
+            # self-gates to run once a week) so redeploys don't keep resetting it.
+            from datetime import time as _time
+
+            hh, mm = _parse_hhmm(cfg.get("proactive.content.time", "08:30"))
+            jq.run_daily(self._content_job, time=_time(hh, mm, tzinfo=UTC))
         log.info("proactive.scheduled")
 
     async def _heartbeat_job(self, context) -> None:
@@ -331,10 +355,19 @@ class ProactiveScheduler:
             pass
 
     async def _content_job(self, context) -> None:
-        """DM admins a weekly preview of blog outlines drafted from question-gaps."""
+        """DM admins a weekly preview of blog outlines drafted from question-gaps.
+        Runs on the daily tick but self-gates to once every 7 days (wall-clock,
+        persisted) so it survives redeploys."""
         adapter = self.app.bot_data.get("adapter")
         if not adapter or not getattr(adapter, "admins", None):
             return
+        now = datetime.now(UTC)
+        if self._content_last:
+            try:
+                if (now - datetime.fromisoformat(self._content_last)).total_seconds() < 7 * 86400 * 0.9:
+                    return
+            except ValueError:
+                pass
         try:
             results = await self.engine.flywheel.run(
                 self.engine.decisions.records(), dry_run=True, limit=5
@@ -350,6 +383,8 @@ class ProactiveScheduler:
             lines.append(f"• {tag} — {r['title'][:80]}")
         lines.append("\nRun /content file to open these as GitHub issues.")
         await adapter.dm_admins(context, "\n".join(lines))
+        self._content_last = now.isoformat()
+        self._save_state()
         log.info("content.previewed", count=len(results))
 
     @staticmethod

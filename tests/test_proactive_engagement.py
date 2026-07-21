@@ -101,3 +101,44 @@ async def test_evangelist_runs_when_gap_elapsed(tmp_path, monkeypatch):
     s.engine.prompts = SimpleNamespace(render=lambda *a, **k: "prompt")
     await s._evangelist_job(context=SimpleNamespace(bot=_Bot()))
     assert "retrieved" in reached and "completed" in reached  # passed the gap guard
+
+
+# --------------------------------------------------------------------------- #
+# Daily/weekly jobs must be wall-clock (run_daily), not first=interval — else
+# frequent redeploys reset the timer and they never fire (the "haven't seen the
+# digest" bug).
+# --------------------------------------------------------------------------- #
+
+def test_parse_hhmm():
+    from stobox_ai.channels.telegram.proactive import _parse_hhmm
+    assert _parse_hhmm("08:00") == (8, 0)
+    assert _parse_hhmm("17:30") == (17, 30)
+    assert _parse_hhmm("bad") == (8, 0)              # default
+    assert _parse_hhmm("25:99", default=(9, 0)) == (9, 0)
+    assert _parse_hhmm("", default=(-1, -1)) == (-1, -1)
+
+
+def test_digest_and_content_scheduled_daily_not_delayed(tmp_path):
+    """The digest/content jobs are registered via run_daily (fixed UTC time),
+    never run_repeating(first=interval) — the redeploy-reset bug."""
+    from types import SimpleNamespace
+
+    daily, repeating = [], []
+
+    class _JQ:
+        def run_daily(self, cb, time=None, **k):
+            daily.append(cb.__name__)
+
+        def run_repeating(self, cb, interval=None, first=None, **k):
+            repeating.append((cb.__name__, first))
+
+    eng = SimpleNamespace(config=SimpleNamespace(
+        get=lambda k, d=None: {"proactive.state_path": str(tmp_path / "p.json")}.get(k, d),
+        section=lambda k: SimpleNamespace(get=lambda kk, d=None: d)))
+    app = SimpleNamespace(bot_data={}, job_queue=_JQ())
+    ProactiveScheduler(eng, app).schedule()
+
+    assert "_digest_job" in daily
+    assert "_content_job" in daily
+    # Neither is a delayed run_repeating.
+    assert not any(name in ("_digest_job", "_content_job") for name, _ in repeating)
