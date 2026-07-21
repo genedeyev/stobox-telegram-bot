@@ -27,6 +27,9 @@ class LeadQualifier:
     def __init__(self, config: Config) -> None:
         leads = config.section("leads")
         self.enabled = bool(leads.get("enabled", True))
+        # Arevik: stop the MQL email spam. Off by default — leads still flow to
+        # the CRM webhook and a one-time admin DM, just no emails to the inbox.
+        self.email_mql = bool(leads.get("email_mql", False))
         self.mql_inbox = leads.get("mql_inbox") or "info@stobox.io"
         self.webhook = leads.get("crm_webhook") or None
         self.source = leads.get("crm_source", "telegram-bot")
@@ -95,8 +98,8 @@ class LeadQualifier:
             return False
         delivered = False
 
-        # 1) Email the MQL summary to the team inbox (until the CRM is connected).
-        if self.email.configured and self.mql_inbox:
+        # 1) Email the MQL summary to the team inbox — OFF by default (Arevik).
+        if self.email_mql and self.email.configured and self.mql_inbox:
             subject = (f"[MQL] {profile.display_name or profile.email} — "
                        f"score {profile.lead_score}")
             ok = await asyncio.to_thread(

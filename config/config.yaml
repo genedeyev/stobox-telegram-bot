@@ -296,8 +296,10 @@ guardrails:
 # --- Leads / sales -----------------------------------------------------------
 leads:
   enabled: true
-  # Until the CRM is connected, qualified MQLs are emailed here (needs SMTP_*).
-  mql_inbox: info@stobox.io
+  email_mql: false                 # Arevik: don't email MQLs (was spammy). Leads
+                                   # still go to the CRM webhook + a one-time admin DM.
+  mql_inbox: info@stobox.io        # only used if email_mql is turned on
+
   # Optional: set CRM_WEBHOOK_URL when the Twenty CRM connector is ready; the same
   # MQL is then also POSTed there. source=telegram-bot mirrors the website flow.
   crm_webhook: ${CRM_WEBHOOK_URL:-}

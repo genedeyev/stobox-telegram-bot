@@ -213,13 +213,20 @@ def _ama_button(qid: int, votes: int):
 
 
 async def ama_cmd(update, context) -> None:
-    """Submit a question for the next AMA (during an open collection window)."""
+    """Submit a question for the next AMA (during an open collection window).
+    Outside a window, a real question is ANSWERED (not dead-ended) — Arevik: a
+    genuine question shouldn't get 'no AMA now'; the unanswered-question loop
+    then captures anything Stoby can't answer for the team to /answer."""
     engine = _engine(context)
     ama = engine.ama
     text = " ".join(context.args).strip() if context.args else ""
     if not ama.open:
+        if len(text) >= 8:
+            await _adapter(context).process_query(update, context, text)
+            return
         await update.effective_message.reply_text(
-            "No AMA is collecting right now. I'll announce the next one — stay tuned! 📢"
+            "No AMA is collecting questions right now — but ask me anything and "
+            "I'll answer, or the team will. I'll announce the next AMA here. 📢"
         )
         return
     if len(text) < 8:

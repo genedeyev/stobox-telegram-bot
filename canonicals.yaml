@@ -62,14 +62,16 @@ products:
       tokenized security with an on-chain registry and Asset Passport,
       non-custodial.
     urls: ["https://stobox.io/compass", "https://app.stobox.io"]
+    # NOTE (2026-07-21): which chain is "primary" (Base vs Arbitrum) is being
+    # confirmed with the team — Arevik believes Arbitrum is the ready-to-go
+    # primary. Until confirmed, do NOT rank a primary; state both are supported.
     chains_phrasing: >
-      Security tokens issued via Compass are primarily on Base, and also
-      support Arbitrum, ERC-20 / STV3, and Canton — Canton and other EVM
-      networks upon client request. (Compass is not "on" a chain; it ISSUES
-      tokens on chains.)
+      Security tokens are issued via Compass on Base and Arbitrum, and also
+      support ERC-20 / STV3, with Canton and other EVM networks upon client
+      request. (Compass is not "on" a chain; it ISSUES tokens on chains.)
     never_say:
       - "Arbitrum today / Base from September 2026"   # superseded wrong framing
-      - "Compass is on Base"                          # it ISSUES tokens on Base
+      - "Compass is on Base"                          # it ISSUES tokens on chains
   lineup_rule: >
     The lineup above matches the live stobox.io. For details beyond it,
     describe products ONLY as the live site describes them at answer time
