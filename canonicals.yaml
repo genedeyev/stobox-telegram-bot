@@ -11,7 +11,7 @@
 #   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
-version: 2026-07-17.1
+version: 2026-07-17.2
 
 company:
   operating_entity: "Stobox Technologies Inc."
@@ -80,7 +80,15 @@ tokens:
   stbx:
     what: "Class-C tokenized equity in Stobox"
     issuer: "Stobox Tokenized Equities Ltd"
-    chain: "Arbitrum"
+    chain: "Arbitrum"                       # V3, the current protocol
+    contracts:
+      v2_bnb_chain: "0x65DaD60a28626309F7504d853AFF0099FeD1aAaF"
+      v3_arbitrum: "0x998a0BEaf37cA4Ba61B5cfAc59fdee0da2211A46"
+    protocol_upgrade: >
+      STBX V2 (BNB Chain) → V3 (Arbitrum, the upgraded protocol). To move STBX
+      to the upgraded protocol, email support@stobox.io with your wallet
+      address. This is SEPARATE from the STBU → Base migration — don't conflate
+      the two. Always tell holders to confirm addresses via official channels.
     never_say:
       - "Class-A"
       - "Stobox Holdings Ltd"
