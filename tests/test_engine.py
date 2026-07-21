@@ -177,21 +177,21 @@ async def test_mql_summary_emitted_once(config):
 
 
 @pytest.mark.asyncio
-async def test_admin_impersonator_is_banned(config):
-    """A NON-admin whose name copies an admin is banned + deleted (Arevik's
-    exception — the one enforcement Stoby keeps in coexist mode)."""
+async def test_coexist_never_deletes_or_bans(config):
+    """SAFETY: in coexist (production default) Stoby takes NO moderation action
+    on ANY message — including one whose name copies an admin. This guarantees
+    it can never delete a real admin's messages. ChatKeeper does moderation."""
     from stobox_ai.core.types import ModerationAction
 
     engine = await AgentEngine.create(config)
     m = IncomingMessage(
         author=Author(external_id="99", display_name="Arevik | Support @ Stobox"),
-        text="DM me for help with your wallet", chat_id="g", chat_type=ChatType.GROUP,
-        message_id="1", raw={"addressed": True},
+        text="here are the migration steps for case 1", chat_id="g",
+        chat_type=ChatType.GROUP, message_id="1", raw={"addressed": True},
     )
     r = await engine.handle(m)
-    assert r is not None
-    assert r.moderation == ModerationAction.BAN
-    assert r.meta.get("category") == "admin_impersonation"
+    # Either answered or ignored — but NEVER a moderation action.
+    assert r is None or r.moderation == ModerationAction.NONE
 
 
 @pytest.mark.asyncio

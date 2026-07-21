@@ -139,21 +139,21 @@ class Moderator:
     async def evaluate(self, msg: IncomingMessage) -> ModerationVerdict:
         if not self.enabled or self.level == "off" or msg.author.is_admin:
             return ModerationVerdict()
-        user_key = f"{msg.channel}:{msg.author.external_id}"
 
-        # 0) Admin impersonation — ALWAYS acted on (ban + delete), even in
-        #    coexist mode. Real admins already returned above (verified by ID),
-        #    so a display name copying an admin here is a scammer.
-        if self._is_admin_impersonator(msg.author):
-            return self._impersonation_ban(user_key, msg)
-
-        # COEXIST: ChatKeeper owns everything else — filters, stop-words,
-        # face-control, scams, spam. Stoby detects nothing further and never
-        # deletes/bans/mutes (Arevik: Stoby was removing relevant messages).
+        # COEXIST (production default): Stoby takes ZERO moderation action —
+        # ChatKeeper owns all of it. No deletes, no bans, no mutes, and NO
+        # admin-impersonation auto-ban (that risked deleting a real admin whose
+        # ID/username didn't match). Nothing destructive happens unless someone
+        # deliberately turns moderation.enforce on.
         if not self.enforce:
             return ModerationVerdict()
 
+        user_key = f"{msg.channel}:{msg.author.external_id}"
         text = msg.text or ""
+
+        # Admin impersonation — only when enforcing.
+        if self._is_admin_impersonator(msg.author):
+            return self._impersonation_ban(user_key, msg)
 
         # 1) Impersonation (identity-based).
         imp = self._impersonation(msg.author)

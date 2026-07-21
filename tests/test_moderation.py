@@ -230,24 +230,24 @@ async def test_coexist_does_nothing_on_scam(config, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_admin_impersonator_banned_even_in_coexist(config, tmp_path):
-    """The ONE enforcement Stoby keeps in coexist: a non-admin whose display
-    name copies an admin is banned + deleted immediately (Arevik)."""
+async def test_coexist_takes_no_action_even_on_impersonator_name(config, tmp_path):
+    """SAFETY: in coexist (enforce=false, the production default) Stoby takes
+    ZERO action — not even on an admin-impersonator name. This is what stops it
+    from ever deleting a real admin's messages. ChatKeeper handles impersonation."""
     mod = _mod(config, tmp_path, enforce=False)
     v = await mod.evaluate(_msg("hey friends, DM me for help",
                                 name="Arevik | Support @ Stobox", uid="666"))
-    assert v.category == "admin_impersonation"
-    assert v.action == ModerationAction.BAN and v.delete and v.alert_admin
-    # A prefixed/variant copy is also caught.
-    v2 = await mod.evaluate(_msg("hi", name="Ross Shemeliak (Stobox)", uid="667"))
-    assert v2.action == ModerationAction.BAN
+    assert v.action == ModerationAction.NONE and not v.flagged
 
 
 @pytest.mark.asyncio
-async def test_real_admin_with_admin_name_not_banned(config, tmp_path):
-    """The real admin (verified by ID) posting under their own name is never
-    flagged — they're exempt at the top of evaluate()."""
-    mod = _mod(config, tmp_path, enforce=False)
-    v = await mod.evaluate(_msg("hello team", name="Arevik | Support @ Stobox",
-                                uid="111", admin=True))
-    assert v.action == ModerationAction.NONE and not v.flagged
+async def test_admin_impersonation_bans_only_when_enforcing(config, tmp_path):
+    """When enforcement is explicitly ON, an impersonator IS banned; a real
+    admin (verified by ID) is always exempt."""
+    mod = _mod(config, tmp_path, enforce=True)
+    v = await mod.evaluate(_msg("DM me for help", name="Arevik | Support @ Stobox", uid="666"))
+    assert v.category == "admin_impersonation" and v.action == ModerationAction.BAN
+    # Real admin (by ID) is never flagged, even with that exact name.
+    v2 = await mod.evaluate(_msg("hello team", name="Arevik | Support @ Stobox",
+                                 uid="111", admin=True))
+    assert v2.action == ModerationAction.NONE and not v2.flagged
