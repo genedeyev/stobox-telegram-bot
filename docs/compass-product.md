@@ -18,10 +18,11 @@ check at https://www.stobox.io/compass.
 
 ## Chains
 
-Stobox Compass issues security tokens primarily on Base, with Arbitrum and Canton
-(and other EVM networks) also supported.
+Security tokens issued via Compass are primarily on Base, and also support Arbitrum,
+ERC-20 / STV3, and Canton — Canton and other EVM networks upon client request. (Compass
+itself is not "on" a chain; it *issues* tokens on chains.)
 
-## What it does
+## What you can do
 
 - Assess an asset's tokenization readiness.
 - Issue compliant security tokens with an on-chain registry.

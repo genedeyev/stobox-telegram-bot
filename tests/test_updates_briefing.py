@@ -12,8 +12,8 @@ from stobox_ai.market import MarketSnapshot
 
 MIGRATION = {
     "burn_window_opens": "2026-07-20",
-    "burn_deadline": "2026-09-15T23:59:00Z",
-    "claim_opens": "2026-09-16",
+    "burn_deadline": "2026-09-14T23:59:59Z",   # burn BEFORE 15 Sep 00:00 UTC
+    "claim_opens": "2026-09-15",
 }
 
 
@@ -35,16 +35,16 @@ def test_migration_line_before_window_counts_down_to_open():
 
 def test_migration_line_open_counts_down_to_deadline():
     line = migration_status_line(_Canon(MIGRATION), date(2026, 8, 1))
-    assert "OPEN" in line and "burn deadline" in line and "15 Sep 2026" in line
+    assert "OPEN" in line and "burn deadline" in line and "14 Sep 2026" in line
 
 
 def test_migration_line_deadline_day_is_today():
-    line = migration_status_line(_Canon(MIGRATION), date(2026, 9, 15))
+    line = migration_status_line(_Canon(MIGRATION), date(2026, 9, 14))
     assert "OPEN" in line and "today" in line
 
 
 def test_migration_line_claims_open():
-    line = migration_status_line(_Canon(MIGRATION), date(2026, 9, 16))
+    line = migration_status_line(_Canon(MIGRATION), date(2026, 9, 15))
     assert "claims are open" in line.lower()
 
 

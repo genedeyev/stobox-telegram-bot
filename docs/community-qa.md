@@ -47,7 +47,8 @@ inform.
 
 What we do share publicly: named case studies and announcements when a client chooses to go
 public, and aggregate milestones when we publish them officially. If a specific tokenization is
-announced, you'll see it on stobox.io and our official channels — that's the reliable record.
+announced, you'll see it on our official channels (the blog, Medium, and our social accounts) —
+that's the reliable record. (We don't post announcements on the stobox.io site itself.)
 
 ---
 

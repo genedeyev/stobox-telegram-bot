@@ -22,7 +22,7 @@ def _dt(s: str) -> datetime:
 # --------------------------------------------------------------------------- #
 def test_canonicals_load_and_verbatim_injection():
     canon = load_canonicals("canonicals.yaml", now=_dt("2026-07-14"))
-    assert canon.version == "2026-07-16.1"
+    assert canon.version == "2026-07-17.1"
     block = canon.injection_block(_dt("2026-07-14"))
     # Verbatim key facts present.
     assert "Stobox Tokenized Equities Ltd" in block
@@ -37,14 +37,14 @@ def test_canonicals_load_and_verbatim_injection():
 
 
 def test_canonicals_timebomb_expires_after_valid_until():
-    # After the STBU migration valid_until (2026-09-16), the fact expires.
-    canon = load_canonicals("canonicals.yaml", now=_dt("2026-10-01"))
+    # After the STBU migration valid_until (2026-12-31), the fact expires.
+    canon = load_canonicals("canonicals.yaml", now=_dt("2027-01-15"))
     assert canon.expired, "expected the STBU migration fact to be expired"
     paths = {e.path for e in canon.expired}
     assert any("stbu.migration" in p for p in paths)
-    block = canon.injection_block(_dt("2026-10-01"))
+    block = canon.injection_block(_dt("2027-01-15"))
     assert "RUNTIME OVERRIDE" in block
-    assert "check stobox.io for current status" in block  # fallback phrasing
+    assert "official Stobox channels" in block  # fallback phrasing
 
 
 # --------------------------------------------------------------------------- #
@@ -54,11 +54,12 @@ def test_migration_phase_transitions():
     canon = load_canonicals("canonicals.yaml", now=_dt("2026-07-14"))
     assert compute_migration_phase(canon, _dt("2026-06-15"))[0] == MigrationPhase.PRE
     assert compute_migration_phase(canon, _dt("2026-08-01"))[0] == MigrationPhase.BURN_OPEN
-    assert compute_migration_phase(canon, _dt("2026-09-15"))[0] == MigrationPhase.BURN_OPEN
-    assert compute_migration_phase(canon, _dt("2026-09-16"))[0] == MigrationPhase.CLAIMS_OPEN
+    # Deadline is 14 Sep 23:59:59 UTC (burn BEFORE 15 Sep 00:00); claims open 15 Sep.
+    assert compute_migration_phase(canon, _dt("2026-09-14"))[0] == MigrationPhase.BURN_OPEN
+    assert compute_migration_phase(canon, _dt("2026-09-15"))[0] == MigrationPhase.CLAIMS_OPEN
     # Message includes the absolute deadline while the window is open.
     _, text = compute_migration_phase(canon, _dt("2026-08-01"))
-    assert "15 September 2026" in text and "Base" in text
+    assert "14 September 2026" in text and "Base" in text
 
 
 # --------------------------------------------------------------------------- #

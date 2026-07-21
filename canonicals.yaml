@@ -11,11 +11,11 @@
 #   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
-version: 2026-07-16.1
+version: 2026-07-17.1
 
 company:
   operating_entity: "Stobox Technologies Inc."
-  incorporated: 2020
+  incorporated: 2018
   what_it_is: >
     Tokenization infrastructure company helping businesses issue, manage, and
     administer tokenized real-world assets and securities.
@@ -63,10 +63,13 @@ products:
       non-custodial.
     urls: ["https://stobox.io/compass", "https://app.stobox.io"]
     chains_phrasing: >
-      Stobox Compass issues security tokens primarily on Base, with Arbitrum
-      and Canton (and other EVM networks) also supported.
+      Security tokens issued via Compass are primarily on Base, and also
+      support Arbitrum, ERC-20 / STV3, and Canton — Canton and other EVM
+      networks upon client request. (Compass is not "on" a chain; it ISSUES
+      tokens on chains.)
     never_say:
       - "Arbitrum today / Base from September 2026"   # superseded wrong framing
+      - "Compass is on Base"                          # it ISSUES tokens on Base
   lineup_rule: >
     The lineup above matches the live stobox.io. For details beyond it,
     describe products ONLY as the live site describes them at answer time
@@ -90,8 +93,12 @@ tokens:
       destination_chain: "Base"
       burn_window_opens: "2026-07-20"       # the burn window OPENS on this date
       burns_count_from: "2026-07-20"        # burns start when the window opens
-      burn_deadline: "2026-09-15T23:59:00Z"
-      claim_opens: "2026-09-16"
+      # AUTHORITATIVE per the blog (confirmed by Arevik): burn BEFORE 15 Sep 2026
+      # 00:00 UTC — i.e. the last eligible instant is 14 Sep 2026 23:59:59 UTC.
+      # Nothing at/after 15 Sep 00:00 UTC is eligible. Exact time matters to
+      # avoid disputes with latecomers.
+      burn_deadline: "2026-09-14T23:59:59Z"
+      claim_opens: "2026-09-15"             # claiming opens 15 Sep 2026 (same day)
       supply_phrasing: '"fixed maximum supply of 250M" — final supply is whatever migrates, at most 250M'
       never_say:
         - '"will reach 250M" / "expected supply 250M"'
@@ -107,8 +114,11 @@ tokens:
         mexc_holders: "withdraw to self-custody wallet first, then burn→claim"
         stobox4_custodial: "email support@stobox.io from the Stobox 4 account email; manual mint to a self-custody Base address; no CEX addresses"
         consolidation: "consolidate all STBU to ONE address before migrating"
-      valid_until: "2026-09-16"
-      fallback: "Migration deadline facts may be outdated — check stobox.io for current status."
+      # Keep asserting these facts through the active claim period (well past
+      # claim-open) so Stoby stays accurate during the crunch, not just until
+      # the deadline. Revisit once the claim period formally closes.
+      valid_until: "2026-12-31"
+      fallback: "Migration deadline facts may be outdated — check the official Stobox channels for current status."
 
 valuation:
   provider: "Eqvista Real-Time Company Valuation®, NACVA-analyst reviewed"
