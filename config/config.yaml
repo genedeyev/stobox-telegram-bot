@@ -162,8 +162,14 @@ proactive:
     enabled: true                  # weekly content-ideas preview to admins
 
 # --- Moderation --------------------------------------------------------------
+# COEXIST MODE: ChatKeeperBot is the community moderator (filters, stop-words,
+# face-control, links, flood, attack mode). Stoby does NOT enforce — it detects
+# and only flags active scams/impersonation to admins. It never deletes anyone's
+# links or images, never bans, never mutes. Flip `enforce: true` only if Stoby
+# is ever meant to take over moderation from ChatKeeper.
 moderation:
-  enabled: true
+  enabled: true                    # keep detection on (for admin scam alerts)
+  enforce: false                   # ← Stoby takes NO delete/ban/mute actions
   level: standard                  # off | light | standard | strict
   # Actions are now driven by the strike-aware policy (moderation/policy.py) —
   # graded per category and escalating with each active strike. See that file.
@@ -180,8 +186,10 @@ moderation:
   # TELEGRAM_ADMIN_USER_IDS) can post anything. stobox.io + all its subdomains
   # are always allowed; the entries below add the official off-domain handles.
   link_policy:
-    enabled: true
-    # host = domain + all subdomains allowed; host/path = exact official handle.
+    enabled: false                 # COEXIST: ChatKeeper filters links with its
+                                   # curated blocklists. Stoby must NOT delete
+                                   # links or images from anyone (Arevik's rule).
+    # If ever enabled: host = domain + all subdomains; host/path = exact handle.
     allow:
       # -- official Stobox off-domain handles --
       - x.com/StoboxCompany
@@ -226,6 +234,10 @@ moderation:
 engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
   ama_path: data/ama.json          # AMA question queue
+  # In GROUPS Stoby only replies when directly addressed (name/@mention/reply).
+  # Set true to also let it answer clear, unaddressed Stobox questions — off by
+  # default so it doesn't read as spam (Arevik's rule: don't answer every message).
+  answer_unaddressed_questions: false
 
 # --- Community loops: state file locations (all under the /app/data volume) --
 qa:

@@ -91,6 +91,10 @@ class Moderator:
         self.strikes = strikes
         m = config.section("moderation")
         self.enabled = bool(m.get("enabled", True))
+        # Coexist mode: ChatKeeperBot is the moderator. When enforce is False,
+        # Stoby DETECTS but never deletes/bans/mutes — it only flags active
+        # scams/impersonation to admins. No message of anyone's is removed.
+        self.enforce = bool(m.get("enforce", True))
         self.level = m.get("level", "standard")
         self.threshold = _LEVEL_SENSITIVITY.get(self.level, 0.6)
         flood = m.get("flood", {}) or {}
@@ -211,6 +215,17 @@ class Moderator:
 
     def _sanction(self, user_key: str, category: str, score: float,
                   msg: IncomingMessage, reason: str, scores=None) -> ModerationVerdict:
+        # Coexist mode: don't act — ChatKeeper enforces. Only flag an ACTIVE
+        # scam/impersonation to admins (a heads-up, not a punishment); nobody's
+        # message is deleted, muted, or banned by Stoby.
+        if not self.enforce:
+            alert = category in ("scam", "phishing", "impersonation")
+            if not alert:
+                return ModerationVerdict(scores=scores or {})   # NONE, no action
+            return ModerationVerdict(
+                category=category, score=score, alert_admin=True,
+                reason=reason or pol.reason_text(category), scores=scores or {},
+            )
         count = self.strikes.add(
             user_key, category, display_name=msg.author.display_name or "",
             chat_id=msg.chat_id, excerpt=(msg.text or "")[:160],

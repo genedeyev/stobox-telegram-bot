@@ -72,55 +72,66 @@ async def test_engine_stays_silent_on_group_chitchat(config):
 
 
 @pytest.mark.asyncio
-async def test_engine_answers_untagged_group_question(config):
-    """A real question in a group is answered even without an @mention/reply."""
+async def test_engine_stays_silent_on_untagged_group_question(config):
+    """COEXIST: in a group Stoby only replies when ADDRESSED. An untagged
+    question is left alone (Arevik's rule: don't answer every message). The
+    same question, addressed, IS answered."""
     engine = await AgentEngine.create(config)
     msg = IncomingMessage(
         author=Author(external_id="8", display_name="Curious"),
         text="What is the STBU token used for?",
-        chat_id="grp-2",
-        chat_type=ChatType.GROUP,
-        message_id="10",
+        chat_id="grp-2", chat_type=ChatType.GROUP, message_id="10",
         raw={"addressed": False},  # NOT tagged, NOT a reply
     )
+    assert await engine.handle(msg) is None
+    msg.raw["addressed"] = True
     resp = await engine.handle(msg)
     assert resp is not None and resp.text
 
 
 @pytest.mark.asyncio
-async def test_engine_engages_untagged_fud_to_calm(config):
-    """Untagged FUD about Stobox is engaged (to calm/correct), not ignored."""
+async def test_engine_ignores_untagged_fud_by_default(config):
+    """Untagged FUD is no longer auto-engaged — Stoby doesn't wade in unasked.
+    (A coordinated FUD SPIKE still alerts admins via the separate FUD alarm.)"""
     engine = await AgentEngine.create(config)
     msg = IncomingMessage(
         author=Author(external_id="9", display_name="Skeptic"),
         text="honestly Stobox is a total scam, is this a rugpull?",
-        chat_id="grp-3",
-        chat_type=ChatType.GROUP,
-        message_id="11",
+        chat_id="grp-3", chat_type=ChatType.GROUP, message_id="11",
         raw={"addressed": False},
     )
-    resp = await engine.handle(msg)
-    assert resp is not None and resp.text
+    assert await engine.handle(msg) is None      # no public reply
 
 
 @pytest.mark.asyncio
-async def test_should_engage_calms_relevant_fud_without_question(config):
-    """A non-question FUD statement about Stobox engages via the sentiment clause."""
+async def test_should_engage_group_is_addressed_only(config):
+    """Groups: engage only when addressed. Unaddressed — even relevant FUD or a
+    clear question — stays silent unless answer_unaddressed_questions is on."""
     from stobox_ai.agents.router import Routing
 
     engine = await AgentEngine.create(config)
-    msg = IncomingMessage(
-        author=Author(external_id="1", display_name="X"),
-        text="stobox rug incoming",
-        chat_id="g", chat_type=ChatType.GROUP, message_id="1",
-        raw={"addressed": False},
-    )
-    # Not a question, no docs needed, but FUD about a Stobox topic → engage to calm.
-    r = Routing(is_question=False, needs_docs=False, topics=["stobox"], sentiment="fud")
-    assert engine._should_engage(msg, r) is True
-    # Same heat but NOT about Stobox (no topics) → stay out of it.
-    r2 = Routing(is_question=False, needs_docs=False, topics=[], sentiment="angry")
-    assert engine._should_engage(msg, r2) is False
+
+    def _m(addressed, text="stobox rug incoming"):
+        return IncomingMessage(
+            author=Author(external_id="1", display_name="X"), text=text,
+            chat_id="g", chat_type=ChatType.GROUP, message_id="1",
+            raw={"addressed": addressed})
+
+    fud = Routing(is_question=False, needs_docs=False, topics=["stobox"], sentiment="fud")
+    question = Routing(is_question=True, needs_docs=True, topics=["stbu"], sentiment="neutral")
+    q_msg = _m(False, "how does the STBU migration work?")
+    # Addressed → always engage.
+    assert engine._should_engage(_m(True), fud) is True
+    # Unaddressed FUD → silent (removed the auto-calm reflex).
+    assert engine._should_engage(_m(False), fud) is False
+    # Unaddressed question → silent by default…
+    assert engine._should_engage(q_msg, question) is False
+    # …unless the team opts in.
+    engine.config.raw.setdefault("engagement", {})["answer_unaddressed_questions"] = True
+    try:
+        assert engine._should_engage(q_msg, question) is True
+    finally:
+        engine.config.raw["engagement"]["answer_unaddressed_questions"] = False
 
 
 @pytest.mark.asyncio
@@ -191,16 +202,16 @@ def test_is_greeting():
 
 
 @pytest.mark.asyncio
-async def test_untagged_greeting_engages(config):
-    """A bare greeting in a group now gets a warm reply."""
+async def test_untagged_greeting_stays_silent(config):
+    """COEXIST: a bare greeting in a group is NOT replied to (would be spam).
+    Stoby greets people via the new-member welcome, not by answering every 'hi'."""
     engine = await AgentEngine.create(config)
     msg = IncomingMessage(
         author=Author(external_id="1", display_name="Gene"),
         text="hi", chat_id="g", chat_type=ChatType.GROUP, message_id="1",
         raw={"addressed": False},
     )
-    r = await engine.handle(msg)
-    assert r is not None and r.text.strip()
+    assert await engine.handle(msg) is None
 
 
 def test_looks_like_question_backstop():
@@ -216,11 +227,11 @@ def test_looks_like_question_backstop():
 
 
 @pytest.mark.asyncio
-async def test_untagged_question_without_qmark_engages(config):
-    """A clear question the router might miss still engages (deterministic floor)."""
+async def test_addressed_group_message_always_engages(config):
+    """When Stoby IS addressed, it engages regardless of routing signals."""
     engine = await AgentEngine.create(config)
 
-    class R:  # routing that the LLM misclassified as not-a-question
+    class R:
         is_question = False
         needs_docs = False
         topics = []
@@ -228,8 +239,8 @@ async def test_untagged_question_without_qmark_engages(config):
 
     msg = IncomingMessage(
         author=Author(external_id="1", display_name="Arevik"),
-        text="how do we keep the official sources in sync",
+        text="Stoby, how do we keep the official sources in sync",
         chat_id="g", chat_type=ChatType.GROUP, message_id="1",
-        raw={"addressed": False},
+        raw={"addressed": True},
     )
     assert engine._should_engage(msg, R()) is True

@@ -849,30 +849,24 @@ class AgentEngine:
 
     # ------------------------------------------------------------------ #
     def _should_engage(self, msg: IncomingMessage, routing: Routing) -> bool:
-        from ..agents.router import HOT_SENTIMENTS
-
+        """Groups: be a guest, not a chatterbox. Only speak when spoken to —
+        replying to every message reads as spam (Arevik's #1 complaint). DMs are
+        1:1, so always engage there."""
         if msg.is_private:
             return True
-        # In a group, always engage when directly addressed (@mention or reply).
+        # In a group, engage when directly addressed (@mention, reply to Stoby,
+        # or "Stoby …"). Never react to admins' messages unless they address you.
         if msg.raw.get("addressed"):
             return True
-        # Deterministic backstop so a clear question is NEVER missed to classifier
-        # variance: a trailing '?' (or an opening question word) always engages.
-        if _looks_like_question(msg.text):
-            return True
-        # Greet back like a person — a bare "hi"/"hey"/"gm" gets a warm reply.
-        if _is_greeting(msg.text):
-            return True
-        # Untagged: jump in on any question, or a clearly Stobox-relevant message
-        # (the router tags topics / needs_docs for those).
-        if routing.is_question or routing.needs_docs or routing.topics:
-            return True
-        # Step in to calm Stobox-directed heat or FUD even when it isn't phrased as
-        # a question — but only when it's about the project, so we don't wade into
-        # unrelated venting or interpersonal spats.
-        if routing.sentiment in HOT_SENTIMENTS and routing.topics:
-            return True
-        # Otherwise stay quiet — pure chatter ("hey", "gm", "lol") isn't ours.
+        # Optional (default OFF): also answer a clear, unaddressed STOBOX question.
+        # Off by default so Stoby stays quiet in the room; flip on if the team
+        # wants it to proactively field questions nobody directed at it.
+        if self.config.get("engagement.answer_unaddressed_questions", False):
+            if routing.needs_docs and _looks_like_question(msg.text) and routing.topics:
+                return True
+        # Everything else — greetings, chatter, opinions, unaddressed messages —
+        # Stoby stays silent. Presence comes from the scheduled proactive posts,
+        # not from replying to each line.
         return False
 
     def _chat_recall(self, msg: IncomingMessage) -> str:

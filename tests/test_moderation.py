@@ -71,8 +71,14 @@ def test_policy_ladders():
 # --------------------------------------------------------------------------- #
 # Detector (deterministic paths, offline)
 # --------------------------------------------------------------------------- #
-def _mod(config, tmp_path):
-    return Moderator(config, EchoLLM(model="echo"), StrikeBook(tmp_path / "s.json"))
+def _mod(config, tmp_path, *, enforce=True):
+    """Default enforce=True so the enforcement LOGIC stays tested (it runs when
+    moderation.enforce is on). Production defaults to coexist (enforce=False,
+    ChatKeeper moderates) — covered by the coexist tests below."""
+    m = Moderator(config, EchoLLM(model="echo"), StrikeBook(tmp_path / "s.json"))
+    m.enforce = enforce
+    m.link_policy_enabled = enforce   # link removal is part of enforcement
+    return m
 
 
 def _msg(text, name="Alice", uid="42", admin=False):
@@ -198,3 +204,26 @@ async def test_lookalike_of_trusted_domain_still_deleted(config, tmp_path):
     for text in ["scam https://scam-etherscan.io/x", "fake etherscan.io.evil.com/x"]:
         v = await mod.evaluate(_msg(text))
         assert v.category == "external_link" and v.delete, f"lookalike allowed: {text}"
+
+
+# --------------------------------------------------------------------------- #
+# COEXIST mode (production default): ChatKeeper enforces; Stoby only detects.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_coexist_does_not_delete_links_or_ban(config, tmp_path):
+    mod = _mod(config, tmp_path, enforce=False)
+    # Non-official link — NOT deleted (ChatKeeper's job; Arevik's rule).
+    v = await mod.evaluate(_msg("check https://example.com/x"))
+    assert v.action == ModerationAction.NONE and not v.delete
+    # A slur — Stoby does not mute/ban in coexist mode.
+    v2 = await mod.evaluate(_msg("you f4ggot", uid="9"))
+    assert v2.action == ModerationAction.NONE and not v2.delete
+
+
+@pytest.mark.asyncio
+async def test_coexist_still_flags_scam_to_admins(config, tmp_path):
+    mod = _mod(config, tmp_path, enforce=False)
+    v = await mod.evaluate(_msg("DM me to recover your funds, I'm from support"))
+    assert v.action == ModerationAction.NONE      # no ban/delete by Stoby
+    assert v.alert_admin                           # but admins are flagged
+    assert v.category == "scam"
