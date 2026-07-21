@@ -403,14 +403,16 @@ class TelegramChannel(Channel):
         # '<a href="…">Stobox Support</a>' must render as text, never as a link.
         names = ", ".join(html_escape(m.first_name or "there") for m in humans[:5])
         variants = [
-            f"👋 Welcome, {names}! I'm Stoby, the resident AI of the Stobox community — "
-            f"part monster, part mind, fully awake. Ask me anything about tokenization, "
-            f"Compass, or STBU right here, or DM me for a 1:1. Verify me with /sources.",
+            f"👋 Welcome, {names}! I'm Stoby, the Stobox community's AI — ask me anything "
+            f"about tokenization, Compass, or STBU right here, or DM me for a 1:1. "
+            f"Please skim /rules, and heads up: Stobox staff never DM you first. "
+            f"Verify me with /sources.",
             f"👋 {names}, good to have you! I'm Stoby. Questions about Stobox, the STBU "
-            f"migration, or RWA tokenization? Just ask — I answer from the official docs, "
-            f"with sources. (And remember: Stobox staff never DM you first.)",
+            f"migration, or RWA tokenization? Just ask — I answer from the official docs. "
+            f"Give /rules a quick read, and remember: Stobox staff never DM you first.",
             f"👋 Welcome aboard, {names}! I'm Stoby, here 24/7 for anything Stobox — ask a "
-            f"question, or /help to see what I can do. Verify me with /sources.",
+            f"question, or /help to see what I can do. Check /rules to get started, and "
+            f"stay safe: staff never DM you first. Verify me with /sources.",
         ]
         welcome = variants[len(names) % len(variants)]
         # Lead new members straight to the most relevant live update (the STBU

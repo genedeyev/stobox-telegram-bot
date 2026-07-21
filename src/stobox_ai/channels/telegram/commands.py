@@ -1436,7 +1436,8 @@ def registry() -> dict:
         "blog": blog_cmd,
         "contact": contact_cmd,
         "support": support_cmd,
-        "report": report_cmd,
+        # COEXIST: /report is owned by ChatKeeperBot (it can ban/mute directly;
+        # Stoby no longer enforces). Not registered here to avoid a double reply.
         "feedback": feedback_cmd,
         "language": language_cmd,
         "status": status_cmd,

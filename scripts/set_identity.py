@@ -16,12 +16,13 @@ import sys
 
 NAME = "Stoby | AI Assistant"
 DESCRIPTION = (
-    "Stoby — the resident AI of the Stobox community. "
-    "Part monster, part mind, fully awake. Ask me anything about tokenization."
+    "Stoby — the resident AI of the Stobox community. Ask me about the STBU → Base "
+    "migration, tokenization, Compass, or anything Stobox — answered from the official "
+    "docs, with sources. Heads up: Stobox staff never DM you first."
 )
 SHORT_DESCRIPTION = (   # ≤120 chars (shown on the profile / empty-chat screen)
-    "Resident AI of the Stobox community. Part monster, part mind, fully awake. "
-    "Ask me anything about tokenization."
+    "Resident AI of the Stobox community. Ask me about the STBU migration, "
+    "tokenization, or anything Stobox."
 )
 COMMANDS = [
     ("guide", "What Stoby can do (quick tour)"),
