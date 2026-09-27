@@ -49,8 +49,9 @@ questions:
     needs_model: true
     category: canonical
     question: "If Stobox moves to Base, will the Arbitrum grants end?"
+    # Stage 0: the July "primary network" answer was withdrawn; grants go to the team.
     expect_contains: ["Arbitrum"]
-    expect_any: ["No", "not leaving", "remains a supported", "expansion"]
+    expect_any: ["team", "info@stobox.io", "stobox.io/compass"]
     forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
 
   - id: compass-chain
