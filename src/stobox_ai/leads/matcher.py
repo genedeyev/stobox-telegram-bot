@@ -14,7 +14,7 @@ append a retrieved link — but the deterministic core here stays fabrication-fr
 from __future__ import annotations
 
 # Official destinations — pick what fits, keep it to 1–2 links.
-READINESS_URL = "https://www.stobox.io/compass"       # assess tokenization readiness
+READINESS_URL = "https://www.stobox.io/readiness"       # assess tokenization readiness
 APP_URL = "https://app.stobox.io"                      # sign up / start in the product
 
 # General, promise-free education per asset type. Keyed by AXIS asset values.

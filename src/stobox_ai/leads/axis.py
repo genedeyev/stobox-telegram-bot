@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-READINESS_URL = "https://www.stobox.io/compass"      # Compass layer / Readiness Score
+READINESS_URL = "https://www.stobox.io/readiness"      # Compass layer / Readiness Score
 APP_URL = "https://app.stobox.io"                     # sign up / start in the product
 RAISABLE_URL = "https://www.stobox.io/raisable"       # Raisable layer / raise capital
 

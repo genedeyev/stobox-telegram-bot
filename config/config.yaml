@@ -123,18 +123,20 @@ proactive:
   # NOT the Stoby AI Chat. Set to the community group's numeric id(s) to lock it
   # down; empty = every group Stoby is active in (channels are already excluded).
   group_ids: []
+  # Stage 0 (27.09.2026): Stoby speaks when spoken to, and on real events only.
+  # Every "presence" loop below is off; see wiki Stoby, stage 0.
   evangelist:
-    enabled: true
+    enabled: false
     interval_hours: 3              # publish useful content every N hours (presence)
     warmup_seconds: 900           # first post ~15 min after boot (NOT a full interval
                                    # later — redeploys used to mute Stoby for hours);
                                    # a persisted wall-clock gap guard prevents spam
     quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 UTC
   migration_countdown:
-    enabled: true                  # public STBU→Base countdown to groups; the job
+    enabled: false                 # public STBU→Base countdown to groups; the job
                                    # ramps weekly → daily as 15 Sep approaches
   updates:
-    enabled: true                  # "What's new at Stobox" — Stoby INITIATES with a
+    enabled: false                 # "What's new at Stobox" — Stoby INITIATES with a
                                    # curated briefing to groups on a fixed schedule
     times: ["12:00", "18:00"]      # UTC; twice daily. Deliberately AFTER the 09:00
                                    # migration countdown so they never collide — and
@@ -144,7 +146,7 @@ proactive:
     include_market: true           # live STBU price/mcap/24h (CoinGecko, framed)
     include_blog: true             # latest blog/news post + link
   growth:
-    revive_inactive: true
+    revive_inactive: false
     inactivity_minutes: 90         # after N min of silence, surface a blog post /
                                    # fact / conversation starter (skips 00:00–07:00).
                                    # Dial down for more presence, up for less.
@@ -156,9 +158,9 @@ proactive:
     chat_ids: []                   # extra chats to announce in (e.g. the community
                                    # group id); groups the bot has seen are included
   reminders:
-    enabled: true                  # opt-in /remindme deadline blasts (hourly check)
+    enabled: false                 # opt-in /remindme deadline blasts (hourly check)
   winback:
-    enabled: true                  # gentle check-in for quiet, opted-in subscribers
+    enabled: false                 # gentle check-in for quiet, opted-in subscribers
     inactive_days: 14              # quiet for N days → candidate
     cooldown_days: 45              # never nudge the same person more often than this
     max_per_tick: 20               # cap per 6h check
@@ -287,6 +289,7 @@ chain:
     bnb_chain: https://bsc-dataseed.binance.org
     polygon: https://polygon-rpc.com
     arbitrum: https://arb1.arbitrum.io/rpc
+    base: https://mainnet.base.org
 
 # --- Compliance guardrails (three-block prompt + canonicals) -----------------
 guardrails:

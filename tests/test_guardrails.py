@@ -22,7 +22,7 @@ def _dt(s: str) -> datetime:
 # --------------------------------------------------------------------------- #
 def test_canonicals_load_and_verbatim_injection():
     canon = load_canonicals("canonicals.yaml", now=_dt("2026-07-14"))
-    assert canon.version == "2026-07-17.2"
+    assert canon.version == "2026-09-27.1"
     block = canon.injection_block(_dt("2026-07-14"))
     # Verbatim key facts present.
     assert "Stobox Tokenized Equities Ltd" in block
@@ -31,7 +31,10 @@ def test_canonicals_load_and_verbatim_injection():
     # Three-layer product lineup is canonical knowledge.
     assert "Stobox Intelligence" in block
     assert "Raisable" in block
-    assert "AXIS" in block
+    assert "Compass" in block
+    # Post-migration facts (stage 0, 27.09.2026).
+    assert "31 December 2026" in block
+    assert "discontinued_contracts" in block
     # Not yet expired → no override section.
     assert "RUNTIME OVERRIDE" not in block
 
@@ -44,7 +47,7 @@ def test_canonicals_timebomb_expires_after_valid_until():
     assert any("stbu.migration" in p for p in paths)
     block = canon.injection_block(_dt("2027-01-15"))
     assert "RUNTIME OVERRIDE" in block
-    assert "official Stobox channels" in block  # fallback phrasing
+    assert "https://www.stobox.io/stbu" in block  # fallback phrasing
 
 
 # --------------------------------------------------------------------------- #

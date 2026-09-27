@@ -405,9 +405,11 @@ class AgentEngine:
             return ("That doesn't look like a wallet address. Paste a public address that "
                     "starts with <code>0x</code> (42 characters) and I'll check it.")
         canon = self.assembler.canonicals if self.assembler else None
-        contracts = canon.get("tokens.stbu.migration.eligible_contracts", {}) if canon else {}
-        if not contracts:
-            return "I can't check balances right now — please see stobox.io for migration help."
+        legacy = canon.get("tokens.stbu.legacy.discontinued_contracts", {}) if canon else {}
+        base = canon.get("tokens.stbu.contract") if canon else None
+        if not base:
+            return "I can't check balances right now. The STBU record is https://www.stobox.io/stbu"
+        contracts = {"base": base, **legacy}
         rpc = self.config.section("chain.rpc").raw or {}
         checker = WalletChecker(contracts, rpc=rpc)
         try:
@@ -416,26 +418,25 @@ class AgentEngine:
             log.error("chain.check_failed", error=str(exc))
             return "I couldn't reach the chains just now — please try again shortly."
 
-        held = [h for h in holdings if h.ok and h.balance > 0]
+        live = [h for h in holdings if h.ok and h.chain == "base"]
+        old = [h for h in holdings if h.ok and h.chain != "base" and h.balance > 0]
         errored = [h for h in holdings if not h.ok]
         short = f"{address[:6]}…{address[-4:]}"
         lines = [f"🔎 <b>STBU check for {short}</b>"]
-        if held:
-            for h in sorted(held, key=lambda x: -x.balance):
-                lines.append(f"• {h.label}: <b>{h.balance:,.2f} STBU</b>")
-            phase = compute_migration_phase(canon)[1] if canon else ""
+        if live:
+            lines.append(f"• Base (live STBU): <b>{live[0].balance:,.2f} STBU</b>")
+        if old:
             lines.append("")
-            lines.append("<b>Your migration path:</b>")
-            lines.append("1. Consolidate all STBU into ONE wallet you control (self-custody).")
-            lines.append("2. Burn-and-mint 1:1 to <b>Base</b>, same wallet — steps: /migrate")
-            if phase:
-                lines.append(f"3. {phase}")
-            lines.append("\nLegacy V1 tokens are not eligible.")
-            lines.append("\n" + IMPERSONATION_WARNING)
-        else:
-            lines.append("No STBU found on the eligible chains for this address.")
-            lines.append("If you hold STBU on an exchange (e.g. MEXC), withdraw it to a "
-                         "self-custody wallet first, then migrate. Full steps: /migrate")
+            lines.append("<b>Legacy STBU, discontinued on 15 September 2026:</b>")
+            for h in sorted(old, key=lambda x: -x.balance):
+                lines.append(f"• {h.label}: {h.balance:,.2f}")
+            lines.append("These are not STBU and cannot be migrated, even where some "
+                         "interfaces still show a price for them.")
+        phase = compute_migration_phase(canon)[1]
+        lines.append("")
+        lines.append(phase)
+        lines.append("\nHelp with a specific burn or claim: support@stobox.io")
+        lines.append("\n" + IMPERSONATION_WARNING)
         if errored:
             lines.append(f"\n(Couldn't reach: {', '.join(h.label for h in errored)} — try again.)")
         return "\n".join(lines)

@@ -33,13 +33,10 @@ See https://www.stobox.io/raisable
 
 ## Stobox Compass — Tokenize
 
-Stobox Compass issues a live, compliant tokenized security with an on-chain
-registry and Asset Passport, non-custodial — primarily on Base, with Arbitrum
-and Canton (and other EVM networks) also supported.
-See https://www.stobox.io/compass
+Stobox Compass issues the token, permissioned, with the compliance enforced by
+the asset itself. For networks and details, see https://www.stobox.io/compass
 
 ## Where to start
 
-The best entry point for a new company is the **free Readiness Score**:
-25 questions, no credit card, same methodology as Stobox Compass.
-See https://www.stobox.io/readiness
+A company can check its own number first with the readiness score:
+https://www.stobox.io/readiness

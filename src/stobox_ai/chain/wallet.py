@@ -1,7 +1,7 @@
 """STBU wallet migration checker — read-only balance lookup.
 
-Given a PUBLIC wallet address, calls ``balanceOf`` on the eligible STBU token
-contracts across each supported chain via public JSON-RPC (no keys, no writes,
+Given a PUBLIC wallet address, calls ``balanceOf`` on the live STBU contract on
+Base and on the discontinued legacy contracts via public JSON-RPC (no keys, no writes,
 never touches a private key). Returns where the user holds STBU so Stoby can
 give the exact migration path. The RPC client is injectable so the logic is
 unit-tested offline.
@@ -32,6 +32,7 @@ DEFAULT_RPC = {
     "bnb_chain": "https://bsc-dataseed.binance.org",
     "polygon": "https://polygon-rpc.com",
     "arbitrum": "https://arb1.arbitrum.io/rpc",
+    "base": "https://mainnet.base.org",
 }
 
 

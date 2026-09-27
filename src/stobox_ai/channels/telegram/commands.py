@@ -183,24 +183,15 @@ async def start_cmd(update, context) -> None:
 
 
 async def remindme_cmd(update, context) -> None:
-    """Opt in to STBU migration deadline reminders (DM only)."""
+    """Migration reminders ended with the burn window; answer with the status."""
     engine = _engine(context)
-    chat = update.effective_chat
-    if chat.type != "private":
-        await update.effective_message.reply_text(
-            "Reminders are personal — DM me /remindme and I'll keep you posted. 👍"
-        )
-        return
     from ...guardrails.freshness import compute_migration_phase
 
     canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
     phase_text = compute_migration_phase(canon)[1] if canon else "See stobox.io for status."
-    new = engine.reminders.subscribe(str(chat.id))
     await update.effective_message.reply_text(
-        ("✅ You're on the list — I'll remind you before the STBU migration deadline "
-         "(and when claims open), right here.\n\n" if new else
-         "You're already subscribed — I've got you. 👍\n\n")
-        + f"Current status: {phase_text}\n\nStop anytime with /stopreminders.",
+        "Migration reminders have ended: the burn window closed before 15 September 2026.\n\n"
+        + f"Current status: {phase_text}",
         disable_web_page_preview=True,
     )
 
@@ -383,12 +374,12 @@ async def resources_cmd(update, context) -> None:
 
 
 async def check_cmd(update, context) -> None:
-    """Check STBU balances for a public wallet address across eligible chains."""
+    """Read STBU on Base plus legacy (discontinued) balances for a public address."""
     addr = context.args[0].strip() if context.args else ""
     if not addr:
         await update.effective_message.reply_text(
-            "Send your <b>public</b> wallet address and I'll check your STBU across all "
-            "eligible chains:\n<code>/check 0xYourAddress</code>\n\n"
+            "Send your <b>public</b> wallet address and I'll read its STBU on Base and "
+            "any legacy (discontinued) STBU:\n<code>/check 0xYourAddress</code>\n\n"
             "🔒 I only read public balances — never share your seed phrase or private key.",
             parse_mode="HTML",
         )
@@ -416,9 +407,10 @@ async def price_cmd(update, context) -> None:
         )
         return
     canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
-    contracts = (
-        canon.get("tokens.stbu.migration.eligible_contracts", {}) if canon else {}
-    )
+    # Only the live Base contract is "official". The legacy contracts were
+    # discontinued on 15 Sep 2026 and must never be listed as official again.
+    base = canon.get("tokens.stbu.contract") if canon else None
+    contracts = {"base": base} if base else {}
     await update.effective_message.reply_text(
         snap.format_report(contracts=contracts),
         parse_mode="HTML", disable_web_page_preview=True,
@@ -671,19 +663,22 @@ async def migrate_cmd(update, context) -> None:
             "STBU migration details: please check https://stobox.io for the current guide."
         )
         return
-    m = canon.get("tokens.stbu.migration", {})
     from ...guardrails.freshness import compute_migration_phase
     from ...guardrails.rails import IMPERSONATION_WARNING
 
+    stbu = canon.get("tokens.stbu", {}) or {}
     _, phase_text = compute_migration_phase(canon)
+    pages = stbu.get("pages", {}) or {}
     lines = [
         "<b>STBU → Base migration</b>",
-        f"Pattern: {m.get('pattern', 'burn-and-mint, 1:1, same-wallet only')}.",
-        f"Destination chain: {m.get('destination_chain', 'Base')}.",
-        f"Status: {phase_text}",
-        f"Legacy V1 tokens: {m.get('legacy_v1', 'not eligible')}.",
-        "Consolidate all STBU to ONE wallet before migrating.",
-        "Confirm the exact burn address via official Stobox channels only.",
+        phase_text,
+        "",
+        f"Live STBU on Base: <code>{stbu.get('contract', '')}</code>",
+        "Legacy STBU on Ethereum, BNB Chain, Polygon and Arbitrum was discontinued on "
+        "15 September 2026: it is not STBU and cannot be migrated, even where some "
+        "interfaces still show a price for it.",
+        f"Record with figures from the chain: {pages.get('record', 'https://www.stobox.io/stbu')}",
+        "Help with a specific burn or claim: support@stobox.io",
         "",
         IMPERSONATION_WARNING,
     ]
@@ -699,10 +694,10 @@ async def compass_cmd(update, context) -> None:
             f"<b>{c.get('name', 'Stobox Compass')}</b>\n"
             f"{c.get('what', 'Tokenization readiness platform')}.\n"
             f"{(c.get('chains_phrasing') or '').strip()}\n"
-            "Run the readiness check: https://stobox.io/compass"
+            "Compass: https://www.stobox.io/compass · readiness score: https://www.stobox.io/readiness"
         )
     else:
-        text = "Stobox Compass — tokenization readiness platform: https://stobox.io/compass"
+        text = "Stobox Compass issues the token, permissioned: https://www.stobox.io/compass"
     await update.effective_message.reply_text(text, parse_mode="HTML",
                                               disable_web_page_preview=True)
 

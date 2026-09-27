@@ -1,8 +1,8 @@
 ---
 title: Stobox Compass
-version: "2026.07"
+version: "2026-09-27"
 author: Stobox
-date: 2026-07-01
+date: 2026-09-27
 category: product
 product: Compass
 language: en
@@ -12,22 +12,21 @@ source_url: https://www.stobox.io/compass
 
 # Stobox Compass
 
-Stobox Compass is a tokenization readiness platform for issuing and managing
-compliant tokenized real-world assets and securities. Run the free readiness
-check at https://www.stobox.io/compass.
+Source: https://www.stobox.io/llms-full.txt, read on 27 September 2026.
 
-## Chains
+Stobox Compass issues the token, permissioned, with the compliance enforced by the
+asset itself. It is the third of three products: Intelligence turns a company into
+one canonical, verifiable record and scores it; Raisable turns that record into a
+regulated offering, sold through licensed broker-dealer partners; Compass issues
+the token. Page: https://www.stobox.io/compass.
 
-Security tokens issued via Compass are primarily on Base, and also support Arbitrum,
-ERC-20 / STV3, and Canton — Canton and other EVM networks upon client request. (Compass
-itself is not "on" a chain; it *issues* tokens on chains.)
+Prices are published and flat, never a percentage of a raise:
+https://www.stobox.io/pricing. A company can check its own number first with the
+readiness score: https://www.stobox.io/readiness.
 
-## What you can do
-
-- Assess an asset's tokenization readiness.
-- Issue compliant security tokens with an on-chain registry.
-- Manage the asset lifecycle (onboarding, transfers subject to compliance rules).
+For which networks Compass issues on, point to the Compass page rather than naming
+chains from memory.
 
 Compass does not provide investment advice and does not guarantee liquidity for
-any tokenized asset. For pricing, timelines, and eligibility, the Stobox team
-confirms specifics on a call.
+any tokenized asset. There is no promise of liquidity; listing decisions rest with
+the venue.

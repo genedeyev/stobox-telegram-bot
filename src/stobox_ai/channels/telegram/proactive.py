@@ -96,8 +96,6 @@ def _strip_tags(text: str) -> str:
 _FORMATS = [
     # Hero topics — weighted heavier so proactive content leans into STBU,
     # migration, news/achievements, and the blog.
-    "STBU migration reminder (deadline + steps, from FRESHNESS/CANONICALS)",
-    "STBU migration step-by-step (burn-and-mint, same wallet, consolidate first)",
     "STBU fact or utility spotlight",
     "Stobox achievement spotlight (clients / assets / jurisdictions, as published)",
     "Latest blog highlight (point to the newest post + the weekly RWA Digest)",
@@ -130,17 +128,15 @@ _QUIET_BLOG_OPENERS = [
 # No links, no pressure — just spark discussion when a room goes still.
 _ENGAGE_PROMPTS = [
     # Hero topics first — STBU, migration, news, blog.
-    "Quick check 👇 Have you migrated your STBU to Base yet? Burn-and-mint, 1:1, same wallet — "
-    "the deadline's 15 Sep. Ask me anything about the steps.",
-    "Reminder for STBU holders: consolidate all your STBU into ONE wallet before migrating. "
-    "Questions about the Base migration? I'm here for it.",
+    "STBU holders: four pools on Base carry the STBU name and only one is the issuer's. "
+    "Ask me how to tell them apart before you trade.",
     "Caught the latest on the Stobox blog? Ask me for the newest post or the weekly RWA & "
     "Tokenization Digest — happy to share.",
     "Milestone moment: Stobox has supported $305M+ in assets across 20+ jurisdictions since "
     "2018. What corner of RWA are you most excited about?",
     "Quick one for the room 👇 If you could tokenize any real-world asset tomorrow, "
     "what would it be?",
-    "Curious what brought everyone here — the STBU migration, RWA in general, or building "
+    "Curious what brought everyone here — STBU, RWA in general, or building "
     "with Compass?",
     "Honest question: what's the biggest thing holding tokenization back right now — "
     "regulation, liquidity, or awareness?",
@@ -187,10 +183,15 @@ def migration_status_line(canon, today) -> str | None:
         return (f"⏳ <b>STBU → Base migration is OPEN</b> — burn deadline <b>{_in(days)}</b> "
                 f"(burn {_burn_before(deadline, '%d %b %Y')}). Burn-and-mint, 1:1, same "
                 "wallet only. Steps: /migrate")
-    # After the deadline.
+    # After the deadline: the claim period (and, later, the end of it).
+    closes = _as_date(m.get("claims_close"))
+    if closes and today > closes:
+        return None
     if claims and today >= claims:
-        return ("🟢 <b>STBU claims are open on Base</b> — if you burned before the deadline, "
-                "claim now (same wallet). Steps: /migrate")
+        until = f" until <b>{closes.strftime('%d %b %Y')}, 23:59 UTC</b>" if closes else ""
+        return ("🟢 <b>STBU claims on Base</b>: if you burned before "
+                f"{claims.strftime('%d %b %Y')}, claim at stbu.stobox.io{until}. "
+                "The burn window is closed. Details: /migrate")
     return ("⛔ The <b>STBU → Base</b> burn window has closed. "
             + (f"Claims open {claims.strftime('%d %b %Y')}. " if claims else "")
             + "Details: /migrate")

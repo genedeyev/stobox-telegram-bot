@@ -1,8 +1,8 @@
 ---
 title: STBU Token Overview
-version: "2026.07"
+version: "2026-09-27"
 author: Stobox
-date: 2026-07-01
+date: 2026-09-27
 category: tokenomics
 product: STBU
 language: en
@@ -12,61 +12,63 @@ source_url: https://www.stobox.io/stbu
 
 # STBU Token Overview
 
-STBU is the Stobox utility token. For the current token page, see
+Source: https://www.stobox.io/llms-full.txt, section "STBU, the token", read on
+27 September 2026. The record with figures read from the chain is
 https://www.stobox.io/stbu.
 
-## Migration to Base
+## What STBU is
 
-STBU is migrating to the Base network using a burn-and-mint process: 1:1, and to
-the **same wallet** only. Consolidate all STBU into one wallet before migrating.
+STBU is a utility token issued by Stobox Innovations Ltd. on Base, at
+`0xe0c0F44A84CC4a60206360006ebA237a5e8fC2dd` (chain id 8453, ERC-20). It carries
+no ownership of Stobox, no yield, no dividend, no staking, no governance vote and
+no buy-back. It is not equity, not a security, not a debt and not a payment
+instrument. Stobox does not forecast, target or promise its price. The Stobox
+equity is a separate token, STBX, on Arbitrum.
 
-**Key dates (exact — these matter):**
-- **Burn window opens: 20 July 2026.** The guided one-click portal opens at
-  **https://stbu.stobox.io** on that date. Burns already count from then.
-- **Burn deadline: before 15 September 2026, 00:00 UTC** (i.e. by end of
-  14 September 2026, 23:59:59 UTC). Anything burned at/after 15 Sep 00:00 UTC is
-  **not** eligible. The 250M supply cap also applies — if it fills, later burns
-  aren't eligible either.
-- **Claiming opens: 15 September 2026** on Base, to the same wallet that burned.
+It may pay for services of the Stobox group at a 10% discount on the list price,
+for each service whose published terms allow payment in STBU; no service has
+published such terms yet. Terminal volume is meant to count toward a badge tier
+that lowers the swap fee between 1.00% and 0.10%; that is not switched on, so
+every swap pays 1.00% today.
 
-**Eligibility:** STBU **V2** (ETH/BSC/Polygon) and STBU **V3** (Arbitrum) are
-eligible. **Legacy V1 is NOT eligible** — invalid since January 2022, cannot be
-migrated. After the deadline, V2 and V3 also become invalid for migration.
+## The one issuer pool
 
-**Eligible contracts** (always tell users to verify the exact address on
-https://stbu.stobox.io before sending anything):
-- ETH: `0xa6422e3e219ee6d4c1b18895275fe43556fd50ed`
-- BSC: `0xb0c4080a8Fa7afa11a09473f3be14d44AF3f8743`
-- Polygon: `0xcf403036bc139d30080d2cf0f5b48066f98191bb`
-- Arbitrum (V3): `0x1cb9bD2c6E7F4A7DE3778547d46C8D4c22abC093`
+The only pool deployed by the issuer is Uniswap v4 on Base, STBU against USDC,
+pool id `0x28bd1d1afcc57d766c5d1c5c38bd8beb376a0c98de719460cdcef60900f7b8b5`.
+Other pools on Base carry the STBU name and were not deployed by Stobox
+Innovations Ltd. How to tell them apart: https://www.stobox.io/stbu/safety.
 
-**Which path applies (ask the holder where their STBU is):**
-- **Case 1 — in your own wallet:** sign in at https://stbu.stobox.io, connect the
-  wallet, burn (early, before the deadline), watch it confirm, then claim from
-  15 Sep on Base to the same wallet. Keep a little native gas on each chain.
-- **Case 2 — in a Stobox 4 wallet, no exported key:** you're still included.
-  Email support@stobox.io **from your Stobox 4 email** with the Base wallet
-  address where you want to receive STBU (no exchange/CEX deposit addresses).
-  The team verifies via a two-person review; then you claim from 15 Sep.
-- **Case 3 — on an exchange (MEXC, Gate.io, …):** withdraw to your own
-  self-custody wallet first, then follow Case 1.
+Stobox Innovations Ltd. does not sell STBU and is not offering it for sale. There
+are no plans for a centralized exchange at this time.
 
-Full guide: https://www.stobox.io/blog/stobox-4-setting-new-stobox-rising.
-⚠️ Only send official STBU to the burn address shown on https://stbu.stobox.io.
-Ignore any DM, ad, or link offering an "early claim" or asking you to "validate"
-your wallet — Stobox will never DM you first.
+## The migration is over
 
-For the current migration status and steps, use /migrate. Authoritative dates are
-governed by the bot's canonical facts.
+The burn window closed before 15 September 2026, 00:00 UTC. Nobody can burn or
+migrate legacy STBU any more.
 
-## Security
+Holders who burned before 15 September 2026 claim one for one on Base at
+https://stbu.stobox.io. Claims close on 31 December 2026 at 23:59 UTC. Nobody has
+the authority to extend that date, and anything unclaimed after it is never
+minted. The migration claim contract is
+`0xec5B3e512de13cb5DdFD84B2DF3167230F2e66a4` on Base.
 
-Stobox will never ask for your seed phrase, recovery phrase, or private key, and
-staff **never DM you first and never ask you to DM them** (a common scam line lately
-is "DM me since we can't DM you first" — that's a scammer). Only trust links from
-stobox.io. Never share your seed phrase with anyone — if you have, treat that wallet
-as compromised and move your funds immediately.
+The legacy contracts were discontinued on 15 September 2026. They are not STBU
+and cannot be migrated, even where some interfaces still show a price for them:
 
-> Authoritative token facts (issuer, class, supply, migration dates) are governed
-> by the bot's canonical facts and the live site, which take precedence over this
-> summary.
+- Ethereum `0xa6422e3e219ee6d4c1b18895275fe43556fd50ed`
+- BNB Chain `0xb0c4080a8fa7afa11a09473f3be14d44af3f8743`
+- Polygon `0xcf403036bc139d30080d2cf0f5b48066f98191bb`
+- Arbitrum `0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093`
+
+Two of them are named "Stobox Token v.2" and "Stobox Token v.3", which reads as
+newer than the live token and is not.
+
+## Supply
+
+The contract cap is 250,000,000 STBU, which no one can raise. The issuance the
+company has determined is 216,563,456 STBU.
+
+## Help
+
+Questions about a specific burn or claim: support@stobox.io. Never share a seed
+phrase or private key with anyone, including Stobox.

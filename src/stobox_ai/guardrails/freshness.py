@@ -29,6 +29,7 @@ class MigrationPhase(str, enum.Enum):
     BURN_OPEN = "burn-window-open"
     BURN_CLOSED = "burn-window-closed"
     CLAIMS_OPEN = "claims-open"
+    CLAIMS_CLOSED = "claims-closed"
 
 
 def _fmt(d: date) -> str:
@@ -70,8 +71,23 @@ def compute_migration_phase(
             MigrationPhase.BURN_CLOSED,
             f"Burn deadline has passed; claims open {_fmt(claim)}.",
         )
+    closes = _as_date(m.get("claims_close"))
+    claim_url = m.get("claim_url") or "https://stbu.stobox.io"
+    if closes and today > closes:
+        return (
+            MigrationPhase.CLAIMS_CLOSED,
+            f"The STBU migration is over: claims closed {_fmt(closes)}, 23:59 UTC, and "
+            "anything unclaimed was never minted. The record is https://www.stobox.io/stbu.",
+        )
     if claim and today >= claim:
-        return MigrationPhase.CLAIMS_OPEN, f"Claims are open (since {_fmt(claim)})."
+        close_txt = f"{_fmt(closes)}, 23:59 UTC" if closes else "the published date"
+        return (
+            MigrationPhase.CLAIMS_OPEN,
+            f"The burn window closed before {_fmt(claim)}, 00:00 UTC; nobody can burn or "
+            f"migrate legacy STBU any more. Holders who burned before then claim one for "
+            f"one on Base at {claim_url}. Claims close {close_txt}. Nobody has the "
+            "authority to extend that date, and anything unclaimed after it is never minted.",
+        )
     return MigrationPhase.PRE, "Migration status: see stobox.io for current details."
 
 
