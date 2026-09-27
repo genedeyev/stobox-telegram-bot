@@ -114,6 +114,8 @@ tokens:
       # v.2" (Ethereum, BNB Chain, Polygon) and one "Stobox Token v.3"
       # (Arbitrum); both read as newer than the live token and are not.
       status: "Discontinued on 15 September 2026. Not STBU, not migratable."
+      history: "Until the burn window closed (before 15 September 2026, 00:00 UTC), holders of these legacy contracts could burn them and claim one for one on Base; that is what the migration was. Since then they are discontinued. Never say STBU was only ever on Base."
+      answer_rule: "Whenever someone holds legacy STBU, say both: the window has closed so it cannot be migrated now, AND if they burned before 15 September 2026 they can still claim at https://stbu.stobox.io until 31 December 2026, 23:59 UTC."
       discontinued_contracts:
         ethereum: "0xa6422e3e219ee6d4c1b18895275fe43556fd50ed"
         bnb_chain: "0xb0c4080a8fa7afa11a09473f3be14d44af3f8743"

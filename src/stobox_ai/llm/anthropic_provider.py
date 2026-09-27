@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
@@ -20,6 +21,8 @@ def _retryable(exc: BaseException) -> bool:
         return True
     return isinstance(exc, APIStatusError) and exc.status_code >= 500
 
+
+_GEN5 = re.compile(r"^claude-(sonnet|opus)-5(\b|-)")
 
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
@@ -75,7 +78,15 @@ class AnthropicProvider(LLMProvider):
             ]
         elif system_texts:
             kwargs["system"] = system_texts[0]
-        if not self._no_temperature:
+        # Generation-5 models (claude-sonnet-5, claude-opus-5) reject sampling
+        # parameters and think adaptively. With thinking off Sonnet 5 made factual
+        # slips on STBU (27.09.2026 probe), so keep adaptive thinking at low effort
+        # and give it room: reasoning counts against max_tokens.
+        if _GEN5.match(self.model):
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {"effort": "low"}
+            kwargs["max_tokens"] = max(kwargs["max_tokens"], 4000)
+        elif not self._no_temperature:
             kwargs["temperature"] = self.temperature if temperature is None else temperature
 
         started = time.perf_counter()
