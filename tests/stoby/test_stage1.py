@@ -69,7 +69,7 @@ class FakeModel:
     def __init__(self, texts: list[str]) -> None:
         self.texts, self.calls = list(texts), 0
 
-    async def draft(self, sources, question, correction=None) -> Draft:
+    async def draft(self, sources, question, correction=None, site_block="") -> Draft:
         self.calls += 1
         text = self.texts.pop(0) if self.texts else "ok"
         return Draft(text=text, usd=0.01, input_tokens=100, output_tokens=50,
@@ -132,10 +132,10 @@ async def test_a1_2_site_edit_changes_answer_without_a_commit(tmp_path):
     seen = {}
 
     class EchoModel(FakeModel):
-        async def draft(self, sources, question, correction=None):
-            seen["sources"] = sources
-            m = re.search(r"Claims close (\d+ \w+ \d{4})", sources)
-            return await super().draft(sources, question, correction) if not m else Draft(
+        async def draft(self, sources, question, correction=None, site_block=""):
+            seen["sources"] = site_block
+            m = re.search(r"Claims close (\d+ \w+ \d{4})", site_block)
+            return await super().draft(sources, question, correction, site_block) if not m else Draft(
                 f"Claims close {m.group(1)} at 23:59 UTC.", 0.01, 1, 1, 0, "end_turn")
 
     p = pipeline(tmp_path, EchoModel([]), site_text=edited)
@@ -203,9 +203,9 @@ async def test_contradicted_draft_is_regenerated_with_the_correction(tmp_path):
     seen = []
 
     class M(FakeModel):
-        async def draft(self, sources, question, correction=None):
+        async def draft(self, sources, question, correction=None, site_block=""):
             seen.append(correction)
-            return await super().draft(sources, question, correction)
+            return await super().draft(sources, question, correction, site_block)
 
     model = M(["Stobox sells STBU.", "Stobox does not sell STBU."])
     p = pipeline(tmp_path, model, sig_kwargs={"verdict": "contradicted",

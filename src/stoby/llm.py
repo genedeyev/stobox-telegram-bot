@@ -44,7 +44,11 @@ class Answerer:
         self.client = client or anthropic.AsyncAnthropic(max_retries=2, timeout=60)
         self.prompt = prompt or load_prompt()
 
-    async def draft(self, sources: str, question: str, correction: str | None = None) -> Draft:
+    async def draft(self, sources: str, question: str, correction: str | None = None,
+                    site_block: str = "") -> Draft:
+        """`site_block` is cached as a second system block: it changes at most
+        every ten minutes, so repeated answers read it at a tenth of the price.
+        `sources` carries what is not cached (the SIG context)."""
         user = f"{sources}\n\n[QUESTION]\n{question}"
         if correction:
             user += (f"\n\n[CORRECTION]\nYour previous draft was rejected: {correction}\n"
@@ -56,7 +60,9 @@ class Answerer:
                 thinking={"type": "adaptive"},
                 output_config={"effort": self.effort},
                 system=[{"type": "text", "text": self.prompt,
-                         "cache_control": {"type": "ephemeral"}}],
+                         "cache_control": {"type": "ephemeral"}},
+                        *([{"type": "text", "text": site_block,
+                            "cache_control": {"type": "ephemeral"}}] if site_block else [])],
                 messages=[{"role": "user", "content": user}],
             )
         except (anthropic.APIConnectionError, anthropic.RateLimitError,

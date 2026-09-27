@@ -68,13 +68,15 @@ class Pipeline:
             return Reply(CANT_VERIFY, "fixed_sig_down", meta={"error": str(exc)})
 
         stamp = time.strftime("%d %B %Y %H:%M UTC", time.gmtime(site.fetched_at))
-        sources = (f"[SITE] ({site.source}, fetched {stamp})\n{site.block()}\n\n"
-                   f"[SIG] (Stobox Intelligence Graph; lower authority than [SITE])\n{sig_ctx}")
+        site_block = f"[SITE] ({site.source}, fetched {stamp})\n{site.block()}"
+        sig_block = f"[SIG] (Stobox Intelligence Graph; lower authority than [SITE])\n{sig_ctx}"
+        sources = f"{site_block}\n\n{sig_block}"
         usd, verdict, correction, tries = 0.0, "unchecked", None, 0
         text = ""
         for tries in (1, 2):  # noqa: B007 - read after the loop
             try:
-                draft = await self.model.draft(sources, question, correction)
+                draft = await self.model.draft(sig_block, question, correction,
+                                               site_block=site_block)
             except ModelDown as exc:
                 return Reply(CANT_VERIFY, "fixed_model_down", usd, {"error": str(exc)})
             usd += draft.usd

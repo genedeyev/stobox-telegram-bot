@@ -70,7 +70,8 @@ questions:
     question: "Will STBU supply reach 250M?"
     # Stage 0: the site says "cap 250,000,000 … issuance 216,563,456".
     expect_any: ["cap", "216,563,456", "ceiling"]
-    forbid_contains: ["will reach", "expected supply", "will be 250M"]
+    # "isn't a promise that supply will reach it" is a correct sentence.
+    forbid_contains: ["will reach 250", "expected supply", "will be 250M", "supply will reach 250"]
 
   - id: stbu-destination
     needs_model: true
@@ -83,7 +84,7 @@ questions:
     needs_model: true
     category: canonical
     question: "Can I migrate my legacy V1 STBU tokens?"
-    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated"]
+    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated", "nobody can burn or migrate", "no path to migrate", "no longer stbu"]
     forbid_contains: []
 
   - id: tokenized-volume

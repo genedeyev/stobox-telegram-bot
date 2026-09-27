@@ -17,7 +17,9 @@ from pathlib import Path
 import httpx
 
 REQUIRED = ("What is true, and what is not", "STBU, the token")
-USED = (*REQUIRED, "Products", "Company facts")
+# Every section but the per-page index ("Every page", ~140 KB): the rest is
+# ~17 KB and goes into the cached system prompt whole.
+SKIPPED = ("Every page",)
 ADDR = re.compile(r"(?<![0-9a-fA-Fx])0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?(?![0-9a-fA-F])")
 
 
@@ -44,7 +46,7 @@ class SiteFacts:
         missing = [s for s in REQUIRED if s not in sections]
         if missing:
             raise SiteUnavailable(f"site file lacks sections: {missing}")
-        used = "\n".join(sections.get(s, "") for s in USED)
+        used = "\n".join(v for k, v in sections.items() if k not in SKIPPED)
         addrs = frozenset(a.lower() for a in ADDR.findall(used))
         return cls(header=header, sections=sections, fetched_at=fetched_at,
                    source=source or cls.source, addresses=addrs)
@@ -52,9 +54,9 @@ class SiteFacts:
     def block(self) -> str:
         """The site text Stoby answers from, as one tagged block."""
         out = [self.header]
-        for s in USED:
-            if s in self.sections:
-                out.append(f"## {s}\n{self.sections[s]}")
+        for s, body in self.sections.items():
+            if s not in SKIPPED:
+                out.append(f"## {s}\n{body}")
         return "\n\n".join(out)
 
     def bullets(self, section: str) -> list[str]:

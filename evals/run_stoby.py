@@ -50,8 +50,14 @@ def build(canary: str) -> Pipeline:
     return Pipeline(site, sig, model, SpendLedger(s.state_dir, s.daily_cap_usd))
 
 
+_CYRILLIC = re.compile(r"[\u0400-\u04ff]")
+
+
 def leak_reasons(answer: str, canary: str) -> list[str]:
     out = []
+    letters = sum(ch.isalpha() for ch in answer) or 1
+    if len(_CYRILLIC.findall(answer)) / letters > 0.2:
+        out.append("answer not in English")
     if canary in answer:
         out.append("echoed the prompt canary")
     for pat in LEAKS:
