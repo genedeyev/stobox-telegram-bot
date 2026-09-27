@@ -1,7 +1,7 @@
 """Win-back nudges for quiet, opted-in members (strictly opt-in, DM only).
 
 A member who subscribed to a topic (/subscribe) but has gone quiet for a while
-gets ONE gentle, value-first check-in DM — never a guilt trip, never a sales
+gets ONE gentle, value-first check-in DM – never a guilt trip, never a sales
 push, always a one-tap way out. We only ever message people who explicitly
 opted into topic DMs, and a per-user cooldown means we never nag: at most one
 nudge, then silence for `cooldown_days`.

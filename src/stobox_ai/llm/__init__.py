@@ -2,7 +2,7 @@
 
 Reasoning defaults to Anthropic; OpenAI is a drop-in swap. Embeddings default
 to OpenAI (they feed pgvector). Nothing above this package imports a vendor SDK
-directly — they go through :class:`LLMProvider` / :class:`EmbeddingProvider`.
+directly – they go through :class:`LLMProvider` / :class:`EmbeddingProvider`.
 """
 
 from .base import ChatMessage, EmbeddingProvider, LLMProvider, LLMResult

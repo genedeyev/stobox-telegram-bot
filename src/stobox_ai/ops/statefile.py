@@ -1,14 +1,14 @@
-"""Atomic JSON state files — shared by every ``data/*.json`` ledger.
+"""Atomic JSON state files – shared by every ``data/*.json`` ledger.
 
 Two failure modes this module exists to close:
 
-* **Torn writes** — a plain ``path.write_text(...)`` truncates the live file
+* **Torn writes** – a plain ``path.write_text(...)`` truncates the live file
   before the new bytes land; a crash (OOM, deploy, kill -9, disk-full) in that
   window corrupts the ledger. ``save_json_atomic`` writes to a temp file,
-  fsyncs, then ``os.replace``s it into place — the live file is always either
+  fsyncs, then ``os.replace``s it into place – the live file is always either
   the old state or the new state, never half of each.
 
-* **Silent resets** — loaders that swallow a parse error and continue with an
+* **Silent resets** – loaders that swallow a parse error and continue with an
   empty dict quietly forget strikes, reminder ledgers, and XP. ``load_json_guarded``
   instead QUARANTINES a corrupt file aside (``<name>.corrupt-<utc-ts>``) so the
   evidence survives for recovery, logs loudly, and only then lets the caller
@@ -71,7 +71,7 @@ async def init_state_mirror(database_url: str | None) -> bool:
 async def restore_state_files(paths: list[str | Path]) -> int:
     """Boot-time restore: for each configured state file that the mirror holds,
     write the mirrored payload to disk so books load it as usual. A file
-    already present locally is left alone (local disk is fresher — the mirror
+    already present locally is left alone (local disk is fresher – the mirror
     only lags by in-flight fire-and-forget writes)."""
     if _mirror_pool is None:
         return 0
@@ -121,7 +121,7 @@ async def _mirror_upsert(name: str, data: str) -> None:
 
 
 def _schedule_mirror(name: str, data: str) -> None:
-    """Fire-and-forget mirror write. Called from SYNC save paths — only works
+    """Fire-and-forget mirror write. Called from SYNC save paths – only works
     when an event loop is running (the app runtime); CLI tools skip silently."""
     if _mirror_pool is None:
         return
@@ -142,9 +142,9 @@ def save_json_atomic(path: str | Path, payload: Any, *, indent: int = 1,
                      _mirror: bool = True) -> None:
     """Serialize ``payload`` and atomically replace ``path`` with it, then
     mirror the payload to Postgres when the state mirror is enabled (keyed by
-    file basename — stable across environments and tmp test dirs).
+    file basename – stable across environments and tmp test dirs).
 
-    Raises on file failure — callers keep their own try/except + log so a
+    Raises on file failure – callers keep their own try/except + log so a
     broken disk never crashes a handler, mirroring the previous behavior.
     """
     path = Path(path)
@@ -164,7 +164,7 @@ def load_json_guarded(path: str | Path, *, label: str) -> Any | None:
     """Parse ``path`` as JSON. Returns None when the file is missing.
 
     A corrupt file is renamed to ``<name>.corrupt-<timestamp>`` (so the next
-    save can't clobber the evidence) and None is returned — the caller starts
+    save can't clobber the evidence) and None is returned – the caller starts
     fresh, and the incident is visible in the logs and on disk.
     """
     path = Path(path)

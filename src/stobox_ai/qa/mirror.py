@@ -4,7 +4,7 @@ The register (docs/COMMUNITY-QA.md, private repo) stays the permanent source of
 truth: new questions land there as DRAFT sections; approved answers flip them to
 APPROVED. Content transforms are pure functions (unit-tested); the push goes
 through the GitHub contents API using GITHUB_TOKEN, falling back to the local
-`gh` CLI. Mirroring is best-effort — a GitHub outage never blocks the answer
+`gh` CLI. Mirroring is best-effort – a GitHub outage never blocks the answer
 flow (local state + local knowledge file carry it).
 """
 
@@ -41,7 +41,7 @@ def draft_section(entry: QAEntry, number: int) -> str:
         f"\n---\n\n## {number}. {entry.question}\n\n"
         f"**Status:** DRAFT · **Added:** {today} · "
         f"**Source:** telegram bot (auto-captured, asked {entry.ask_count}×)\n\n"
-        f"**Answer:**\n\n_(pending — Gene to provide)_\n"
+        f"**Answer:**\n\n_(pending – Gene to provide)_\n"
     )
 
 

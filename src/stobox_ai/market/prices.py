@@ -1,9 +1,9 @@
-"""STBU live market data — CoinGecko (primary) + CoinMarketCap (fallback).
+"""STBU live market data – CoinGecko (primary) + CoinMarketCap (fallback).
 
 Read-only public market endpoints. CoinGecko works keyless (free tier); a
 ``COINGECKO_API_KEY`` upgrades to the pro host, and ``COINMARKETCAP_API_KEY``
 enables the CMC fallback. Everything degrades gracefully: a failed fetch returns
-the last good snapshot (or ``None``), never an exception — market data must never
+the last good snapshot (or ``None``), never an exception – market data must never
 break a reply.
 
 The HTTP client is injectable (a ``HttpJson``) so the logic is unit-tested fully
@@ -81,63 +81,40 @@ class MarketSnapshot:
     symbol: str = "STBU"
     coin_url: str = COINGECKO_COIN_URL
 
+    # Stage 0 (27.09.2026), securities review: price only. Market cap is out
+    # (aggregator supply for STBU was wrong on 18.09 and market cap never goes
+    # into our texts), and so are 24h change and arrows (trading framing).
+    # Volume and change stay on the snapshot for internal use only.
+    _SAFETY = ("Aggregators may include pools not deployed by the issuer: "
+               "https://www.stobox.io/stbu/safety")
+
     def format_line(self) -> str:
         """One-line grounded fact for the [FRESHNESS] block."""
-        parts = [f"${_fmt_price(self.price_usd)}"]
-        if self.market_cap_usd is not None:
-            parts.append(f"market cap ${_fmt_usd(self.market_cap_usd)}")
-        if self.volume_24h_usd is not None:
-            parts.append(f"24h vol ${_fmt_usd(self.volume_24h_usd)}")
-        if self.change_24h_pct is not None:
-            parts.append(f"24h {self.change_24h_pct:+.1f}%")
-        body = ", ".join(parts)
         return (
-            f"- {self.symbol} live market price ({self.source}): {body} — as of {self.as_of}. "
-            "This is current secondary-market data (a FACT you may state when asked), NOT the "
-            "Eqvista company valuation and NOT investment advice. Never give price predictions "
-            "or targets."
+            f"- {self.symbol} third-party price ({self.source}): ${_fmt_price(self.price_usd)}, "
+            f"as of {self.as_of}. State only the price, with source and time, when asked. "
+            "Never state market cap, 24h change or volume, never compare it with the "
+            "company valuation, never predict. " + self._SAFETY + "."
         )
 
     def format_brief(self) -> str:
-        """Compact one-liner for a community post (not the system prompt). The
-        'not advice / not the company valuation' framing is added once by the
-        caller around the whole updates briefing, so this stays short."""
-        parts = [f"${_fmt_price(self.price_usd)}"]
-        if self.change_24h_pct is not None:
-            arrow = "🔺" if self.change_24h_pct >= 0 else "🔻"
-            parts.append(f"{arrow} {self.change_24h_pct:+.1f}% (24h)")
-        if self.market_cap_usd is not None:
-            parts.append(f"mcap ${_fmt_usd(self.market_cap_usd)}")
-        return " · ".join(parts)
+        """Compact one-liner (price only)."""
+        return f"${_fmt_price(self.price_usd)} ({self.source}, {self.as_of})"
 
     def format_report(self, contracts: dict[str, str] | None = None) -> str:
-        """Full HTML block for the /price command. Carries its own compliance
-        framing because command output bypasses the answer-path rails."""
+        """HTML block for the /price command. Carries its own compliance framing
+        because command output bypasses the answer-path rails."""
         lines = [
-            f"📈 <b>{self.symbol} market snapshot</b> — live, {self.source}",
-            f"• Price: <b>${_fmt_price(self.price_usd)}</b>",
+            f"<b>{self.symbol}</b>: third-party price from {self.source}, as of {self.as_of}: "
+            f"<b>${_fmt_price(self.price_usd)}</b>",
+            self._SAFETY,
         ]
-        if self.market_cap_usd is not None:
-            lines.append(f"• Market cap: ${_fmt_usd(self.market_cap_usd)}")
-        if self.volume_24h_usd is not None:
-            lines.append(f"• 24h volume: ${_fmt_usd(self.volume_24h_usd)}")
-        if self.change_24h_pct is not None:
-            arrow = "🔺" if self.change_24h_pct >= 0 else "🔻"
-            lines.append(f"• 24h change: {arrow} {self.change_24h_pct:+.2f}%")
-        lines.append(f"• As of: {self.as_of}")
-        lines.append(f"• Chart: {self.coin_url}")
         if contracts:
-            labels = {
-                "ethereum": "Ethereum", "bnb_chain": "BNB Chain",
-                "polygon": "Polygon", "arbitrum": "Arbitrum", "base": "Base",
-            }
-            lines.append("\n<b>Official STBU contracts</b> (verify only via stobox.io):")
+            lines.append("")
             for chain, addr in contracts.items():
-                lines.append(f"• {labels.get(chain, chain)}: <code>{addr}</code>")
-        lines.append(
-            "\nThis is market data, <b>not investment advice</b>, and <b>not</b> the Stobox "
-            "company valuation (that's a separate figure — /valuation)."
-        )
+                label = {"base": "Base"}.get(chain, chain)
+                lines.append(f"Live STBU contract on {label}: <code>{addr}</code>")
+        lines.append("\nMarket data, <b>not investment advice</b>.")
         return "\n".join(lines)
 
 
@@ -235,7 +212,7 @@ class MarketData:
         if not force and self._cache and (now - self._fetched_at) < self.ttl:
             return self._cache
         if not force and now < self._neg_until:
-            return self._cache                 # in backoff — serve last good (maybe None)
+            return self._cache                 # in backoff – serve last good (maybe None)
 
         if self._lock is None:
             self._lock = asyncio.Lock()

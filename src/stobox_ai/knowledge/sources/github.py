@@ -1,4 +1,4 @@
-"""GitHub source — auto-discover and ingest the StoboxTechnologies repos.
+"""GitHub source – auto-discover and ingest the StoboxTechnologies repos.
 
 For each repo (auto-discovered from the org, or an explicit list) it reads the
 full file tree via the GitHub API, filters to text files (Markdown/docs and,
@@ -28,7 +28,7 @@ _DOC_EXT = {".md", ".markdown", ".rst", ".txt", ".adoc"}
 # notices, changelogs ("all updates"), and bare READMEs.
 _SPECIAL_NAMES = {"license", "licence", "copying", "notice", "readme",
                   "changelog", "changes", "authors", "codeowners"}
-# Generated/vendored noise — huge, worthless for retrieval, and it used to eat
+# Generated/vendored noise – huge, worthless for retrieval, and it used to eat
 # the whole file budget before real content was reached.
 _SKIP_PATH = re.compile(
     r"(^|/)(node_modules|dist|build|out|vendor|artifacts|coverage|__pycache__|"
@@ -60,7 +60,7 @@ class GitHubSource(Source):
         self.include_code = include_code
         self.max_files = max_files
         # Fairness: the global cap used to be consumed repo-by-repo in listing
-        # order, so one giant frontend repo starved every repo after it —
+        # order, so one giant frontend repo starved every repo after it – 
         # including the smart contracts. Each repo now gets a bounded share.
         self.max_files_per_repo = max_files_per_repo
         self.token = token
@@ -125,7 +125,7 @@ class GitHubSource(Source):
         if status == 403:
             log.warning("github.rate_limited", hint="set GITHUB_TOKEN for higher limits")
             return []
-        # A pinned repo (or a stale default) can miss the real branch — main vs
+        # A pinned repo (or a stale default) can miss the real branch – main vs
         # master. Ask the API for the actual default and retry once, so no repo
         # is silently skipped over a branch-name guess.
         if status == 404 and not self.branch:
@@ -163,7 +163,7 @@ class GitHubSource(Source):
         if base in _SPECIAL_NAMES or ext in _DOC_EXT:
             return 0                         # docs, LICENSE, CHANGELOG, README
         if ext == ".sol":
-            return 1                         # smart contracts — highest-value code
+            return 1                         # smart contracts – highest-value code
         return 2
 
     def _want(self, path: str) -> bool:

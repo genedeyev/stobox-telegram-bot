@@ -93,7 +93,7 @@ class IncomingMessage:
 
 @dataclass(slots=True)
 class Citation:
-    """A reference backing a factual claim — the anti-hallucination anchor."""
+    """A reference backing a factual claim – the anti-hallucination anchor."""
     title: str
     section: str | None = None
     version: str | None = None

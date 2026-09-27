@@ -46,7 +46,7 @@ _NAME_RE = re.compile(r"\bstob(y|i|ie|by|bie|ey)\b", re.I)
 # Varied "thinking" placeholders (rotated) so Stoby visibly works, never a bot loop.
 _THINKING = [
     "🔍 Checking the Stobox docs…",
-    "🔎 One sec — pulling that up…",
+    "🔎 One sec – pulling that up…",
     "📚 Digging into the sources…",
     "🧠 Let me check that properly…",
     "⏳ Looking into it…",
@@ -109,7 +109,7 @@ class TelegramChannel(Channel):
         self.admins = self.secrets.admin_user_ids
         self.admin_usernames = self.secrets.admin_usernames
         self.proactive: ProactiveScheduler | None = None
-        # Group chats the bot has seen — targets for proactive posts — plus the
+        # Group chats the bot has seen – targets for proactive posts – plus the
         # per-chat member-count milestones already celebrated. PERSISTED: without
         # this, every restart silently stops all proactive broadcasts until a
         # human happens to post in each group again, and re-fires milestones.
@@ -172,7 +172,7 @@ class TelegramChannel(Channel):
         # Generous timeouts: PTB's 5s defaults die on slow Wi-Fi / flaky IPv6
         # paths to api.telegram.org. Polling read timeout is higher by design.
         # concurrent_updates: without it PTB processes updates strictly one at a
-        # time — a single slow LLM reply would queue every other user's messages
+        # time – a single slow LLM reply would queue every other user's messages
         # AND group moderation behind it. Bounded so a flood can't fork unbounded
         # tasks; per-user rate limits still apply inside the engine.
         self.app = (
@@ -207,7 +207,7 @@ class TelegramChannel(Channel):
         self.app.add_handler(
             MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, self._on_new_members)
         )
-        # Inline mode — @bot <query> callable in ANY chat (enable via BotFather
+        # Inline mode – @bot <query> callable in ANY chat (enable via BotFather
         # /setinline). Answers go through the same compliance pipeline.
         self.app.add_handler(InlineQueryHandler(self._on_inline_query))
         # Mod-log Pardon/Ban buttons.
@@ -253,7 +253,7 @@ class TelegramChannel(Channel):
         )
 
     async def _get_me_with_retry(self, attempts: int = 4):
-        """Retry startup handshake — transient TimedOut must not kill the boot."""
+        """Retry startup handshake – transient TimedOut must not kill the boot."""
         import asyncio
 
         from telegram.error import NetworkError, TimedOut
@@ -267,7 +267,7 @@ class TelegramChannel(Channel):
                 wait = 3 * i
                 log.warning("telegram.get_me_retry", attempt=i, wait_s=wait, error=str(exc))
                 await asyncio.sleep(wait)
-        raise last_exc  # exhausted — a real network problem, surface it
+        raise last_exc  # exhausted – a real network problem, surface it
 
     async def stop(self) -> None:
         if self.app:
@@ -277,13 +277,11 @@ class TelegramChannel(Channel):
             log.info("telegram.stopped")
 
     def is_admin(self, user) -> bool:
-        """Admin by numeric ID (preferred) or by @username (convenience)."""
+        """Admin by numeric ID only. A released @username can be re-registered
+        by someone else, so usernames never grant admin (security review 27.09)."""
         if user is None:
             return False
-        if user.id in self.admins:
-            return True
-        uname = (getattr(user, "username", None) or "").lower()
-        return bool(uname and uname in self.admin_usernames)
+        return user.id in self.admins
 
     def _log_message(self, update) -> None:
         """Record a group message to the internal log (best-effort, never blocks)."""
@@ -355,9 +353,9 @@ class TelegramChannel(Channel):
             response = await self.engine.handle(incoming)
         except Exception as exc:  # noqa: BLE001
             log.error("telegram.handle_failed", error=str(exc), exc_info=True)
-            # Never fail silently in a DM — tell the user and move on.
+            # Never fail silently in a DM – tell the user and move on.
             apology = (
-                "Sorry — something went wrong on my side processing that. "
+                "Sorry – something went wrong on my side processing that. "
                 "Please try again in a moment, or email support@stobox.io."
             )
             try:
@@ -370,7 +368,7 @@ class TelegramChannel(Channel):
             return
 
         if response is None:
-            if placeholder:  # engine chose not to reply — clean up quietly
+            if placeholder:  # engine chose not to reply – clean up quietly
                 try:
                     await placeholder.delete()
                 except Exception:  # noqa: BLE001
@@ -380,8 +378,8 @@ class TelegramChannel(Channel):
 
     async def _on_new_members(self, update, context) -> None:
         """Greet new group members by name. Skips bots; a mass-join (>5 at
-        once) is treated as a possible raid — no welcome, admins pinged.
-        COEXIST: disabled by default — ChatKeeper welcomes new members (Arevik)."""
+        once) is treated as a possible raid – no welcome, admins pinged.
+        COEXIST: disabled by default – ChatKeeper welcomes new members (Arevik)."""
         if not self.engine.config.get("channels.telegram.welcome_new_members", False):
             # Still track the chat so proactive posting works; don't greet.
             chat = update.effective_chat
@@ -404,20 +402,20 @@ class TelegramChannel(Channel):
             log.warning("telegram.mass_join", count=len(humans), chat=str(chat.id))
             await self.dm_admins(
                 context, f"⚠️ Mass join in {chat.title or chat.id}: "
-                         f"{len(humans)} accounts at once — possible raid.")
+                         f"{len(humans)} accounts at once – possible raid.")
             return
         # Escape names: the welcome is sent in HTML mode, and a display name like
         # '<a href="…">Stobox Support</a>' must render as text, never as a link.
         names = ", ".join(html_escape(m.first_name or "there") for m in humans[:5])
         variants = [
-            f"👋 Welcome, {names}! I'm Stoby, the Stobox community's AI — ask me anything "
+            f"👋 Welcome, {names}! I'm Stoby, the Stobox community's AI – ask me anything "
             f"about tokenization, Compass, or STBU right here, or DM me for a 1:1. "
             f"Please skim /rules, and heads up: Stobox staff never DM you first. "
             f"Verify me with /sources.",
             f"👋 {names}, good to have you! I'm Stoby. Questions about Stobox, the STBU "
-            f"migration, or RWA tokenization? Just ask — I answer from the official docs. "
+            f"migration, or RWA tokenization? Just ask – I answer from the official docs. "
             f"Give /rules a quick read, and remember: Stobox staff never DM you first.",
-            f"👋 Welcome aboard, {names}! I'm Stoby, here 24/7 for anything Stobox — ask a "
+            f"👋 Welcome aboard, {names}! I'm Stoby, here 24/7 for anything Stobox – ask a "
             f"question, or /help to see what I can do. Check /rules to get started, and "
             f"stay safe: staff never DM you first. Verify me with /sources.",
         ]
@@ -457,7 +455,7 @@ class TelegramChannel(Channel):
                 await context.bot.send_message(
                     chat.id,
                     f"🎉 We just crossed <b>{crossed:,} members</b>! Thanks for being "
-                    "part of the Stobox community — here's to the next milestone. 🚀",
+                    "part of the Stobox community – here's to the next milestone. 🚀",
                     parse_mode="HTML",
                 )
             except Exception:  # noqa: BLE001
@@ -487,7 +485,7 @@ class TelegramChannel(Channel):
         return True
 
     async def _on_chat_member(self, update, context) -> None:
-        """A member's status changed — if it surfaces a deleted account that's
+        """A member's status changed – if it surfaces a deleted account that's
         still in the group, remove it (group hygiene)."""
         cm = update.chat_member
         if cm is None:
@@ -571,7 +569,7 @@ class TelegramChannel(Channel):
         detail, Email me this / Continue in DM, and Share.
 
         OFF by default (channels.telegram.answer_buttons): buttons under every
-        reply read as bot furniture, and Stoby should feel like a person — a
+        reply read as bot furniture, and Stoby should feel like a person – a
         user who wants more just asks. The follow-up callbacks stay registered
         so old messages' buttons keep working."""
         if not self.engine.config.get("channels.telegram.answer_buttons", False):
@@ -635,14 +633,14 @@ class TelegramChannel(Channel):
             f"🚨 <b>FUD spike</b> in <b>{where}</b>\n"
             f"{count} FUD-flagged messages in a short window. Latest:\n"
             f"“{excerpt}”\n\n"
-            f"I'm already replying calmly with facts — a human touch may help.{link}"
+            f"I'm already replying calmly with facts – a human touch may help.{link}"
         )
         await self.dm_admins(context, text, html=True)
         log.info("fud.alert_sent", chat=str(getattr(chat, "id", "?")), count=count)
 
     async def dm_admins(self, context, text: str, *, html: bool = False,
                         reply_markup=None) -> int:
-        """Best-effort broadcast to every configured admin — THE one admin
+        """Best-effort broadcast to every configured admin – THE one admin
         fan-out (replaces nine hand-rolled loops). HTML mode falls back to
         stripped plain text per admin, so an admin ping is never lost to one
         bad tag. Returns the delivered count."""
@@ -688,7 +686,7 @@ class TelegramChannel(Channel):
             await self._dm_admins(context, "🟢 New MQL from Telegram\n\n"
                                   + response.meta["mql_summary"])
         # Benign impersonation flag (name mimics team) → post the mod-log for admins
-        # to pardon/act on, but DON'T swallow the reply — keep helping the person.
+        # to pardon/act on, but DON'T swallow the reply – keep helping the person.
         if response.meta.get("mod_alert"):
             try:
                 await self._post_modlog(
@@ -719,8 +717,8 @@ class TelegramChannel(Channel):
         text = response.text + footer
         if response.meta.get("share_nudge") and self.bot_username:
             text += (
-                "\n\n🙌 Finding this useful? Share Stobox with a friend — "
-                f"https://stobox.io — or just send them my way: @{self.bot_username}"
+                "\n\n🙌 Finding this useful? Share Stobox with a friend – "
+                f"https://stobox.io – or just send them my way: @{self.bot_username}"
             )
         markup = self._answer_buttons(
             response, update.effective_message.text or "", update.effective_chat.type == "private"
@@ -754,7 +752,7 @@ class TelegramChannel(Channel):
                 )
         else:
             await self.reply_html(update.effective_message, text, markup)
-        # Milestone shout-out (level-up / streak) — a short public celebration.
+        # Milestone shout-out (level-up / streak) – a short public celebration.
         await self._milestone_shout(context, update, response)
 
     async def _milestone_shout(self, context, update, response) -> None:
@@ -769,7 +767,7 @@ class TelegramChannel(Channel):
         elif streak:
             who = (streak.get("name") or "").split()[:1]
             name = html_escape(who[0]) if who else "You"
-            line = f"🔥 {name} is on a <b>{streak['days']}-day streak</b> — respect!"
+            line = f"🔥 {name} is on a <b>{streak['days']}-day streak</b> – respect!"
         if not line:
             return
         try:
@@ -809,7 +807,7 @@ class TelegramChannel(Channel):
         except Exception as exc:  # noqa: BLE001
             log.warning("telegram.moderation_failed", action=action.value, error=str(exc))
 
-        # 2) Public note (WARN only — keep the chat clean, don't spotlight).
+        # 2) Public note (WARN only – keep the chat clean, don't spotlight).
         if response.text:
             try:
                 await msg.reply_text(response.text)
@@ -823,7 +821,7 @@ class TelegramChannel(Channel):
             try:
                 await context.bot.send_message(
                     chat.id,
-                    "⚠️ This account is impersonating a Stobox admin — do NOT engage "
+                    "⚠️ This account is impersonating a Stobox admin – do NOT engage "
                     "or DM it, and please report it. Stobox staff never DM you first.",
                 )
             except Exception:  # noqa: BLE001
@@ -844,7 +842,7 @@ class TelegramChannel(Channel):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         uk = m.get("offender_user_key", "")
-        # Offender name/reason are user-controlled — escape for HTML mode.
+        # Offender name/reason are user-controlled – escape for HTML mode.
         name = html_escape(str(m.get("offender_name") or m.get("offender_id")))
         cat = html_escape(str(m.get("category", "?")))
         excerpt = html_escape((m.get("reason") or "")[:200])
@@ -868,7 +866,7 @@ class TelegramChannel(Channel):
         verb, _, token = (query.data or "").partition(":")
         question = self._q_cache.get(token)
         if not question:
-            await query.answer("That one expired — just ask me again. 🙂", show_alert=True)
+            await query.answer("That one expired – just ask me again. 🙂", show_alert=True)
             return
 
         if verb == "more":
@@ -886,7 +884,7 @@ class TelegramChannel(Channel):
             except Exception as exc:  # noqa: BLE001
                 log.error("telegram.more_failed", error=str(exc))
                 await context.bot.send_message(query.message.chat.id,
-                                               "Sorry — couldn't expand that. Try asking directly.")
+                                               "Sorry – couldn't expand that. Try asking directly.")
         elif verb == "email":
             self._email_pending[query.from_user.id] = question
             await query.answer()
@@ -918,7 +916,7 @@ class TelegramChannel(Channel):
         self._axis_sessions[user.id] = Session()
         prompt, markup = self._axis_question_markup(0)
         await message.reply_text(
-            "Let's do a quick <b>fit check</b> — 5 taps, ~30 seconds. It points you to the "
+            "Let's do a quick <b>fit check</b> – 5 taps, ~30 seconds. It points you to the "
             "right next step (it's a light indicator, not the full Readiness Score).\n\n" + prompt,
             parse_mode="HTML", reply_markup=markup,
         )
@@ -934,7 +932,7 @@ class TelegramChannel(Channel):
         session = self._axis_sessions.get(query.from_user.id)
         step, idx = int(parts[1]), int(parts[2])
         if not session or session.step != step or idx >= len(ax.QUESTIONS[step].options):
-            await query.answer("This check expired — send /qualify to start again.")
+            await query.answer("This check expired – send /qualify to start again.")
             return
         session.record(ax.QUESTIONS[step], idx)
         await query.answer()
@@ -1115,7 +1113,7 @@ class TelegramChannel(Channel):
                     await context.bot.unban_chat_member(chat_id, int(uid), only_if_banned=True)
                 except Exception:  # noqa: BLE001
                     pass
-            await query.answer("Pardoned — strike removed.")
+            await query.answer("Pardoned – strike removed.")
             await query.edit_message_text((query.message.text or "") + "\n\n✅ Pardoned.")
         elif verb == "ban" and uk:
             uid = uk.split(":")[-1]
@@ -1163,8 +1161,8 @@ class TelegramChannel(Channel):
         if draft:
             text += (
                 f"🤖 <b>Proposed draft</b> (not sent to anyone):\n{draft[:1200]}\n\n"
-                f"✅ <code>/approve {qid}</code> — use this draft as-is\n"
-                f"✏️ <code>/answer {qid} your better answer</code> — replace it\n"
+                f"✅ <code>/approve {qid}</code> – use this draft as-is\n"
+                f"✏️ <code>/answer {qid} your better answer</code> – replace it\n"
             )
         else:
             text += f"Reply with:\n<code>/answer {qid} your answer here</code>\n"
@@ -1222,7 +1220,7 @@ class TelegramChannel(Channel):
         # By @username…
         if self.bot_username and f"@{self.bot_username}".lower() in text.lower():
             return True
-        # …by name ("Hey Stoby", and common typos) — always react…
+        # …by name ("Hey Stoby", and common typos) – always react…
         if _NAME_RE.search(text or ""):
             return True
         # …or a reply to one of Stoby's messages.
@@ -1248,6 +1246,6 @@ class TelegramChannel(Channel):
         return out
 
     async def _on_error(self, update, context) -> None:
-        # exc_info gives the full traceback — `str(exc)` alone made production
+        # exc_info gives the full traceback – `str(exc)` alone made production
         # errors ("'x'") nearly undebuggable.
         log.error("telegram.error", error=str(context.error), exc_info=context.error)

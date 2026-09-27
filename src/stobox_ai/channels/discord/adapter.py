@@ -1,4 +1,4 @@
-"""Discord adapter — the same engine on a third transport.
+"""Discord adapter – the same engine on a third transport.
 
 Mirrors the Telegram adapter: Discord message → :class:`IncomingMessage` →
 shared engine → rendered reply + moderation. discord.py is imported lazily so it

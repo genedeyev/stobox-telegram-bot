@@ -1,5 +1,5 @@
 # ============================================================================
-# Stobox AI Community Manager — central configuration
+# Stobox AI Community Manager – central configuration
 # Everything the spec calls "configurable" lives here (or in env for secrets).
 # Values here are defaults; env vars referenced as ${VAR} override at load time.
 # ============================================================================
@@ -33,7 +33,7 @@ llm:
 knowledge:
   docs_path: ${DOCS_PATH:-docs}
   blog:
-    # Stoby only SHARES blog links published on/after this date — the whole
+    # Stoby only SHARES blog links published on/after this date – the whole
     # archive stays indexed for ANSWERING, but proactive shares (revival,
     # "what's new", /blog, [FRESHNESS]) never surface a stale post. Raise/lower
     # as new posts land. (Publish dates are read from each page's JSON-LD.)
@@ -43,7 +43,7 @@ knowledge:
   background_sync_on_boot: true    # auto-load the live corpus right after boot (non-blocking)
   daily_resync: true               # 04:00 UTC daily reconciliation sync (self-update loop)
   sources:
-    # Curated AI reference published by Stobox (llms.txt / llms-full.txt) — the
+    # Curated AI reference published by Stobox (llms.txt / llms-full.txt) – the
     # canonical, highest-confidence source. docs.stobox.io now redirects here.
     llms:
       enabled: true
@@ -53,9 +53,9 @@ knowledge:
       enabled: true
       # No sitemap on stobox.io; the crawler auto-discovers the page inventory
       # from llms-full.txt, then fetches each page. Blog posts are NOT in
-      # llms-full.txt — the paginate walk below enumerates the whole archive
+      # llms-full.txt – the paginate walk below enumerates the whole archive
       # (24+ listing pages) so every post is indexed.
-      # docs.stobox.io is DEPRECATED (301→www) and is NOT a source of truth —
+      # docs.stobox.io is DEPRECATED (301→www) and is NOT a source of truth – 
       # it's excluded from allow_domains so it's never crawled or ingested.
       seeds:
         - https://www.stobox.io/
@@ -104,11 +104,11 @@ memory:
   # verbatim question text on profiles; lower the cap to keep fewer. Users can
   # erase everything about themselves with /forgetme (GDPR Art. 17).
   retain_questions: true
-  max_recent_questions: 8          # was 15 — tightened
+  max_recent_questions: 8          # was 15 – tightened
 
 # --- Internal message log ----------------------------------------------------
 # Full transcript of every group message Stoby sees (audit + admin /log /whosaid).
-# Retains message text on purpose — turn off to disable entirely.
+# Retains message text on purpose – turn off to disable entirely.
 message_log:
   enabled: true
   state_path: data/message_log.jsonl
@@ -119,7 +119,7 @@ message_log:
 # --- Proactive engagement ----------------------------------------------------
 proactive:
   state_path: data/proactive_state.json   # one-shot broadcast dedupe (survives restarts)
-  # Arevik: post ONLY to the community group — NOT Ross's announcement channel,
+  # Arevik: post ONLY to the community group – NOT Ross's announcement channel,
   # NOT the Stoby AI Chat. Set to the community group's numeric id(s) to lock it
   # down; empty = every group Stoby is active in (channels are already excluded).
   group_ids: []
@@ -129,17 +129,17 @@ proactive:
     enabled: false
     interval_hours: 3              # publish useful content every N hours (presence)
     warmup_seconds: 900           # first post ~15 min after boot (NOT a full interval
-                                   # later — redeploys used to mute Stoby for hours);
+                                   # later – redeploys used to mute Stoby for hours);
                                    # a persisted wall-clock gap guard prevents spam
     quiet_hours: [0, 7]           # do not post between 00:00 and 07:00 UTC
   migration_countdown:
     enabled: false                 # public STBU→Base countdown to groups; the job
                                    # ramps weekly → daily as 15 Sep approaches
   updates:
-    enabled: false                 # "What's new at Stobox" — Stoby INITIATES with a
+    enabled: false                 # "What's new at Stobox" – Stoby INITIATES with a
                                    # curated briefing to groups on a fixed schedule
     times: ["12:00", "18:00"]      # UTC; twice daily. Deliberately AFTER the 09:00
-                                   # migration countdown so they never collide — and
+                                   # migration countdown so they never collide – and
                                    # the briefing drops its migration line on days the
                                    # countdown already posted (no double migration post)
     include_migration: true        # STBU→Base migration status line (canonical dates)
@@ -170,7 +170,7 @@ proactive:
 
 # --- Moderation --------------------------------------------------------------
 # COEXIST MODE: ChatKeeperBot is the community moderator (filters, stop-words,
-# face-control, links, flood, attack mode). Stoby does NOT enforce — it detects
+# face-control, links, flood, attack mode). Stoby does NOT enforce – it detects
 # and only flags active scams/impersonation to admins. It never deletes anyone's
 # links or images, never bans, never mutes. Flip `enforce: true` only if Stoby
 # is ever meant to take over moderation from ChatKeeper.
@@ -178,7 +178,7 @@ moderation:
   enabled: true                    # keep detection on (for admin scam alerts)
   enforce: false                   # ← Stoby takes NO delete/ban/mute actions
   level: standard                  # off | light | standard | strict
-  # Actions are now driven by the strike-aware policy (moderation/policy.py) —
+  # Actions are now driven by the strike-aware policy (moderation/policy.py) – 
   # graded per category and escalating with each active strike. See that file.
   strike_decay_days: 30            # strikes older than this stop counting
   strikes_path: data/strikes.json  # persisted (mount /app/data volume in prod)
@@ -188,7 +188,7 @@ moderation:
   flood:
     max_messages: 5
     per_seconds: 10
-  # Link allowlist: a NON-admin may only post official Stobox links — any other
+  # Link allowlist: a NON-admin may only post official Stobox links – any other
   # link is removed (message deleted, friendly DM). Admins (Gene/Arevik, i.e.
   # TELEGRAM_ADMIN_USER_IDS) can post anything. stobox.io + all its subdomains
   # are always allowed; the entries below add the official off-domain handles.
@@ -249,7 +249,7 @@ moderation:
 engagement:
   xp_path: data/xp.json            # persisted (mount /app/data volume in prod)
   ama_path: data/ama.json          # AMA question queue
-  # Arevik: "answer a question when tagged OR when it sees a question" — but not
+  # Arevik: "answer a question when tagged OR when it sees a question" – but not
   # every message/greeting/chatter. So Stoby answers clear, Stobox-relevant
   # questions even when not tagged, and stays silent on everything else.
   answer_unaddressed_questions: true
@@ -271,7 +271,7 @@ content:
 # CoinGecko is the primary source and works with NO key (free tier). Optional
 # env keys upgrade/extend: COINGECKO_API_KEY (pro host), COINMARKETCAP_API_KEY
 # (enables the CMC fallback). The snapshot is cached and injected into
-# [FRESHNESS] so Stoby can state the CURRENT market price as a grounded fact —
+# [FRESHNESS] so Stoby can state the CURRENT market price as a grounded fact – 
 # never a prediction. Distinct from the Eqvista COMPANY valuation.
 market:
   enabled: true
@@ -285,16 +285,16 @@ market:
 # --- On-chain reads (STBU wallet migration checker, /check) ------------------
 chain:
   rpc:                             # public endpoints (no key); override if rate-limited
-    ethereum: https://eth.llamarpc.com
+    ethereum: https://ethereum-rpc.publicnode.com
     bnb_chain: https://bsc-dataseed.binance.org
-    polygon: https://polygon-rpc.com
+    polygon: https://polygon-bor-rpc.publicnode.com
     arbitrum: https://arb1.arbitrum.io/rpc
     base: https://mainnet.base.org
 
 # --- Compliance guardrails (three-block prompt + canonicals) -----------------
 guardrails:
-  system_prompt: SYSTEM-PROMPT.md       # [CORE] behavior — changed only via PR
-  canonicals: canonicals.yaml           # [CANONICALS] facts — changed only via PR
+  system_prompt: SYSTEM-PROMPT.md       # [CORE] behavior – changed only via PR
+  canonicals: canonicals.yaml           # [CANONICALS] facts – changed only via PR
 
 # --- Leads / sales -----------------------------------------------------------
 leads:
@@ -319,7 +319,7 @@ channels:
     welcome_new_members: false     # COEXIST: ChatKeeper welcomes new members
     answer_buttons: false             # inline buttons under answers (More detail /
                                       # Continue in DM / Share). Off: Stoby reads as a
-                                      # person, not a bot — users just ask for more.
+                                      # person, not a bot – users just ask for more.
 
 # --- Rate limiting / abuse ---------------------------------------------------
 limits:
@@ -331,7 +331,7 @@ limits:
 # --- Observability -----------------------------------------------------------
 observability:
   daily_digest: true
-  digest_time: "08:00"             # UTC — admins get the daily community digest
+  digest_time: "08:00"             # UTC – admins get the daily community digest
                                    # at this fixed time (run_daily, redeploy-proof)
   decision_retention_days: 90      # Postgres decision_log rows (hold verbatim
                                    # member questions) pruned nightly past this age

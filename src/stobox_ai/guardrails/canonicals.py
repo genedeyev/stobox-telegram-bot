@@ -1,4 +1,4 @@
-"""Canonicals loader — the PR-gated guardrail facts.
+"""Canonicals loader – the PR-gated guardrail facts.
 
 canonicals.yaml is injected **verbatim** into the system prompt and overrides
 retrieved content (precedence CANONICALS > FRESHNESS > retrieved). The pipeline
@@ -67,7 +67,7 @@ class Canonicals:
         block = self.raw_text.strip()
         if not self.expired:
             return block
-        overrides = ["", "### RUNTIME OVERRIDE — expired canonical facts (do NOT assert):"]
+        overrides = ["", "### RUNTIME OVERRIDE – expired canonical facts (do NOT assert):"]
         for e in self.expired:
             overrides.append(
                 f"- `{e.path}` expired {e.valid_until.isoformat()}. "

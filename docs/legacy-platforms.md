@@ -13,10 +13,10 @@ source_url: https://www.stobox.io
 # Stobox's earlier tokenization platforms
 
 **DS Dashboard (V1–V3)** and **Stobox 4** were Stobox's proprietary tokenization
-platforms, used by clients from roughly **2022 to 2026**. They ran on different
+platforms, used by clients before the current products. They ran on different
 technology stacks and architectures over time, but shared one goal: make
 tokenization as easy as possible for businesses that don't go deep into
-technology — and especially not into blockchain. Each platform had its own
+technology – and especially not into blockchain. Each platform had its own
 access links.
 
 **None of these platforms is available anymore.** They have been retired.

@@ -1,6 +1,6 @@
 """Prompt library loader.
 
-Prompts live as versioned YAML under ``config/prompts/`` — never hardcoded in
+Prompts live as versioned YAML under ``config/prompts/`` – never hardcoded in
 code (spec: "Store prompts separately. Never hardcode. Version prompts. A/B test
 prompts."). Each file:
 

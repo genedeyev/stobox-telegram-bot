@@ -1,4 +1,4 @@
-"""Remote knowledge sync — build sources from config, fetch, and index.
+"""Remote knowledge sync – build sources from config, fetch, and index.
 
 Runs the web crawler and GitHub ingester and feeds their Documents through the
 same incremental indexer as local ``docs/`` (content-hash change detection, so
@@ -29,7 +29,7 @@ def build_sources(config: Config) -> list[Source]:
     s = config.section("knowledge.sources")
     sources: list[Source] = []
 
-    # llms.txt / llms-full.txt — the curated, canonical AI reference (highest value).
+    # llms.txt / llms-full.txt – the curated, canonical AI reference (highest value).
     llms = s.get("llms") or {}
     if llms.get("enabled"):
         sources.append(

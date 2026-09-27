@@ -1,8 +1,8 @@
-"""AMA collector — crowd-sourced, community-ranked AMA prep.
+"""AMA collector – crowd-sourced, community-ranked AMA prep.
 
 Members submit questions with /ama during an open collection window; similar
 questions merge (each merge is an implicit upvote); everyone upvotes with a tap.
-Admins get a vote-ranked list — zero manual triage. Persisted to JSON.
+Admins get a vote-ranked list – zero manual triage. Persisted to JSON.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _tokens(t: str) -> set[str]:
 
 
 def _similar(a: str, b: str, threshold: float = 0.6) -> bool:
-    # Overlap coefficient (min-based) — more forgiving than Jaccard for short,
+    # Overlap coefficient (min-based) – more forgiving than Jaccard for short,
     # differently-phrased questions ("when's the burn deadline?" ≈ "burn
     # deadline time?"). Requires ≥2 shared content words to avoid over-merging.
     ta, tb = _tokens(a), _tokens(b)

@@ -1,6 +1,6 @@
 """Deterministic analysis over decision-log records.
 
-No LLM here — pure aggregation so it's fast, cheap, and unit-testable. The FAQ
+No LLM here – pure aggregation so it's fast, cheap, and unit-testable. The FAQ
 generator (faq.py) layers the reasoner on top of ``cluster_questions``.
 """
 

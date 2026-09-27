@@ -1,6 +1,6 @@
 """Real-time FUD spike detector.
 
-A single skeptic isn't an emergency — but several FUD messages in a short window
+A single skeptic isn't an emergency – but several FUD messages in a short window
 (coordinated or spreading) is something admins want to know about immediately,
 not in tomorrow's digest. This tracks FUD events per chat and fires at most one
 alert per cooldown once a spike crosses the threshold.

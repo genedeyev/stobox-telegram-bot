@@ -1,6 +1,6 @@
 """Offline/deterministic providers for local dev, tests, and CI.
 
-No network, no API keys. The hash embedder is NOT semantically meaningful — it
+No network, no API keys. The hash embedder is NOT semantically meaningful – it
 exists so the vector store, retrieval, and pipeline are runnable and testable
 without external services. Production uses real providers via the factory.
 """
@@ -46,7 +46,7 @@ class EchoLLM(LLMProvider):
     ) -> LLMResult:
         user = next((m.content for m in reversed(messages) if m.role == "user"), "")
         return LLMResult(
-            text=f"[echo-llm — no API key configured] I received: {user[:200]}",
+            text=f"[echo-llm – no API key configured] I received: {user[:200]}",
             model="echo",
             provider=self.name,
         )

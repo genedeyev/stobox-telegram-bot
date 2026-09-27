@@ -31,7 +31,7 @@ def _profile_from_json(raw: str | dict, user_key: str = "",
     """Hydrate a stored profile, tolerating schema drift.
 
     Unknown keys (fields since removed/renamed) are dropped, and any residual
-    failure yields a FRESH profile instead of raising — a stale row must never
+    failure yields a FRESH profile instead of raising – a stale row must never
     make the bot stop answering an existing user.
     """
     from ..util import filter_dataclass_kwargs
@@ -85,7 +85,7 @@ class MemoryStore:
 
     def forget_threads(self, fragment: str) -> int:
         """Drop conversation windows whose thread key contains ``fragment``
-        (e.g. the user's DM chat id) — part of the erasure path."""
+        (e.g. the user's DM chat id) – part of the erasure path."""
         keys = [k for k in self._convos if fragment in k]
         for k in keys:
             self._convos.pop(k, None)
@@ -167,5 +167,5 @@ async def build_memory_store(config: Config) -> MemoryStore:
             return store
         except Exception as exc:  # noqa: BLE001
             log.error("memory.pg_failed", error=str(exc))
-    log.warning("memory.in_memory", reason="no/failed DATABASE_URL — dev fallback")
+    log.warning("memory.in_memory", reason="no/failed DATABASE_URL – dev fallback")
     return MemoryStore(window)

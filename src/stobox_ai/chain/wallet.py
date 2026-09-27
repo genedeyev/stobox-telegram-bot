@@ -1,4 +1,4 @@
-"""STBU wallet migration checker — read-only balance lookup.
+"""STBU wallet migration checker – read-only balance lookup.
 
 Given a PUBLIC wallet address, calls ``balanceOf`` on the live STBU contract on
 Base and on the discontinued legacy contracts via public JSON-RPC (no keys, no writes,
@@ -28,9 +28,9 @@ CHAIN_LABELS = {
     "polygon": "Polygon", "arbitrum": "Arbitrum", "base": "Base",
 }
 DEFAULT_RPC = {
-    "ethereum": "https://eth.llamarpc.com",
+    "ethereum": "https://ethereum-rpc.publicnode.com",
     "bnb_chain": "https://bsc-dataseed.binance.org",
-    "polygon": "https://polygon-rpc.com",
+    "polygon": "https://polygon-bor-rpc.publicnode.com",
     "arbitrum": "https://arb1.arbitrum.io/rpc",
     "base": "https://mainnet.base.org",
 }
@@ -41,7 +41,7 @@ def is_address(s: str) -> bool:
 
 
 def is_private_key(s: str) -> bool:
-    """A 64-hex string is a private key, NOT an address — never accept it."""
+    """A 64-hex string is a private key, NOT an address – never accept it."""
     t = s.strip()
     return bool(_PRIVKEY.match(t)) and not is_address(t)
 
@@ -86,7 +86,7 @@ def _balanceof_data(address: str) -> str:
 
 def _to_int(hexstr: str | None) -> int | None:
     if hexstr is None:
-        return None                       # RPC error — distinct from zero balance
+        return None                       # RPC error – distinct from zero balance
     if hexstr in ("0x", "0x0", ""):
         return 0
     try:

@@ -3,9 +3,9 @@
 These enforce the [CORE] §4 hard rails independently of the model, so a model
 slip cannot become a compliance incident:
 
-  * pre-intercepts  — seed-phrase leaks, prompt-injection, price speculation and
+  * pre-intercepts – seed-phrase leaks, prompt-injection, price speculation and
     "should I buy" are answered by fixed, safe text (no LLM latitude).
-  * post-processing — appends the investment disclaimer and the anti-impersonation
+  * post-processing – appends the investment disclaimer and the anti-impersonation
     warning where required, and scrubs/blocks forbidden claims (Class-A,
     "$500M", securities exemptions, "will reach 250M", competitor comparisons).
 
@@ -22,6 +22,81 @@ from ..logging import get_logger
 
 log = get_logger(__name__)
 
+
+# --- Output link / address rail (stage 0 security review, 27.09.2026) -------
+# The prompt and the regexes are public, and recall feeds other people's old
+# messages into the answer, so a scammer's link or address could come back out
+# in Stoby's voice. Deterministic rule: only official hosts and only addresses
+# that appear in canonicals.yaml ever reach the chat.
+_ALLOWED_HOSTS = ("stobox.io",)                      # + every subdomain
+_ALLOWED_PREFIXES = (
+    "x.com/stoboxcompany", "twitter.com/stoboxcompany", "t.me/stobox_community",
+    "linkedin.com/company/stobox", "youtube.com/@stobox", "github.com/stoboxtechnologies",
+    "facebook.com/stoboxforbusiness", "stobox-platform.medium.com",
+    "coingecko.com/en/coins/stobox-token",
+    "basescan.org", "etherscan.io", "arbiscan.io", "bscscan.com", "polygonscan.com",
+)
+_URL = re.compile(
+    r"(?i)\b(?:https?://|www\.)[^\s<>\"')\]]+"
+    r"|\b(?:[a-z0-9-]+\.)+(?:xyz|io|com|org|net|app|finance|site|online|top|info|co|me|ly|gg|"
+    r"link|live|pro|claims?|network|exchange|biz|cc|to)\b(?:/[^\s<>\"')\]]*)?"
+)
+_ADDR = re.compile(r"(?<![0-9a-fA-Fx])0x[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?(?![0-9a-fA-F])")
+LINK_REMOVED = "[link removed: official links only, see /sources]"
+ADDR_REMOVED = "[address removed: verify addresses only at https://www.stobox.io/stbu]"
+_CANON_ADDRS: set[str] | None = None
+
+
+def _canon_addresses() -> set[str]:
+    global _CANON_ADDRS
+    if _CANON_ADDRS is None:
+        try:
+            with open("canonicals.yaml", encoding="utf-8") as f:
+                _CANON_ADDRS = {a.lower() for a in _ADDR.findall(f.read())}
+        except OSError:
+            _CANON_ADDRS = set()        # fail closed: no address is trusted
+    return _CANON_ADDRS
+
+
+def _url_allowed(url: str) -> bool:
+    u = re.sub(r"(?i)^https?://", "", url).lower()
+    u = u[4:] if u.startswith("www.") else u
+    host = u.split("/", 1)[0].split(":", 1)[0].rstrip(".")
+    if any(host == h or host.endswith("." + h) for h in _ALLOWED_HOSTS):
+        return True
+    return any(u.startswith(p) for p in _ALLOWED_PREFIXES)
+
+
+def scrub_links_and_addresses(text: str) -> tuple[str, int]:
+    """Remove non-official URLs and non-canonical addresses. Returns (text, n)."""
+    n = 0
+
+    def _u(m: re.Match) -> str:
+        nonlocal n
+        url = m.group(0).rstrip(".,;:!?")
+        tail = m.group(0)[len(url):]
+        if _url_allowed(url):
+            return m.group(0)
+        n += 1
+        return LINK_REMOVED + tail
+
+    def _a(m: re.Match) -> str:
+        nonlocal n
+        if m.group(0).lower() in _canon_addresses():
+            return m.group(0)
+        n += 1
+        return ADDR_REMOVED
+
+    text = _URL.sub(_u, text or "")
+    text = _ADDR.sub(_a, text)
+    return text, n
+
+
+def no_em_dash(text: str) -> str:
+    """Stobox house rule: an em dash never reaches the chat."""
+    out = re.sub(r"[ \t]*\u2014[ \t]*", " \u2013 ", text or "")
+    return re.sub(r"(^|\n) \u2013 ", "\\1\u2013 ", out)
+
 DISCLAIMER = "This is information, not investment advice."
 
 IMPERSONATION_WARNING = (
@@ -32,7 +107,7 @@ IMPERSONATION_WARNING = (
 
 _SEED_TERMS = re.compile(
     r"\b(seed[\s-]?phrase|secret[\s-]?phrase|recovery[\s-]?phrase|private[\s-]?key|mnemonic)\b"
-    # ru/uk/es — the community speaks 12 languages; the deterministic rails must
+    # ru/uk/es – the community speaks 12 languages; the deterministic rails must
     # fire on the highest-risk security topics in the biggest non-English ones too.
     r"|\b(сид|сід)[\s-]?фраз|\bсекретн(ая|а)\s+фраз|\bфраза\s+(восстановления|відновлення)"
     r"|\bприватн(ый|ий)\s+ключ|\bмнемоник|\bмнемонік"
@@ -42,7 +117,7 @@ _SEED_TERMS = re.compile(
 _INJECTION = re.compile(
     r"\b(ignore|disregard|forget|override)\b.{0,40}\b(instruction|instructions|rules|prompt|"
     r"guardrail)\b|(system\s+prompt)|(developer\s+mode)|(reveal|print|show|repeat).{0,20}"
-    # Bare "DAN" used to catch users literally named Dan — require jailbreak context.
+    # Bare "DAN" used to catch users literally named Dan – require jailbreak context.
     r"(your\s+)?(system\s+)?prompt|jailbreak|\b(act\s+as|you\s+are|enable|pretend\s+to\s+be)\s+DAN\b"
     r"|\bDAN\s+mode\b",
     re.I,
@@ -79,12 +154,12 @@ _BUY_SELL = re.compile(
 
 # Capital-raise / securities-solicitation: STBX/STBU are regulated securities, so
 # an "active seed round / token sale / STBX funding" is a securities offering. Any
-# message asserting or asking about a Stobox raise is deflected to the team — Stoby
+# message asserting or asking about a Stobox raise is deflected to the team – Stoby
 # never confirms, denies, or persists unannounced financing, and never adopts such a
 # claim from chat (not even from an admin; material facts change only via canonicals).
 _CAPITAL_RAISE = re.compile(
     # A Stobox subject near a genuine raise-EVENT term. Note: bare "token" is NOT a
-    # raise event (it's the token's name — "STBU token"); only "token sale" counts.
+    # raise event (it's the token's name – "STBU token"); only "token sale" counts.
     r"\b(stbx|stbu|stobox)\b[^.?!]{0,40}\b(seed\s+round|private\s+round|funding\s+round|"
     r"funding|pre[\s-]?sale|presale|token\s+sale|ico|ieo|ido|raising|capital\s+raise)\b"
     r"|\b(seed|private|funding|investment)\s+round\b[^.?!]{0,40}"
@@ -94,7 +169,7 @@ _CAPITAL_RAISE = re.compile(
     r"|\b(is|are)\s+(stobox|you|the\s+team|the\s+company)\s+(raising|doing\s+a\s+(raise|round))\b",
     re.I,
 )
-# Exclude Raisable PRODUCT questions ("help ME raise", "for my company") — those are
+# Exclude Raisable PRODUCT questions ("help ME raise", "for my company") – those are
 # a legit routed answer, not a Stobox-solicitation deflection. Deliberately narrow so
 # it never swallows "how do I invest in the Stobox seed round" (that IS a deflection).
 _RAISE_PRODUCT = re.compile(
@@ -109,7 +184,7 @@ _WALLET_TOPIC = re.compile(
     re.I,
 )
 _INVESTMENT_TOPIC = re.compile(
-    # "hold" alone is too broad ("hold assets on-chain") — only trading-context hold.
+    # "hold" alone is too broad ("hold assets on-chain") – only trading-context hold.
     r"\b(buy|sell|invest|investment|price|worth\s+(buying|investing)|profit|"
     r"return|yield|dividend|valuation|token\s*price|market\s*cap|roi|apy|"
     r"(should|to)\s+hold|hodl)\b",
@@ -136,7 +211,7 @@ _FORBIDDEN = [
     ),
 ]
 # Known impostor handles → deterministically scrubbed from output (never shown,
-# even in warnings — an official bot must not give fake accounts name recognition).
+# even in warnings – an official bot must not give fake accounts name recognition).
 _SCRUB = [
     (re.compile(r"@?stobox_io\b|@?stobox_official\b", re.I), "an unofficial account"),
 ]
@@ -171,7 +246,7 @@ class ComplianceRails:
         if _SEED_TERMS.search(t):
             return RailResult(
                 text=(
-                    "🚨 Never share a seed phrase, recovery phrase, or private key — with "
+                    "🚨 Never share a seed phrase, recovery phrase, or private key – with "
                     "anyone, including me. If you have already shared it, consider that wallet "
                     "compromised and move your funds to a new wallet immediately.\n\n"
                     + IMPERSONATION_WARNING
@@ -184,7 +259,7 @@ class ComplianceRails:
             return RailResult(
                 text=(
                     "I can't change my instructions, reveal my system prompt, or enable any "
-                    "special mode — those rules are fixed. Happy to help with your actual "
+                    "special mode – those rules are fixed. Happy to help with your actual "
                     "question about Stobox, tokenization, or the STBU migration."
                 ),
                 intercepted=True, category="injection",
@@ -193,7 +268,7 @@ class ComplianceRails:
         if _BUY_SELL.search(t) or _SPECULATION.search(t):
             return RailResult(
                 text=(
-                    "I can't give investment advice or make price predictions — Stobox's "
+                    "I can't give investment advice or make price predictions – Stobox's "
                     "official bot cannot speculate on token value. I can share published facts "
                     "(what STBU/STBX are, the migration, the company valuation page) and point "
                     "you to the team.\n\n" + DISCLAIMER
@@ -204,7 +279,7 @@ class ComplianceRails:
         if _CAPITAL_RAISE.search(t) and not _RAISE_PRODUCT.search(t):
             return RailResult(
                 text=(
-                    "I can't confirm any active raise — anything about fundraising, a seed "
+                    "I can't confirm any active raise – anything about fundraising, a seed "
                     "round, or an STBU/STBX token sale is a question for the Stobox team and "
                     "official channels (stobox.io). I only share what's in the official docs, "
                     "and I won't speculate on or confirm unannounced financing.\n\n"
@@ -219,7 +294,7 @@ class ComplianceRails:
     def post_process(self, answer: str, user_text: str) -> RailResult:
         result = RailResult(text=answer or "")
 
-        # 0) Deterministic scrubs — impostor handles etc. never reach the chat.
+        # 0) Deterministic scrubs – impostor handles etc. never reach the chat.
         for pat, repl in _SCRUB:
             result.text = pat.sub(repl, result.text)
 
@@ -244,7 +319,7 @@ class ComplianceRails:
             result.escalate = True
             result.category = "blocked_claim"
 
-        # 2) Anti-impersonation warning on wallet-adjacent topics — unless the
+        # 2) Anti-impersonation warning on wallet-adjacent topics – unless the
         #    answer already carries one (models often write their own; don't
         #    stack two warnings in one message).
         already_warned = re.search(
@@ -260,4 +335,12 @@ class ComplianceRails:
                 result.text = result.text.rstrip() + "\n\n" + DISCLAIMER
                 result.disclaimer_added = True
 
+        # 4) Only official links and canonical addresses reach the chat.
+        result.text, removed = scrub_links_and_addresses(result.text)
+        if removed:
+            log.warning("rails.scrubbed_links", count=removed, q=user_text[:120])
+
+        # 5) House typography (Stobox rule for every external text): no em dash.
+        #    Spaced en dash for asides; a bare em dash becomes an en dash.
+        result.text = no_em_dash(result.text)
         return result

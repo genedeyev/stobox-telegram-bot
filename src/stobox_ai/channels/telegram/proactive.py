@@ -1,10 +1,10 @@
 """Proactive engagement for Telegram.
 
 Three jobs, all config-driven:
-  * Evangelist   — every N hours, post grounded educational content to active
+  * Evangelist – every N hours, post grounded educational content to active
     group chats (rotating format, avoiding repetition), respecting quiet hours.
-  * Revival      — nudge a chat that's gone quiet for too long.
-  * Daily digest — send admins a community report (top questions, leads, spam…).
+  * Revival – nudge a chat that's gone quiet for too long.
+  * Daily digest – send admins a community report (top questions, leads, spam…).
 
 Requires the PTB job-queue extra; if unavailable, proactive posting is skipped
 gracefully (the bot still answers reactively).
@@ -48,11 +48,11 @@ async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2,
     Telegram raises RetryAfter at ~30 msg/s globally (and per-chat limits);
     swallowing it silently drops recipients from a blast. When ``html=True`` the
     message is sent with HTML parse mode and, if Telegram rejects the markup,
-    retried once as stripped plain text — so a stray tag never surfaces raw in
+    retried once as stripped plain text – so a stray tag never surfaces raw in
     the chat (the `<b>…</b>` bug) nor drops the post entirely. Returns:
-      "ok"        — delivered
-      "forbidden" — user blocked the bot / bot kicked (caller may unsubscribe)
-      "failed"    — other error after retries (caller decides whether to retry later)
+      "ok" – delivered
+      "forbidden" – user blocked the bot / bot kicked (caller may unsubscribe)
+      "failed" – other error after retries (caller decides whether to retry later)
     """
     from telegram.error import BadRequest, Forbidden, RetryAfter
 
@@ -86,7 +86,7 @@ async def send_with_flood_control(bot, chat_id, text: str, *, retries: int = 2,
 
 
 # Any HTML-like tag (letter or / after '<'), so the plain-text fallback removes
-# unsupported tags too (<h1>, <p>, …) — but leaves prose like "STBU < $1" alone.
+# unsupported tags too (<h1>, <p>, …) – but leaves prose like "STBU < $1" alone.
 _TAG_RE = re.compile(r"</?[a-zA-Z][^>]*>")
 
 
@@ -94,7 +94,7 @@ def _strip_tags(text: str) -> str:
     return _TAG_RE.sub("", text or "")
 
 _FORMATS = [
-    # Hero topics — weighted heavier so proactive content leans into STBU,
+    # Hero topics – weighted heavier so proactive content leans into STBU,
     # migration, news/achievements, and the blog.
     "STBU fact or utility spotlight",
     "Stobox achievement spotlight (clients / assets / jurisdictions, as published)",
@@ -106,48 +106,48 @@ _FORMATS = [
     "Poll (pose one question)",
 ]
 
-# Rotating friendly openers for new-blog announcements (deterministic — no LLM
+# Rotating friendly openers for new-blog announcements (deterministic – no LLM
 # in broadcasts). Index rotates per announcement so consecutive posts differ.
 _BLOG_OPENERS = [
-    "📰 Fresh from the Stobox blog — check out our new article:",
+    "📰 Fresh from the Stobox blog – check out our new article:",
     "🆕 Just published on the Stobox blog:",
-    "📚 New read for you — hot off the Stobox blog:",
+    "📚 New read for you – hot off the Stobox blog:",
     "✍️ The Stobox team just published something new:",
 ]
 
 # Quieter, low-key openers for surfacing an EXISTING post when a chat goes still.
 _QUIET_BLOG_OPENERS = [
-    "Quiet in here — here's a good read from our blog while it's calm:",
+    "Quiet in here – here's a good read from our blog while it's calm:",
     "In case it's useful, one from the archive worth a look:",
-    "Bit slow today — here's a piece some folks found handy:",
+    "Bit slow today – here's a piece some folks found handy:",
     "While things are quiet, a read that comes up a lot:",
     "No rush, but this one's worth bookmarking:",
 ]
 
 # Open, on-brand conversation starters that INVITE a reply (proactive engagement).
-# No links, no pressure — just spark discussion when a room goes still.
+# No links, no pressure – just spark discussion when a room goes still.
 _ENGAGE_PROMPTS = [
-    # Hero topics first — STBU, migration, news, blog.
+    # Hero topics first – STBU, migration, news, blog.
     "STBU holders: four pools on Base carry the STBU name and only one is the issuer's. "
     "Ask me how to tell them apart before you trade.",
     "Caught the latest on the Stobox blog? Ask me for the newest post or the weekly RWA & "
-    "Tokenization Digest — happy to share.",
+    "Tokenization Digest – happy to share.",
     "Milestone moment: Stobox has supported $305M+ in assets across 20+ jurisdictions since "
     "2018. What corner of RWA are you most excited about?",
     "Quick one for the room 👇 If you could tokenize any real-world asset tomorrow, "
     "what would it be?",
-    "Curious what brought everyone here — STBU, RWA in general, or building "
+    "Curious what brought everyone here – STBU, RWA in general, or building "
     "with Compass?",
-    "Honest question: what's the biggest thing holding tokenization back right now — "
+    "Honest question: what's the biggest thing holding tokenization back right now – "
     "regulation, liquidity, or awareness?",
     "What would make you trust a tokenized asset enough to actually hold it? 🤔",
-    "Issuers in here — what asset class are you eyeing? Real estate, a fund, equity, "
+    "Issuers in here – what asset class are you eyeing? Real estate, a fund, equity, "
     "private credit?",
     "What's one thing about Stobox or RWA you wish was explained more simply? I'll take a "
     "crack at it.",
-    "Building anything on-chain right now? Drop what you're working on — happy to point you "
+    "Building anything on-chain right now? Drop what you're working on – happy to point you "
     "the right way.",
-    "Real estate, private credit, or company equity — which do you reckon tokenizes best, "
+    "Real estate, private credit, or company equity – which do you reckon tokenizes best, "
     "and why?",
 ]
 
@@ -156,7 +156,7 @@ def migration_status_line(canon, today) -> str | None:
     """One concise, HTML STBU→Base migration status line for `today`, grounded in
     the canonical dates. Reused by the twice-daily updates briefing AND the
     new-member welcome (the single most relevant live update). Returns None when
-    the canonical dates are missing. Pure/synchronous — trivially unit-tested."""
+    the canonical dates are missing. Pure/synchronous – trivially unit-tested."""
     from ...guardrails.canonicals import _as_date
 
     if canon is None:
@@ -180,7 +180,7 @@ def migration_status_line(canon, today) -> str | None:
     # Window open, on/before the deadline → count down to the deadline.
     if today <= deadline:
         days = (deadline - today).days
-        return (f"⏳ <b>STBU → Base migration is OPEN</b> — burn deadline <b>{_in(days)}</b> "
+        return (f"⏳ <b>STBU → Base migration is OPEN</b> – burn deadline <b>{_in(days)}</b> "
                 f"(burn {_burn_before(deadline, '%d %b %Y')}). Burn-and-mint, 1:1, same "
                 "wallet only. Steps: /migrate")
     # After the deadline: the claim period (and, later, the end of it).
@@ -198,7 +198,7 @@ def migration_status_line(canon, today) -> str | None:
 
 
 async def fetch_og_meta(url: str, timeout: float = 15.0) -> dict:
-    """Fetch a page's OpenGraph meta (image, title, description). Best-effort —
+    """Fetch a page's OpenGraph meta (image, title, description). Best-effort – 
     returns {} on any failure so announcements degrade to a link card."""
     try:
         import httpx
@@ -253,10 +253,10 @@ class ProactiveScheduler:
         # Last updates-briefing text, to skip back-to-back identical broadcasts.
         self._updates_last: str = str(state.get("updates_last", ""))
         # Last evangelist post time (ISO). PERSISTED so the post cadence is
-        # driven by wall-clock, not process uptime — otherwise every redeploy
+        # driven by wall-clock, not process uptime – otherwise every redeploy
         # reset the "first post in 4h" timer and Stoby went silent for hours.
         self._evangelist_last: str = str(state.get("evangelist_last", ""))
-        # Last weekly content-preview time (ISO) — same redeploy-proofing.
+        # Last weekly content-preview time (ISO) – same redeploy-proofing.
         self._content_last: str = str(state.get("content_last", ""))
 
     def _save_state(self) -> None:
@@ -278,7 +278,7 @@ class ProactiveScheduler:
             log.warning("proactive.no_job_queue", hint="install python-telegram-bot[job-queue]")
             return
         cfg = self.engine.config
-        # Liveness heartbeat — the container HEALTHCHECK stats this file's
+        # Liveness heartbeat – the container HEALTHCHECK stats this file's
         # mtime, catching a wedged event loop / dead job queue (an `import`
         # check can't).
         jq.run_repeating(self._heartbeat_job, interval=60, first=5)
@@ -292,7 +292,7 @@ class ProactiveScheduler:
         if cfg.get("proactive.growth.revive_inactive", True):
             jq.run_repeating(self._revival_job, interval=1800, first=300)  # check ~5m then every 30m
         if cfg.get("observability.daily_digest", True):
-            # run_daily at a FIXED UTC time — NOT first=24h. With first=interval
+            # run_daily at a FIXED UTC time – NOT first=24h. With first=interval
             # every redeploy reset the timer, so the digest effectively never
             # fired (Arevik: "haven't seen it"). Daily jobs must be wall-clock.
             from datetime import time as _time
@@ -305,7 +305,7 @@ class ProactiveScheduler:
 
             jq.run_daily(self._resync_job, time=_time(4, 0, tzinfo=UTC))
         # New-blog announcements: cheap in-memory diff, so a tight interval is
-        # fine — a post lands minutes after the sync that discovers it.
+        # fine – a post lands minutes after the sync that discovers it.
         blog = cfg.section("proactive.blog_announcements")
         if blog.get("enabled", True):
             minutes = float(blog.get("interval_minutes", 10))
@@ -314,14 +314,14 @@ class ProactiveScheduler:
         # per-threshold dedupe means each blast fires exactly once.
         if cfg.get("proactive.reminders.enabled", True):
             jq.run_repeating(self._reminder_job, interval=3600, first=300)
-        # PUBLIC migration countdown to groups — once a day at 09:00 UTC; the job
+        # PUBLIC migration countdown to groups – once a day at 09:00 UTC; the job
         # itself decides whether today is a post-day (weekly far out → daily in
         # the final week). Separate from the opt-in /remindme DMs.
         if cfg.get("proactive.migration_countdown.enabled", True):
             from datetime import time as _time
 
             jq.run_daily(self._migration_countdown_job, time=_time(9, 0, tzinfo=UTC))
-        # "What's new at Stobox" — a curated updates briefing (latest blog +
+        # "What's new at Stobox" – a curated updates briefing (latest blog +
         # migration status + live STBU market) posted to groups on a fixed daily
         # schedule (twice a day by default). Stoby INITIATES with relevant updates.
         updates = cfg.section("proactive.updates")
@@ -339,7 +339,7 @@ class ProactiveScheduler:
             jq.run_repeating(self._winback_job, interval=6 * 3600, first=1800)
         # Weekly content-ideas preview to admins (from community question-gaps).
         if cfg.get("proactive.content.enabled", True):
-            # Weekly admin content preview — also wall-clock (run_daily; the job
+            # Weekly admin content preview – also wall-clock (run_daily; the job
             # self-gates to run once a week) so redeploys don't keep resetting it.
             from datetime import time as _time
 
@@ -378,10 +378,10 @@ class ProactiveScheduler:
             return
         if not results:
             return
-        lines = [f"📝 Weekly content ideas ({len(results)}) — from community questions:"]
+        lines = [f"📝 Weekly content ideas ({len(results)}) – from community questions:"]
         for r in results:
             tag = "🕳 gap" if r["is_gap"] else f"{r['count']}×"
-            lines.append(f"• {tag} — {r['title'][:80]}")
+            lines.append(f"• {tag} – {r['title'][:80]}")
         lines.append("\nRun /content file to open these as GitHub issues.")
         await adapter.dm_admins(context, "\n".join(lines))
         self._content_last = now.isoformat()
@@ -419,9 +419,9 @@ class ProactiveScheduler:
             self._countdown_last = "opened"
             self._save_state()
             text = ("🟢 <b>The STBU → Base burn window is NOW OPEN!</b>\n\n"
-                    "Burn-and-mint, 1:1, <b>same wallet only</b> — consolidate all your STBU into "
+                    "Burn-and-mint, 1:1, <b>same wallet only</b> – consolidate all your STBU into "
                     "one wallet first. Legacy V1 isn't eligible. Burn "
-                    f"{_burn_before(deadline, '%d %b %Y')} — minting opens the same instant.\n\n"
+                    f"{_burn_before(deadline, '%d %b %Y')} – minting opens the same instant.\n\n"
                     "Steps: /migrate  ·  Reminders: /remindme\n"
                     "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
             await self._broadcast(context, chats, text)
@@ -436,7 +436,7 @@ class ProactiveScheduler:
             when = ("<b>TODAY</b>" if days == 0 else
                     "<b>tomorrow</b>" if days == 1 else f"in <b>{days} days</b>")
             text = (
-                f"🔥 The <b>STBU → Base</b> burn window <b>OPENS {when}</b> — "
+                f"🔥 The <b>STBU → Base</b> burn window <b>OPENS {when}</b> – "
                 f"{window_open.strftime('%d %b %Y')}!\n\n"
                 "Get ready: consolidate all your STBU into <b>one wallet</b> now "
                 "(burn-and-mint will be 1:1, same wallet only). Legacy V1 isn't eligible.\n\n"
@@ -467,7 +467,7 @@ class ProactiveScheduler:
         when = ("<b>TODAY</b>" if days == 0 else
                 "<b>tomorrow</b>" if days == 1 else f"in <b>{days} days</b>")
         text = (
-            f"⏳ The <b>STBU → Base</b> burn deadline is {when} — burn "
+            f"⏳ The <b>STBU → Base</b> burn deadline is {when} – burn "
             f"{_burn_before(deadline, '%d %b %Y')} (minting opens the same instant).\n\n"
             "Burn-and-mint, 1:1, <b>same wallet only</b>. Consolidate all your STBU into one "
             "wallet first; legacy V1 isn't eligible.\n\n"
@@ -482,12 +482,12 @@ class ProactiveScheduler:
     async def _build_updates_briefing(self) -> str | None:
         """Compose the 'What's new at Stobox' briefing from the enabled sources
         (migration status + live STBU market + latest blog). Returns None when
-        nothing substantive resolves. Never raises — a broken source is skipped."""
+        nothing substantive resolves. Never raises – a broken source is skipped."""
         cfg = self.engine.config.section("proactive.updates")
         blocks: list[str] = []
         today = datetime.now(UTC).date()
 
-        # 1) Migration status — the single most time-sensitive update. Skip it when
+        # 1) Migration status – the single most time-sensitive update. Skip it when
         #    the dedicated public countdown already posted a dated reminder to these
         #    same groups today, so migration isn't announced twice in one day.
         if cfg.get("include_migration", True) and self._countdown_last != str(today):
@@ -504,7 +504,7 @@ class ProactiveScheduler:
                 snap = None
             if snap:
                 blocks.append(
-                    f"📈 <b>STBU</b>: {snap.format_brief()} — market data, "
+                    f"📈 <b>STBU</b>: {snap.format_brief()} – market data, "
                     "not advice, not the company valuation."
                 )
 
@@ -518,7 +518,7 @@ class ProactiveScheduler:
         if not blocks:
             return None
         header = "📣 <b>What's new at Stobox</b>"
-        footer = ("\n\nQuestions on any of this? Just ask — I'm here 24/7. "
+        footer = ("\n\nQuestions on any of this? Just ask – I'm here 24/7. "
                   "⚠️ Stobox staff never DM you first; only trust links from stobox.io.")
         return header + "\n\n" + "\n\n".join(blocks) + footer
 
@@ -580,7 +580,7 @@ class ProactiveScheduler:
                     "tomorrow" if days_left == 1 else f"in {days_left} days")
                 blast = (
                     f"burn-{days_left}",
-                    f"⏰ <b>STBU migration reminder</b> — the burn deadline is "
+                    f"⏰ <b>STBU migration reminder</b> – the burn deadline is "
                     f"<b>{when}</b>: burn {_burn_before(deadline, '%d %B %Y')}.\n\n"
                     "Burn-and-mint, 1:1, same wallet only. Consolidate all STBU into "
                     "one wallet first. Legacy V1 tokens are not eligible. Full steps: "
@@ -590,7 +590,7 @@ class ProactiveScheduler:
         elif claims and today >= claims and not book.was_sent("claims-open"):
             blast = (
                 "claims-open",
-                "🟢 <b>STBU claims are open</b> — if you burned before the deadline, "
+                "🟢 <b>STBU claims are open</b> – if you burned before the deadline, "
                 "you can now claim on Base (same wallet). Details: /migrate or "
                 "https://stobox.io\n\n" + IMPERSONATION_WARNING +
                 "\n\nStop these reminders: /stopreminders",
@@ -610,13 +610,13 @@ class ProactiveScheduler:
                 book.mark_delivered(tag, chat_id)
                 sent += 1
             elif status == "forbidden":
-                # Blocked the bot — that's an unsubscribe, not a retry-forever.
+                # Blocked the bot – that's an unsubscribe, not a retry-forever.
                 book.unsubscribe(chat_id)
                 log.info("reminders.unsubscribed_blocked", chat=chat_id)
             else:
                 failed += 1
             await asyncio.sleep(0.05)
-        # Only close the tag after a pass with zero transient failures — the
+        # Only close the tag after a pass with zero transient failures – the
         # hourly tick retries just the missed subscribers otherwise.
         if failed == 0:
             book.mark_sent(tag)
@@ -636,19 +636,19 @@ class ProactiveScheduler:
             log.info("blog.no_chats_to_announce", posts=len(new_posts))
             return
 
-        for post in new_posts[:3]:  # cap per tick — never flood the chat
+        for post in new_posts[:3]:  # cap per tick – never flood the chat
             og = await fetch_og_meta(post["url"])
             title = og.get("title") or post["title"]
             teaser = (og.get("description") or "").strip()
             opener = _BLOG_OPENERS[self._opener_i % len(_BLOG_OPENERS)]
             self._opener_i += 1
-            # Crawled OG metadata is untrusted for HTML mode — escape it.
+            # Crawled OG metadata is untrusted for HTML mode – escape it.
             caption = f"{opener}\n\n<b>{html_escape(title)}</b>"
             if teaser:
                 caption += f"\n{html_escape(teaser[:220])}"
             caption += (
                 f"\n\n🔗 {post['url']}"
-                "\n\nGive it a read — questions welcome right here. 👇"
+                "\n\nGive it a read – questions welcome right here. 👇"
                 "\n🔁 Know someone who'd find this useful? Forward it their way."
             )
             delivered = False
@@ -686,11 +686,11 @@ class ProactiveScheduler:
         if not recipients:
             return
         label = TOPICS[topic]["label"]
-        # Title/teaser come from crawled OG metadata — escape before HTML mode.
+        # Title/teaser come from crawled OG metadata – escape before HTML mode.
         body = f"<b>{html_escape(title)}</b>"
         if teaser:
             body += f"\n{html_escape(teaser[:220])}"
-        dm = (f"{label} — new from Stobox 👇\n\n{body}\n\n🔗 {url}"
+        dm = (f"{label} – new from Stobox 👇\n\n{body}\n\n🔗 {url}"
               f"\n\n<i>You're subscribed to {label}. Manage or stop with /subscribe.</i>")
         sent = 0
         for chat_id, _lang in recipients:
@@ -737,10 +737,10 @@ class ProactiveScheduler:
             msg = (
                 f"👋 {hi}it's been a minute! A few things have moved at Stobox since we "
                 "last chatted. Want the short version?\n\n"
-                "• Ask me anything, anytime — I'm here 24/7\n"
-                "• /blog — the latest posts + RWA digest\n"
-                "• /subscribe — fine-tune what I ping you about (or turn it off)\n\n"
-                "<i>No pressure at all — reply /unsubscribe and I'll go quiet.</i>"
+                "• Ask me anything, anytime – I'm here 24/7\n"
+                "• /blog – the latest posts + RWA digest\n"
+                "• /subscribe – fine-tune what I ping you about (or turn it off)\n\n"
+                "<i>No pressure at all – reply /unsubscribe and I'll go quiet.</i>"
             )
             try:
                 await context.bot.send_message(
@@ -755,7 +755,7 @@ class ProactiveScheduler:
 
     async def _resync_job(self, context) -> None:
         # Nightly housekeeping rides the same 04:00 tick: decision-log retention
-        # (rows carry verbatim member questions — PII must not grow forever).
+        # (rows carry verbatim member questions – PII must not grow forever).
         try:
             days = int(self.engine.config.get("observability.decision_retention_days", 90))
             await self.engine.decisions.prune(days)
@@ -767,7 +767,7 @@ class ProactiveScheduler:
             log.error("proactive.resync_failed", error=str(exc), exc_info=True)
             # A silently-missed resync leaves the corpus a day stale until the
             # next 04:00 tick. Alert admins and retry in 30 minutes (transient
-            # network/API failures are the common case) — max 3 retries per day
+            # network/API failures are the common case) – max 3 retries per day
             # so a real outage doesn't loop-and-ping forever.
             self._resync_failures = getattr(self, "_resync_failures", 0) + 1
             adapter = self.app.bot_data.get("adapter")
@@ -777,13 +777,13 @@ class ProactiveScheduler:
                     await adapter.dm_admins(
                         context,
                         f"⚠️ Daily knowledge resync FAILED ({str(exc)[:150]}). "
-                        f"Retry {self._resync_failures}/3 in 30 min — or run /sync now.")
+                        f"Retry {self._resync_failures}/3 in 30 min – or run /sync now.")
                 if jq is not None:
                     jq.run_once(self._resync_job, when=1800)
             elif adapter:
                 await adapter.dm_admins(
                     context,
-                    "⛔ Knowledge resync failed 3 retries — giving up until the next "
+                    "⛔ Knowledge resync failed 3 retries – giving up until the next "
                     "04:00 UTC run. The corpus is marked stale in [FRESHNESS]; "
                     "run /sync once the underlying issue is fixed.")
             return
@@ -871,7 +871,7 @@ class ProactiveScheduler:
         log.info("proactive.evangelist_posted", format=fmt, chats=len(chats))
 
     async def _post_poll(self, context) -> None:
-        """Quiz night — post a native Telegram quiz poll to active groups. Correct
+        """Quiz night – post a native Telegram quiz poll to active groups. Correct
         answers auto-award XP (adapter PollAnswerHandler). Never price/investment."""
         adapter = self.app.bot_data.get("adapter")
         if not adapter:
@@ -884,7 +884,7 @@ class ProactiveScheduler:
 
     async def _revival_job(self, context) -> None:
         """When a chat goes quiet, surface a real blog post (preferred) or an
-        interesting fact — never at night, and marked as activity so the same
+        interesting fact – never at night, and marked as activity so the same
         chat isn't revived again until it's quiet for another full window."""
         if self._in_quiet_hours():
             return

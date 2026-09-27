@@ -46,8 +46,8 @@ def test_address_and_key_validation():
 @pytest.mark.asyncio
 async def test_checker_reports_balances_and_decimals():
     rpc = FakeRpc(balances={
-        "https://eth.llamarpc.com": 5_000 * 10**18,
-        "https://polygon-rpc.com": 0,
+        "https://ethereum-rpc.publicnode.com": 5_000 * 10**18,
+        "https://polygon-bor-rpc.publicnode.com": 0,
     })
     checker = WalletChecker(CONTRACTS, client=rpc)
     holdings = await checker.check(WALLET)
@@ -65,7 +65,7 @@ async def test_checker_marks_rpc_errors():
             if "polygon" in url:
                 return None                        # simulate RPC failure
             return await super().call(url, to, data)
-    rpc = ErrRpc(balances={"https://eth.llamarpc.com": 10**18})
+    rpc = ErrRpc(balances={"https://ethereum-rpc.publicnode.com": 10**18})
     holdings = await WalletChecker(CONTRACTS, client=rpc).check(WALLET)
     poly = next(h for h in holdings if h.chain == "polygon")
     assert not poly.ok

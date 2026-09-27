@@ -1,6 +1,6 @@
 """Topic subscriptions (strictly opt-in, DM only).
 
-Users pick topics they care about — migration, rwa-news, product — and Stoby
+Users pick topics they care about – migration, rwa-news, product – and Stoby
 DMs them only when something in that lane ships (a matching blog post, a product
 update, a migration milestone). Every push carries a one-tap way out, and we
 only ever message people who explicitly opted in, so this respects the

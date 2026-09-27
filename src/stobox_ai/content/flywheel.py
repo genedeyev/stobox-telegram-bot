@@ -1,12 +1,12 @@
-"""Content flywheel — community question-gaps → drafted blog outlines as issues.
+"""Content flywheel – community question-gaps → drafted blog outlines as issues.
 
 The community tells us what it wants to read. This turns the recurring questions
-Stoby sees (especially the ones it struggles to answer — real documentation gaps)
+Stoby sees (especially the ones it struggles to answer – real documentation gaps)
 into ready-to-write blog outlines, filed as GitHub issues on the content repo so
 a human writer can pick them up.
 
 Outlines are DETERMINISTIC (no LLM, no invented facts): a title, the angle, the
-exact reader questions to answer, and suggested sections — a brief, not an
+exact reader questions to answer, and suggested sections – a brief, not an
 article. Dedup is state-based (filed theme keys persist to JSON) so the same
 theme is never filed twice, even across restarts. Filing is best-effort and
 opt-in; without a GITHUB_TOKEN it degrades to a preview the admins can copy.
@@ -39,22 +39,22 @@ def draft_outline(cluster: QuestionCluster) -> tuple[str, str]:
     """A blog-outline brief (title, GitHub-issue body) for a question cluster."""
     q = cluster.representative.strip().rstrip("?")
     title = f"Blog outline: {q[:90]}"
-    gap_note = ("⚠️ Stoby struggles to answer this confidently — likely a real "
+    gap_note = ("⚠️ Stoby struggles to answer this confidently – likely a real "
                 "documentation gap worth closing.\n\n" if cluster.is_gap else "")
     questions = "\n".join(f"- {m.strip().rstrip('?')}?" for m in cluster.members[:8])
-    topics = ", ".join(cluster.topics) or "—"
+    topics = ", ".join(cluster.topics) or " – "
     body = (
         f"{gap_note}"
         f"**Why now:** the community asked variations of this **{cluster.count}×** "
         f"(avg answer confidence {cluster.avg_confidence:.0%}"
         f"{', ' + str(cluster.unresolved) + ' unresolved' if cluster.unresolved else ''}).\n\n"
         f"**Angle:** a clear, compliance-safe explainer that answers exactly what "
-        f"people are asking — grounded in official Stobox docs, no promises.\n\n"
+        f"people are asking – grounded in official Stobox docs, no promises.\n\n"
         f"**Reader questions to answer:**\n{questions}\n\n"
         f"**Suggested sections:**\n"
         f"1. The short answer (one paragraph a beginner gets)\n"
         f"2. How it actually works (mechanics, with an example)\n"
-        f"3. What to watch for (compliance / jurisdiction caveats — defer to counsel)\n"
+        f"3. What to watch for (compliance / jurisdiction caveats – defer to counsel)\n"
         f"4. Next step (Readiness Score / relevant Stobox product)\n\n"
         f"**Topics:** {topics}\n"
         f"**Source:** auto-drafted by Stoby from live community questions. "

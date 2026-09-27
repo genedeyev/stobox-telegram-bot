@@ -2,7 +2,7 @@
 
 Supported formats: Markdown (with YAML front-matter metadata), plain text,
 HTML, PDF, and Word (.docx). Google Docs are ingested via their exported
-Markdown/DOCX/HTML — export first, drop in ``docs/``.
+Markdown/DOCX/HTML – export first, drop in ``docs/``.
 
 Front-matter example (Markdown):
 

@@ -1,4 +1,4 @@
-"""Content flywheel — turn community question-gaps into blog outlines."""
+"""Content flywheel – turn community question-gaps into blog outlines."""
 
 from .flywheel import ContentFlywheel, draft_outline, theme_key
 

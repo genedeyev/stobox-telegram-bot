@@ -1,4 +1,4 @@
-"""Confidence engine — the anti-hallucination gate.
+"""Confidence engine – the anti-hallucination gate.
 
 Combines two signals into a final confidence score:
   * retrieval strength (top fused score + coverage), and
@@ -23,7 +23,7 @@ _SRC_LINE = re.compile(r"SOURCES:\s*(.+)", re.I)
 def top_relevance(retrieved: list[RetrievedChunk], *, semantic_embeddings: bool = False) -> float:
     """Best ABSOLUTE relevance evidence for a retrieval set.
 
-    The fused `score` is min-max normalized per query — the top hit is ~1.0 for
+    The fused `score` is min-max normalized per query – the top hit is ~1.0 for
     ANY query, even a totally irrelevant corpus match, so thresholding on it
     made the IDK gate nearly inert. Preference order:
       1. LLM rerank score (absolute 0..1 judgment) when the reranker ran;
@@ -56,9 +56,9 @@ class ConfidenceEngine:
         """Strip the CONFIDENCE/SOURCES trailer.
 
         Returns (clean_text, self_conf, sources) where sources is:
-          * None      — the model emitted no SOURCES line at all;
-          * []        — the model explicitly declared "SOURCES: none";
-          * [labels…] — the sources the model claims grounded the answer.
+          * None – the model emitted no SOURCES line at all;
+          * [] – the model explicitly declared "SOURCES: none";
+          * [labels…] – the sources the model claims grounded the answer.
         The None/[] distinction matters: an explicit "none" is the model
         admitting the answer is unsupported.
         """

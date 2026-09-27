@@ -1,8 +1,8 @@
 """Vector store abstraction.
 
 Two interchangeable backends:
-  * :class:`PgVectorStore`   — Postgres + pgvector (production).
-  * :class:`InMemoryVectorStore` — numpy cosine search (dev/tests, no infra).
+  * :class:`PgVectorStore` – Postgres + pgvector (production).
+  * :class:`InMemoryVectorStore` – numpy cosine search (dev/tests, no infra).
 
 Both persist chunk text + metadata so retrieval can build BM25 and cite sources.
 The store also tracks a monotonically increasing ``version`` bumped on every
@@ -77,7 +77,7 @@ class VectorStore(abc.ABC):
 
 
 # --------------------------------------------------------------------------- #
-# In-memory (numpy) — the always-available fallback.
+# In-memory (numpy) – the always-available fallback.
 # --------------------------------------------------------------------------- #
 class InMemoryVectorStore(VectorStore):
     def __init__(self) -> None:
@@ -125,7 +125,7 @@ class InMemoryVectorStore(VectorStore):
 
 
 # --------------------------------------------------------------------------- #
-# Postgres + pgvector — production backend.
+# Postgres + pgvector – production backend.
 # --------------------------------------------------------------------------- #
 class PgVectorStore(VectorStore):
     def __init__(self, pool, dimensions: int) -> None:
@@ -173,7 +173,7 @@ class PgVectorStore(VectorStore):
             )
             # Dimension guard: CREATE TABLE IF NOT EXISTS is a no-op on an
             # existing table, so changing the embedding model/dimensions used
-            # to leave a mismatched vector column — every upsert then failed
+            # to leave a mismatched vector column – every upsert then failed
             # forever with only a log line. Detect the mismatch and rebuild
             # (the corpus is fully reconstructible: local docs + daily resync).
             cur = await conn.execute(
@@ -204,7 +204,7 @@ class PgVectorStore(VectorStore):
                 )
             await conn.execute("CREATE INDEX IF NOT EXISTS kb_doc_idx ON kb_chunks(doc_id)")
             # HNSW, not ivfflat: ivfflat trains its centroids at CREATE INDEX
-            # time — built on an empty table (as it was at first boot) it gives
+            # time – built on an empty table (as it was at first boot) it gives
             # degraded recall for the corpus's whole life. HNSW has no training
             # step and stays accurate as rows arrive.
             await conn.execute("DROP INDEX IF EXISTS kb_vec_idx")

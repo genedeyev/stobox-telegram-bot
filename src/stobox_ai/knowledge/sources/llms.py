@@ -1,10 +1,10 @@
-"""llms.txt source — ingest a site's AI-oriented knowledge files.
+"""llms.txt source – ingest a site's AI-oriented knowledge files.
 
 Modern sites publish ``/llms.txt`` (a curated overview + link inventory) and
 ``/llms-full.txt`` (the full reference content), authored specifically for LLMs.
 stobox.io publishes both. These are the single highest-quality, canonical source
-for the bot — curated by the Stobox team, kept current, and free of marketing
-chrome — so they're ingested at high confidence.
+for the bot – curated by the Stobox team, kept current, and free of marketing
+chrome – so they're ingested at high confidence.
 
 The ``.txt`` files are Markdown; the semantic chunker splits them by their
 ``##`` sections automatically, so citations land on the right topic.
@@ -66,7 +66,7 @@ class LlmsTxtSource(Source):
         p = urlparse(url)
         site_url = f"{p.scheme}://{p.netloc}"
         meta = DocMeta(
-            title="Stobox — Official Website Reference",
+            title="Stobox – Official Website Reference",
             source_file=f"llms://{url}",
             source_url=site_url,
             category="documentation",

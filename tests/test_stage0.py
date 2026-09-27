@@ -136,3 +136,102 @@ def test_own_mailboxes_are_not_leads():
     assert q("ping gd@stoboxplatform.com or info@stobox.io") is None
     assert q("contact support@stobox.io, my email is ann@acme.com") == "ann@acme.com"
     assert q("me@notstobox.io") == "me@notstobox.io"
+
+
+# --- Security review (27.09.2026): output rail, leads, root ------------------
+
+def test_rail_removes_foreign_links_and_addresses():
+    from stobox_ai.guardrails.rails import ComplianceRails
+
+    out = ComplianceRails().post_process(
+        "Claim at https://stbu-claim.xyz or send to "
+        "0x1111111111111111111111111111111111111111 — the live token is "
+        "0xe0c0F44A84CC4a60206360006ebA237a5e8fC2dd, see https://www.stobox.io/stbu.",
+        "where do I claim?",
+    ).text
+    assert "stbu-claim.xyz" not in out
+    assert "0x1111111111111111111111111111111111111111" not in out
+    assert "0xe0c0F44A84CC4a60206360006ebA237a5e8fC2dd" in out
+    assert "https://www.stobox.io/stbu" in out
+    assert "—" not in out
+
+
+async def test_lead_posts_once_per_email_and_respects_cap(monkeypatch, config):
+    from stobox_ai.leads import qualifier as qmod
+    from stobox_ai.memory.models import UserProfile
+
+    posts = []
+
+    class _Resp:
+        status_code = 200
+
+    class _Client:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, json=None, headers=None):
+            posts.append((url, json["email"], headers))
+            return _Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+    monkeypatch.setenv("CRM_WEBHOOK_SECRET", "s3cret")
+    q = qmod.LeadQualifier(config)
+    q.webhook, q.webhook_secret, q.daily_cap = "https://example.test/api/mcp-lead", "s3cret", 1
+    p = UserProfile(user_key="telegram:1", email="ann@acme.com", lead_score=60)
+    assert await q.handoff(p) and await q.handoff(p)
+    assert len(posts) == 1 and posts[0][2] == {"x-mcp-secret": "s3cret"}
+    p2 = UserProfile(user_key="telegram:2", email="bob@acme.com", lead_score=60)
+    await q.handoff(p2)
+    assert len(posts) == 1                       # daily cap of 1 reached
+
+
+def test_webhook_must_be_https(monkeypatch, config):
+    from stobox_ai.leads.qualifier import LeadQualifier
+
+    config.raw.setdefault("leads", {})["crm_webhook"] = "http://example.test/lead"
+    try:
+        assert LeadQualifier(config).webhook is None
+    finally:
+        config.raw["leads"]["crm_webhook"] = ""
+
+
+def test_app_refuses_to_run_as_root(monkeypatch):
+    import os
+
+    from stobox_ai import __main__ as entry
+
+    monkeypatch.setattr(os, "getuid", lambda: 0)
+    monkeypatch.delenv("STOBY_ALLOW_ROOT", raising=False)
+    with pytest.raises(SystemExit) as e:
+        entry.main()
+    assert e.value.code == 78
+
+
+def test_entrypoint_hands_volume_over_then_drops_root(monkeypatch, tmp_path):
+    """deploy/entrypoint.py as root: chown every path in the volume to 10001,
+    then setgroups → setgid → setuid in that order, then exec the app."""
+    import importlib.util
+    import os
+
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "xp.json").write_text("{}")
+    spec = importlib.util.spec_from_file_location("entrypoint", "deploy/entrypoint.py")
+    ep = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ep)
+    calls = []
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", str(tmp_path))
+    monkeypatch.setattr(os, "getuid", lambda: 0)
+    monkeypatch.setattr(os, "lchown", lambda p, u, g: calls.append(("chown", os.path.relpath(p, tmp_path), u, g)))
+    monkeypatch.setattr(os, "setgroups", lambda g: calls.append(("setgroups", tuple(g))))
+    monkeypatch.setattr(os, "setgid", lambda g: calls.append(("setgid", g)))
+    monkeypatch.setattr(os, "setuid", lambda u: calls.append(("setuid", u)))
+    monkeypatch.setattr(os, "execvp", lambda f, a: calls.append(("exec", tuple(a))))
+    monkeypatch.setattr("sys.argv", ["entrypoint.py", "python", "-m", "stobox_ai"])
+    ep.main()
+    chowned = {c[1] for c in calls if c[0] == "chown"}
+    assert chowned == {".", "sub", os.path.join("sub", "xp.json")}
+    assert all(c[2:] == (10001, 10001) for c in calls if c[0] == "chown")
+    order = [c[0] for c in calls if c[0] != "chown"]
+    assert order == ["setgroups", "setgid", "setuid", "exec"]
+    assert calls[-1] == ("exec", ("python", "-m", "stobox_ai"))

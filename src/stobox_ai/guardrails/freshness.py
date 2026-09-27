@@ -1,4 +1,4 @@
-"""[FRESHNESS] block — auto-assembled at answer time.
+"""[FRESHNESS] block – auto-assembled at answer time.
 
 Contains: current UTC date, knowledge-index last-sync timestamp + corpus hash,
 5 latest blog posts, the current Eqvista valuation mark, and the STBU migration
@@ -37,8 +37,8 @@ def _fmt(d: date) -> str:
 
 
 def burn_before_phrase(deadline: date, fmt: str = "%d %B %Y") -> str:
-    """Phrase the burn deadline exactly as the published blog does — 'before
-    <cutover> 00:00 UTC' — so Stoby never says '14 Sep 23:59' while holders read
+    """Phrase the burn deadline exactly as the published blog does – 'before
+    <cutover> 00:00 UTC' – so Stoby never says '14 Sep 23:59' while holders read
     'before 15 September' on the site (the 14-vs-15 confusion causes disputes).
     The stored deadline is the last instant BEFORE the cutover, so the cutover
     date is deadline + 1 day (also the claim-open day; it's a clean cutover)."""
@@ -63,7 +63,7 @@ def compute_migration_phase(
     if deadline and today <= deadline:
         return (
             MigrationPhase.BURN_OPEN,
-            f"Burn window is OPEN. Burn {burn_before_phrase(deadline)} — minting on "
+            f"Burn window is OPEN. Burn {burn_before_phrase(deadline)} – minting on "
             f"Base opens the same instant. Burn-and-mint, 1:1, same-wallet only.",
         )
     if claim and today < claim:
@@ -108,18 +108,18 @@ class FreshnessBuilder:
         now = now or datetime.now(UTC)
         phase, phase_text = compute_migration_phase(self.canon, now)
 
-        lines = ["## [FRESHNESS] — live runtime state", ""]
+        lines = ["## [FRESHNESS] – live runtime state", ""]
         lines.append(f"- Current date (UTC): {now.strftime('%d %B %Y')}")
         if self.last_sync:
             line = (
                 f"- Knowledge index last synced: {self.last_sync.strftime('%d %B %Y %H:%M UTC')}"
                 + (f" (corpus {self.corpus_hash[:12]})" if self.corpus_hash else "")
             )
-            # The daily resync runs at 04:00 UTC — anything older than ~30h
+            # The daily resync runs at 04:00 UTC – anything older than ~30h
             # means a sync was missed. Tell the model so it hedges recency
             # claims instead of presenting a stale corpus as fresh.
             if (now - self.last_sync).total_seconds() > 30 * 3600:
-                line += (" — STALE: more than a day old. Do not claim the index is "
+                line += (" – STALE: more than a day old. Do not claim the index is "
                          "fresh; hedge recency-sensitive answers and suggest "
                          "stobox.io for the very latest.")
             lines.append(line)
@@ -130,7 +130,7 @@ class FreshnessBuilder:
         if valuation:
             lines.append(
                 f"- Eqvista company valuation mark: {valuation} "
-                "(a COMPANY valuation — not the STBX token price, not an offer). "
+                "(a COMPANY valuation – not the STBX token price, not an offer). "
                 "See https://stobox.io/valuation"
             )
         else:
@@ -142,7 +142,7 @@ class FreshnessBuilder:
         if self.market_line:
             lines.append(self.market_line)
 
-        lines.append(f"- STBU migration phase: {phase.value} — {phase_text}")
+        lines.append(f"- STBU migration phase: {phase.value} – {phase_text}")
         if self.canon.expired:
             lines.append(
                 "- ⚠️ Some canonical time-limited facts have expired; use the runtime "
@@ -153,5 +153,5 @@ class FreshnessBuilder:
             lines.append("- Latest blog posts:")
             for p in self.blog_posts[:5]:
                 d = p.get("date")
-                lines.append(f"    • {p.get('title', 'Post')}{f' ({d})' if d else ''} — {p.get('url', '')}")
+                lines.append(f"    • {p.get('title', 'Post')}{f' ({d})' if d else ''} – {p.get('url', '')}")
         return "\n".join(lines)

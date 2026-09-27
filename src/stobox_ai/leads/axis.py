@@ -1,4 +1,4 @@
-"""In-chat pre-qualifier — a quick 5-question fit check for issuers.
+"""In-chat pre-qualifier – a quick 5-question fit check for issuers.
 
 This is a LIGHT indicator, NOT the real AXIS readiness score. It qualifies a
 prospect conversationally (asset, jurisdiction, stage, size, timeline), gives a
@@ -17,7 +17,7 @@ RAISABLE_URL = "https://www.stobox.io/raisable"       # Raisable layer / raise c
 
 
 def next_step(stage: str) -> tuple[str, str]:
-    """The right next destination for where they are — not always Compass."""
+    """The right next destination for where they are – not always Compass."""
     if stage == "raising":                            # already raising → just start
         return ("jump into the product and get started", APP_URL)
     if stage == "ready":                              # ready to raise → the Raise layer
@@ -35,7 +35,7 @@ class Question:
 
 # Info-only questions score 0; stage/size/timeline drive the fit signal.
 QUESTIONS: list[Question] = [
-    Question("asset", "🏢 First up — what are you looking to tokenize?", [
+    Question("asset", "🏢 First up – what are you looking to tokenize?", [
         ("Real estate", "real_estate", 0),
         ("Fund / private equity", "fund", 0),
         ("Company equity", "equity", 0),
@@ -99,22 +99,22 @@ def result_text(session: Session, first_name: str = "") -> str:
     b = band(session.score)
     hi = {
         "strong": (
-            f"Honestly{',' + ' ' + first_name if first_name else ''} — this looks like a "
+            f"Honestly{',' + ' ' + first_name if first_name else ''} – this looks like a "
             f"<b>strong fit</b>. Tokenizing {asset} at your stage and size is squarely what "
             "Stobox Compass is built for."
         ),
         "promising": (
-            f"Nice — this looks <b>promising</b>. There's a real path to tokenizing {asset} "
+            f"Nice – this looks <b>promising</b>. There's a real path to tokenizing {asset} "
             "with Stobox; a few specifics will sharpen it."
         ),
         "early": (
             "Good starting point. You're a little <b>earlier</b> in the journey, which is "
-            f"totally fine — the best first move is to see where {asset} stands."
+            f"totally fine – the best first move is to see where {asset} stands."
         ),
     }[b]
     label, url = next_step(a.get("stage", ""))
     cta = (
-        f" The clean next move: {label} — {url}. Or if you'd rather just talk it through "
+        f" The clean next move: {label} – {url}. Or if you'd rather just talk it through "
         "with the team, drop your email with <code>/email</code> and I'll pass it along."
     )
     return f"{hi}{cta}\n\n<i>This is information, not investment advice.</i>"

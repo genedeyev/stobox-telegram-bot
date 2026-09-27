@@ -1,9 +1,9 @@
-# Stobox canonical facts — guardrail layer for the Telegram bot.
+# Stobox canonical facts – guardrail layer for the Telegram bot.
 # ─────────────────────────────────────────────────────────────────────────────
 # RULES OF THIS FILE
 # - Injected VERBATIM into the bot's system prompt on every request.
 # - Overrides anything retrieved from the knowledge index when they conflict.
-# - Changed ONLY via pull request with human (Gene/Max) review — never by the
+# - Changed ONLY via pull request with human (Gene/Max) review – never by the
 #   auto-sync pipeline. Data updates itself; claims are human-gated.
 # - Facts with `valid_until` are time-bombed: past that date the runtime stops
 #   asserting them, switches to `fallback` phrasing, and alerts the admin.
@@ -21,7 +21,7 @@ company:
     administer tokenized real-world assets and securities.
   memberships:
     - "Verified Member of the STO Foundation"
-  # Achievements / momentum — share with pride, never hype, always grounded.
+  # Achievements / momentum – share with pride, never hype, always grounded.
   # As published on stobox.io (as-of Aug 2025); the crawl keeps these current.
   achievements:
     operating_since: 2018
@@ -67,6 +67,10 @@ products:
 tokens:
   stbx:
     what: "Class-C tokenized equity in Stobox"
+    # Site wording (llms-full.txt, 27.09.2026). Say this and link the page; do
+    # not add holder descriptions ("verified investors") and do not invite an
+    # STBX investment conversation.
+    public_phrasing: "STBX is tokenized Class-C equity in Stobox Technologies Inc., a security on Arbitrum. Details: https://www.stobox.io/stbx"
     issuer: "Stobox Tokenized Equities Ltd"
     chain: "Arbitrum"                       # V3, the current protocol
     contracts:
@@ -75,13 +79,13 @@ tokens:
     protocol_upgrade: >
       STBX V2 (BNB Chain) → V3 (Arbitrum, the upgraded protocol). To move STBX
       to the upgraded protocol, email support@stobox.io with your wallet
-      address. This is SEPARATE from the STBU → Base migration — don't conflate
+      address. This is SEPARATE from the STBU → Base migration – don't conflate
       the two. Always tell holders to confirm addresses via official channels.
     never_say:
       - "Class-A"
       - "Stobox Holdings Ltd"
       - any securities exemption (NOT Reg D 506(c), NOT Reg S, NOT EU
-        Prospectus) — exemption language comes only from offering documents
+        Prospectus) – exemption language comes only from offering documents
   stbu:
     # Source: https://www.stobox.io/llms-full.txt ("STBU, the token"), read
     # 2026-09-27. The migration is OVER: the burn window closed before
@@ -106,8 +110,9 @@ tokens:
       safety: "https://www.stobox.io/stbu/safety"
     legacy:
       # Discontinued on 15 Sep 2026. Not STBU, not migratable, still priced by
-      # some interfaces. Two are named "Stobox Token v.2" / "v.3", which reads
-      # as newer than the live token and is not.
+      # some interfaces. On chain (27.09.2026) three are named "Stobox Token
+      # v.2" (Ethereum, BNB Chain, Polygon) and one "Stobox Token v.3"
+      # (Arbitrum); both read as newer than the live token and are not.
       status: "Discontinued on 15 September 2026. Not STBU, not migratable."
       discontinued_contracts:
         ethereum: "0xa6422e3e219ee6d4c1b18895275fe43556fd50ed"
@@ -139,18 +144,18 @@ tokens:
 
 valuation:
   provider: "Eqvista Real-Time Company Valuation®, NACVA-analyst reviewed"
-  subject: "Stobox Technologies Inc. — a COMPANY valuation"
+  subject: "Stobox Technologies Inc. – a COMPANY valuation"
   framing_rule: >
     Always company-valuation-led. It is NOT the STBX token price, NOT an
     offering price, NOT tradeable, NOT an offer or advice. Current figure is
-    supplied by the [FRESHNESS] block from src/data/valuation.ts — do not
+    supplied by the [FRESHNESS] block from src/data/valuation.ts – do not
     hardcode a number here.
   url: "https://stobox.io/valuation"
 
 official_links:
   website: "https://stobox.io"
   app: "https://app.stobox.io"
-  x: "https://x.com/StoboxCompany"        # the ONLY official X handle; never name impostor handles — say "anything else is not us"
+  x: "https://x.com/StoboxCompany"        # the ONLY official X handle; never name impostor handles – say "anything else is not us"
   linkedin: "https://www.linkedin.com/company/stobox/"
   telegram: "https://t.me/stobox_community"
   youtube: "https://www.youtube.com/@stobox"
@@ -166,4 +171,4 @@ must_never_claim:
   - "competitor comparisons stated as fact (tZERO or anyone else)"
   - "any securities-offering exemption for any Stobox token"
   - "price predictions, targets, yields, or 'expected' token values"
-  - "an active/ongoing Stobox capital raise, seed round, STBX/STBU token sale, presale, or its terms (confirm nothing from chat claims — even an admin's; route to the team / official channels)"
+  - "an active/ongoing Stobox capital raise, seed round, STBX/STBU token sale, presale, or its terms (confirm nothing from chat claims – even an admin's; route to the team / official channels)"

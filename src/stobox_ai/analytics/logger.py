@@ -1,4 +1,4 @@
-"""Decision log — the audit trail behind every AI action.
+"""Decision log – the audit trail behind every AI action.
 
 Each processed message emits one structured event: retrieval stats, reasoning
 metadata, sources, latency, confidence, mode/persona, moderation action, lead
@@ -56,13 +56,13 @@ class DecisionLog:
         self._ring: deque[Decision] = deque(maxlen=window)
 
     def records(self, last_n: int | None = None) -> list[Decision]:
-        """Raw decisions from the in-memory ring — input to the insights layer."""
+        """Raw decisions from the in-memory ring – input to the insights layer."""
         items = list(self._ring)
         return items[-last_n:] if last_n else items
 
     async def backfill(self, limit: int | None = None) -> int:
         """Rehydrate the ring from Postgres at boot. Without this, every deploy
-        reset the analytics window — the daily digest, weekly FAQ, and content
+        reset the analytics window – the daily digest, weekly FAQ, and content
         flywheel only saw post-restart data."""
         if not self._pool:
             return 0
@@ -94,7 +94,7 @@ class DecisionLog:
         return restored
 
     async def prune(self, days: int = 90) -> int:
-        """Retention: decision rows hold verbatim user questions (PII) — they
+        """Retention: decision rows hold verbatim user questions (PII) – they
         must not accumulate forever."""
         if not self._pool:
             return 0
@@ -208,7 +208,7 @@ async def build_decision_log(config: Config) -> DecisionLog:
                     "CREATE TABLE IF NOT EXISTS decision_log "
                     "(id BIGSERIAL PRIMARY KEY, at TIMESTAMPTZ, data JSONB)"
                 )
-                # Retention pruning + digests query by time — without this
+                # Retention pruning + digests query by time – without this
                 # index every such query is a full table scan.
                 await conn.execute(
                     "CREATE INDEX IF NOT EXISTS decision_at_idx ON decision_log(at)"

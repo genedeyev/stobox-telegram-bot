@@ -1,4 +1,4 @@
-"""Strikes ledger — progressive discipline memory.
+"""Strikes ledger – progressive discipline memory.
 
 Per-user, per-category record of moderation offenses with time decay, so the
 policy can escalate (warn → mute → ban) across messages instead of judging each
@@ -47,7 +47,7 @@ class StrikeBook:
         return [s for s in rec.strikes if _parse(s.at) >= cutoff]
 
     def count(self, user_key: str, category: str | None = None) -> int:
-        """Active strikes — for one category, or total if category is None."""
+        """Active strikes – for one category, or total if category is None."""
         rec = self.users.get(user_key)
         if not rec:
             return 0

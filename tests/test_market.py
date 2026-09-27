@@ -65,18 +65,21 @@ async def test_snapshot_is_cached_within_ttl():
 async def test_format_line_is_grounded_and_disclaimed():
     snap = (await MarketData(client=FakeHttp({"/simple/price": CG_OK})).snapshot())
     line = snap.format_line()
-    assert "STBU live market price" in line and "CoinGecko" in line
-    assert "not investment advice" in line.lower()
-    assert "eqvista company valuation" in line.lower()   # must distinguish the two
+    assert "STBU third-party price" in line and "CoinGecko" in line
+    assert "stbu/safety" in line
+    # Stage 0 securities review: price only, never market cap or 24h change.
+    assert "market cap" not in line.lower().replace("never state market cap", "")
 
 
 @pytest.mark.asyncio
 async def test_format_report_includes_contracts_and_framing():
     snap = await MarketData(client=FakeHttp({"/simple/price": CG_OK})).snapshot()
-    report = snap.format_report(contracts={"ethereum": "0xabc", "base": "0xdef"})
-    assert "0xabc" in report and "0xdef" in report
+    report = snap.format_report(contracts={"base": "0xdef"})
+    assert "0xdef" in report
     assert "not investment advice" in report.lower()
-    assert "not</b> the Stobox" in report or "not the Stobox" in report.lower()
+    assert "stbu/safety" in report
+    for banned in ("market cap", "24h", "🔺", "🔻"):
+        assert banned not in report.lower(), banned
 
 
 @pytest.mark.asyncio

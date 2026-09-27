@@ -60,8 +60,9 @@ and cannot be migrated, even where some interfaces still show a price for them:
 - Polygon `0xcf403036bc139d30080d2cf0f5b48066f98191bb`
 - Arbitrum `0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093`
 
-Two of them are named "Stobox Token v.2" and "Stobox Token v.3", which reads as
-newer than the live token and is not.
+On chain, three of them are named "Stobox Token v.2" (Ethereum, BNB Chain,
+Polygon) and one "Stobox Token v.3" (Arbitrum). Both names read as newer than
+the live token, and neither is.
 
 ## Supply
 

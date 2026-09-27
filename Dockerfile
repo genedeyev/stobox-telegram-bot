@@ -48,7 +48,9 @@ COPY SYSTEM-PROMPT.md canonicals.yaml ARCHITECTURE.md ./
 # Non-root runtime user. The container starts as root only so the entrypoint
 # can hand the Railway volume (/app/data, mounted root-owned) to this user; it
 # then drops root before the app starts (deploy/entrypoint.py).
-RUN useradd --create-home --uid 10001 stobox && chown -R stobox:stobox /app
+# Only the state dir belongs to the app user: the runtime must not be able to
+# rewrite SYSTEM-PROMPT.md, canonicals.yaml or config/.
+RUN useradd --create-home --uid 10001 stobox && mkdir -p /app/data && chown stobox:stobox /app/data
 COPY deploy/entrypoint.py /entrypoint.py
 
 # Real liveness: the job queue touches HEARTBEAT_FILE every 60s (proactive.py).
