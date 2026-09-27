@@ -13,13 +13,18 @@ HELP = (
     "/stbu – the STBU record\n/check 0xAddress – read a wallet's STBU\n"
     "/sources – official links\n/contact – reach the team"
 )
-SOURCES = (
-    "Official Stobox links:\n"
-    "Website: https://www.stobox.io\nX: https://x.com/StoboxCompany\n"
-    "LinkedIn: https://www.linkedin.com/company/stobox/\nTelegram: https://t.me/stobox_community\n"
-    "YouTube: https://www.youtube.com/@stobox\nGitHub: https://github.com/StoboxTechnologies\n\n"
-    "Anything else claiming to be Stobox is not us."
-)
+# Until the site publishes its channels (stobox-v15#938), the only fact the bot
+# keeps of its own is the website address itself.
+SOURCES_FALLBACK = ("Official Stobox links are listed on https://www.stobox.io. "
+                    "Anything else claiming to be Stobox is not us.")
+
+
+def sources_text(site: SiteFacts | None) -> str:
+    channels = site.bullets("Official channels") if site else []
+    if not channels:
+        return SOURCES_FALLBACK
+    return ("Official Stobox channels, from the published record:\n" + "\n".join(channels)
+            + "\n\nAnything else claiming to be Stobox is not us.")
 CONTACT = ("The team: info@stobox.io or https://www.stobox.io/contact. "
            "For a specific STBU burn or claim: support@stobox.io.")
 

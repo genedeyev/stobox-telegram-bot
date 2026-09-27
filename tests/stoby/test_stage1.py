@@ -307,3 +307,14 @@ def test_stbu_command_text_comes_from_the_site():
     text = stbu_text(facts)
     assert LIVE in text and "Discontinued on 15 September 2026" in text
     assert "Claims close 31 December 2026" in text
+
+
+def test_sources_come_from_the_site_when_published():
+    from stoby.commands import SOURCES_FALLBACK, sources_text
+
+    plain = SiteFacts.parse(FIXTURE, time.time())
+    assert sources_text(plain) == SOURCES_FALLBACK
+    with_channels = SiteFacts.parse(FIXTURE.replace(
+        "## Asking directly", "## Official channels\n\n- X: https://x.com/StoboxCompany\n\n## Asking directly"),
+        time.time())
+    assert "x.com/StoboxCompany" in sources_text(with_channels)

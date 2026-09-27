@@ -14,7 +14,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from .answer import Pipeline
-from .commands import CONTACT, HELP, SOURCES, check_text, stbu_text
+from .commands import CONTACT, HELP, check_text, sources_text, stbu_text
 from .leads import Leads
 from .ledger import log
 from .sources.chain import ChainReader
@@ -96,7 +96,11 @@ class StobyBot:
         await self._send(message, HELP)
 
     async def cmd_sources(self, message: Message) -> None:
-        await self._send(message, SOURCES)
+        try:
+            site = await self.site.facts()
+        except SiteUnavailable:
+            site = None
+        await self._send(message, sources_text(site))
 
     async def cmd_contact(self, message: Message) -> None:
         await self._send(message, CONTACT)
