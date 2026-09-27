@@ -2,7 +2,7 @@
 
 Clusters the week's recurring questions, then for each top cluster retrieves
 documentation and generates a concise, grounded, cited answer. Clusters that
-can't be answered from the docs are returned as ``needs_docs`` entries — the
+can't be answered from the docs are returned as ``needs_docs`` entries – the
 raw material for closing documentation gaps.
 """
 
@@ -58,14 +58,14 @@ class WeeklyFAQ:
         from ..agents.confidence import top_relevance
 
         retrieved = await self.retriever.retrieve(question)
-        # Gap detection needs ABSOLUTE relevance — the fused score is normalized
+        # Gap detection needs ABSOLUTE relevance – the fused score is normalized
         # to ~1.0 whenever anything is retrieved, which under-reported doc gaps.
         semantic = getattr(self.retriever.embedder, "name", "") != "local-hash"
         top = top_relevance(retrieved, semantic_embeddings=semantic)
         if not retrieved or top < self.threshold:
             return FAQEntry(
                 question=question,
-                answer="(No supporting documentation found — candidate for new docs.)",
+                answer="(No supporting documentation found – candidate for new docs.)",
                 frequency=frequency,
                 needs_docs=True,
             )

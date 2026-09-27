@@ -1,4 +1,4 @@
-"""Intent router — one cheap classifier call that decides how to handle a
+"""Intent router – one cheap classifier call that decides how to handle a
 message: mode, persona, language, buying intent, whether docs are needed.
 
 Falls back to fast heuristics (langdetect + keyword rules) if the classifier is
@@ -70,7 +70,7 @@ class IntentRouter:
 
     async def route(self, text: str, reply_to: str | None = None) -> Routing:
         heuristic = self._heuristic(text)
-        prompt = self.prompts.render("intent_router", text=text[:1500], reply_to=reply_to or "—")
+        prompt = self.prompts.render("intent_router", text=text[:1500], reply_to=reply_to or " – ")
         try:
             raw = await self.classifier.complete_json(
                 [ChatMessage("user", prompt)], max_tokens=240

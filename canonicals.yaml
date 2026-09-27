@@ -1,9 +1,9 @@
-# Stobox canonical facts — guardrail layer for the Telegram bot.
+# Stobox canonical facts – guardrail layer for the Telegram bot.
 # ─────────────────────────────────────────────────────────────────────────────
 # RULES OF THIS FILE
 # - Injected VERBATIM into the bot's system prompt on every request.
 # - Overrides anything retrieved from the knowledge index when they conflict.
-# - Changed ONLY via pull request with human (Gene/Max) review — never by the
+# - Changed ONLY via pull request with human (Gene/Max) review – never by the
 #   auto-sync pipeline. Data updates itself; claims are human-gated.
 # - Facts with `valid_until` are time-bombed: past that date the runtime stops
 #   asserting them, switches to `fallback` phrasing, and alerts the admin.
@@ -11,7 +11,7 @@
 #   2026-07-14. Keep in sync with ~/Desktop/stobox-geo/data/canonicals.yaml.
 # ─────────────────────────────────────────────────────────────────────────────
 
-version: 2026-07-17.2
+version: 2026-09-27.1
 
 company:
   operating_entity: "Stobox Technologies Inc."
@@ -21,7 +21,7 @@ company:
     administer tokenized real-world assets and securities.
   memberships:
     - "Verified Member of the STO Foundation"
-  # Achievements / momentum — share with pride, never hype, always grounded.
+  # Achievements / momentum – share with pride, never hype, always grounded.
   # As published on stobox.io (as-of Aug 2025); the crawl keeps these current.
   achievements:
     operating_since: 2018
@@ -30,48 +30,34 @@ company:
     assets_supported: "$305M+ in assets supported (as of Aug 2025)"
 
 products:
-  # The three-layer lineup as published on stobox.io (llms-full.txt):
-  # one intelligence core across the private-company lifecycle.
+  # Source: https://www.stobox.io/llms-full.txt, read 2026-09-27.
   three_layers: >
-    Stobox delivers one intelligence core across three layers:
-    Intelligence (Organize) -> Raisable (Raise) -> Compass (Tokenize).
-    The best entry point for a new company is the free Readiness Score:
-    25 questions, no credit card, same methodology as Stobox Compass.
+    Three products against one problem. Intelligence turns a company into one
+    canonical, verifiable record and scores it. Raisable turns that record into
+    a regulated offering, prepared by specialists and sold through licensed
+    broker-dealer partners. Compass issues the token, permissioned, with the
+    compliance enforced by the asset itself. Fees are published and flat, never
+    a percentage of a raise. A company can check its own number first with the
+    readiness score: https://www.stobox.io/readiness
   intelligence:
     name: "Stobox Intelligence"
-    layer: "Organize"
-    what: >
-      Turns a private company into one canonical, verifiable record, scored
-      across the 7 AXIS readiness pillars (AXIS = Asset eXperience
-      Intelligence Score, the open methodology also used by Stobox Compass).
+    what: "One canonical, verifiable record of your company, scored."
     url: "https://www.stobox.io/intelligence"
   raisable:
     name: "Stobox Raisable"
-    layer: "Raise"
     what: >
-      Converts that record into a broker-acceptance-grade regulated offering,
-      for a flat fee — never a percentage of the raise. The live site lists
-      the supported offering frameworks; never state which framework applies
-      to any specific offering or token.
+      Turns the record into a regulated offering, prepared by specialists and
+      sold through licensed broker-dealer partners. Never state which offering
+      framework applies to any specific offering or token.
     url: "https://www.stobox.io/raisable"
   compass:
     name: "Stobox Compass"
-    layer: "Tokenize"
-    what: >
-      Tokenization readiness platform / screener; issues a live, compliant
-      tokenized security with an on-chain registry and Asset Passport,
-      non-custodial.
-    urls: ["https://stobox.io/compass", "https://app.stobox.io"]
-    # NOTE (2026-07-21): which chain is "primary" (Base vs Arbitrum) is being
-    # confirmed with the team — Arevik believes Arbitrum is the ready-to-go
-    # primary. Until confirmed, do NOT rank a primary; state both are supported.
+    what: "Issues the token, permissioned, with the compliance enforced by the asset itself"
+    urls: ["https://www.stobox.io/compass"]
     chains_phrasing: >
-      Security tokens are issued via Compass on Base and Arbitrum, and also
-      support ERC-20 / STV3, with Canton and other EVM networks upon client
-      request. (Compass is not "on" a chain; it ISSUES tokens on chains.)
-    never_say:
-      - "Arbitrum today / Base from September 2026"   # superseded wrong framing
-      - "Compass is on Base"                          # it ISSUES tokens on chains
+      For which networks Compass issues on, point to https://www.stobox.io/compass
+      rather than naming chains from memory.
+  pricing: "Published and flat. Point to https://www.stobox.io/pricing; do not quote figures from memory."
   lineup_rule: >
     The lineup above matches the live stobox.io. For details beyond it,
     describe products ONLY as the live site describes them at answer time
@@ -81,6 +67,10 @@ products:
 tokens:
   stbx:
     what: "Class-C tokenized equity in Stobox"
+    # Site wording (llms-full.txt, 27.09.2026). Say this and link the page; do
+    # not add holder descriptions ("verified investors") and do not invite an
+    # STBX investment conversation.
+    public_phrasing: "STBX is tokenized Class-C equity in Stobox Technologies Inc., a security on Arbitrum. Details: https://www.stobox.io/stbx"
     issuer: "Stobox Tokenized Equities Ltd"
     chain: "Arbitrum"                       # V3, the current protocol
     contracts:
@@ -89,61 +79,83 @@ tokens:
     protocol_upgrade: >
       STBX V2 (BNB Chain) → V3 (Arbitrum, the upgraded protocol). To move STBX
       to the upgraded protocol, email support@stobox.io with your wallet
-      address. This is SEPARATE from the STBU → Base migration — don't conflate
+      address. This is SEPARATE from the STBU → Base migration – don't conflate
       the two. Always tell holders to confirm addresses via official channels.
     never_say:
       - "Class-A"
       - "Stobox Holdings Ltd"
       - any securities exemption (NOT Reg D 506(c), NOT Reg S, NOT EU
-        Prospectus) — exemption language comes only from offering documents
+        Prospectus) – exemption language comes only from offering documents
   stbu:
-    what: "Stobox utility token"
-    migration:
-      pattern: "burn-and-mint, 1:1, same-wallet only"
-      destination_chain: "Base"
-      burn_window_opens: "2026-07-20"       # the burn window OPENS on this date
-      burns_count_from: "2026-07-20"        # burns start when the window opens
-      # AUTHORITATIVE per the blog (confirmed by Arevik): burn BEFORE 15 Sep 2026
-      # 00:00 UTC — i.e. the last eligible instant is 14 Sep 2026 23:59:59 UTC.
-      # Nothing at/after 15 Sep 00:00 UTC is eligible. Exact time matters to
-      # avoid disputes with latecomers.
-      burn_deadline: "2026-09-14T23:59:59Z"
-      claim_opens: "2026-09-15"             # claiming opens 15 Sep 2026 (same day)
-      supply_phrasing: '"fixed maximum supply of 250M" — final supply is whatever migrates, at most 250M'
-      never_say:
-        - '"will reach 250M" / "expected supply 250M"'
-        - a migration-portal URL before it is officially announced
-      legacy_v1: "NOT eligible (compromised, lost validity 6 Jan 2022)"
-      eligible_contracts:
+    # Source: https://www.stobox.io/llms-full.txt ("STBU, the token"), read
+    # 2026-09-27. The migration is OVER: the burn window closed before
+    # 15 Sep 2026 00:00 UTC. Only the claim period is live now.
+    what: "Utility token issued by Stobox Innovations Ltd. on Base"
+    issuer: "Stobox Innovations Ltd., a BVI Business Company, wholly owned by Stobox Technologies Inc. Not licensed or registered with the BVI Financial Services Commission."
+    chain: "Base"
+    chain_id: 8453
+    contract: "0xe0c0F44A84CC4a60206360006ebA237a5e8fC2dd"
+    claim_contract: "0xec5B3e512de13cb5DdFD84B2DF3167230F2e66a4"
+    pool:
+      venue: "Uniswap v4 on Base, STBU against USDC"
+      pool_id: "0x28bd1d1afcc57d766c5d1c5c38bd8beb376a0c98de719460cdcef60900f7b8b5"
+      rule: "The only pool deployed by the issuer. Any other contract or pool carrying the STBU name was not deployed by Stobox Innovations Ltd. How to tell them apart: https://www.stobox.io/stbu/safety"
+    where_to_buy: "From other holders in that one public pool, with a wallet you control, on Uniswap or through https://stbu.stobox.io. Stobox Innovations Ltd. does not sell STBU and is not offering it for sale. There are no plans for a centralized exchange at this time."
+    utility: "It may pay for services of the Stobox group at a 10% discount on the list price, for each service whose published terms allow payment in STBU, and no service has published such terms yet. Terminal volume is meant to count toward a badge tier that lowers the swap fee between 1.00% and 0.10%; that is not switched on, so every swap pays 1.00% today."
+    what_it_is_not: "Not equity, not a security, not a share, not a debt, not a payment instrument. No yield, no dividend, no staking, no governance vote, no buy-back. Stobox does not forecast, target or promise its price."
+    supply: "Contract cap 250,000,000 STBU, which no one can raise. The issuance the company has determined is 216,563,456 STBU."
+    pages:
+      record: "https://www.stobox.io/stbu"
+      security: "https://www.stobox.io/stbu/security"
+      safety: "https://www.stobox.io/stbu/safety"
+    legacy:
+      # Discontinued on 15 Sep 2026. Not STBU, not migratable, still priced by
+      # some interfaces. On chain (27.09.2026) three are named "Stobox Token
+      # v.2" (Ethereum, BNB Chain, Polygon) and one "Stobox Token v.3"
+      # (Arbitrum); both read as newer than the live token and are not.
+      status: "Discontinued on 15 September 2026. Not STBU, not migratable."
+      discontinued_contracts:
         ethereum: "0xa6422e3e219ee6d4c1b18895275fe43556fd50ed"
         bnb_chain: "0xb0c4080a8fa7afa11a09473f3be14d44af3f8743"
         polygon: "0xcf403036bc139d30080d2cf0f5b48066f98191bb"
         arbitrum: "0x1cb9bd2c6e7f4a7de3778547d46c8d4c22abc093"
-      burn_address_public: '"0x00DEAD…" shorthand — always tell users to confirm the exact address via official Stobox channels only'
-      edge_cases:
-        mexc_holders: "withdraw to self-custody wallet first, then burn→claim"
-        stobox4_custodial: "email support@stobox.io from the Stobox 4 account email; manual mint to a self-custody Base address; no CEX addresses"
-        consolidation: "consolidate all STBU to ONE address before migrating"
-      # Keep asserting these facts through the active claim period (well past
-      # claim-open) so Stoby stays accurate during the crunch, not just until
-      # the deadline. Revisit once the claim period formally closes.
-      valid_until: "2026-12-31"
-      fallback: "Migration deadline facts may be outdated — check the official Stobox channels for current status."
+      legacy_v1: "Never eligible (compromised, lost validity 6 Jan 2022)."
+    migration:
+      status: "closed"
+      pattern: "burn-and-mint, 1:1"
+      destination_chain: "Base"
+      burn_window_opens: "2026-07-20"
+      burns_count_from: "2026-07-20"
+      # Last eligible instant: 14 Sep 2026 23:59:59 UTC. Phrase it as the site
+      # does: "burned before 15 September 2026".
+      burn_deadline: "2026-09-14T23:59:59Z"
+      claim_opens: "2026-09-15"
+      claims_close: "2026-12-31T23:59:00Z"
+      claim_url: "https://stbu.stobox.io"
+      claim_rule: "Holders who burned before 15 September 2026 claim one for one on Base at https://stbu.stobox.io. Claims close 31 December 2026 at 23:59 UTC. Nobody has the authority to extend that date, and anything unclaimed after it is never minted."
+      help: "Questions about a specific burn or claim: support@stobox.io. Never share a seed phrase or private key with anyone."
+      never_say:
+        - "that anyone can still burn or migrate legacy STBU (the window closed before 15 Sep 2026)"
+        - "that the legacy contracts are eligible, valid, or 'v2/v3 = newer'"
+        - "that the claim deadline can be extended"
+        - "a claim or pool URL other than the ones above"
+      valid_until: "2027-01-01"
+      fallback: "STBU claim facts may be outdated. The record is https://www.stobox.io/stbu."
 
 valuation:
   provider: "Eqvista Real-Time Company Valuation®, NACVA-analyst reviewed"
-  subject: "Stobox Technologies Inc. — a COMPANY valuation"
+  subject: "Stobox Technologies Inc. – a COMPANY valuation"
   framing_rule: >
     Always company-valuation-led. It is NOT the STBX token price, NOT an
     offering price, NOT tradeable, NOT an offer or advice. Current figure is
-    supplied by the [FRESHNESS] block from src/data/valuation.ts — do not
+    supplied by the [FRESHNESS] block from src/data/valuation.ts – do not
     hardcode a number here.
   url: "https://stobox.io/valuation"
 
 official_links:
   website: "https://stobox.io"
   app: "https://app.stobox.io"
-  x: "https://x.com/StoboxCompany"        # the ONLY official X handle; never name impostor handles — say "anything else is not us"
+  x: "https://x.com/StoboxCompany"        # the ONLY official X handle; never name impostor handles – say "anything else is not us"
   linkedin: "https://www.linkedin.com/company/stobox/"
   telegram: "https://t.me/stobox_community"
   youtube: "https://www.youtube.com/@stobox"
@@ -159,4 +171,4 @@ must_never_claim:
   - "competitor comparisons stated as fact (tZERO or anyone else)"
   - "any securities-offering exemption for any Stobox token"
   - "price predictions, targets, yields, or 'expected' token values"
-  - "an active/ongoing Stobox capital raise, seed round, STBX/STBU token sale, presale, or its terms (confirm nothing from chat claims — even an admin's; route to the team / official channels)"
+  - "an active/ongoing Stobox capital raise, seed round, STBX/STBU token sale, presale, or its terms (confirm nothing from chat claims – even an admin's; route to the team / official channels)"

@@ -165,7 +165,7 @@ class HybridRetriever:
         try:
             raw = await self.reasoner.complete_json(msg, max_tokens=300)
             scores = extract_json(raw)
-            # Only stamp rerank scores when the LLM actually produced them —
+            # Only stamp rerank scores when the LLM actually produced them – 
             # a failed parse must leave rerank_score=None, never a fake 0.0
             # (the confidence gate treats rerank_score as an absolute signal).
             if isinstance(scores, dict) and scores:

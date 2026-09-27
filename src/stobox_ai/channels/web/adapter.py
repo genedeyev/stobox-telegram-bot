@@ -1,4 +1,4 @@
-"""Web / HTTP channel — the same engine, a different transport.
+"""Web / HTTP channel – the same engine, a different transport.
 
 This adapter demonstrates the platform is genuinely channel-agnostic: it maps an
 HTTP chat request onto the identical :class:`IncomingMessage` → engine →
@@ -23,7 +23,7 @@ from ..base import Channel, public_citation_url
 
 log = get_logger(__name__)
 
-# Hard cap on /chat request bodies — Starlette does not bound body size, and an
+# Hard cap on /chat request bodies – Starlette does not bound body size, and an
 # unauthenticated endpoint that feeds an LLM must not accept megabyte payloads.
 MAX_BODY_BYTES = 16_384
 MAX_TEXT_CHARS = 4_000
@@ -55,7 +55,7 @@ def _client_ip(request) -> str:
 def _insights_authorized(request) -> bool:
     """Bearer-token gate for the analytics endpoints (community PII).
 
-    Secure by default: with no INSIGHTS_TOKEN configured the routes are OFF —
+    Secure by default: with no INSIGHTS_TOKEN configured the routes are OFF – 
     they leak member questions and lead data if left open on a public service.
     """
     token = os.environ.get("INSIGHTS_TOKEN", "")
@@ -235,7 +235,7 @@ def create_app_from_config():
         )
 
     async def digest_endpoint(request: Request):
-        # Analytics data (member questions, leads) — token-gated, off by default.
+        # Analytics data (member questions, leads) – token-gated, off by default.
         if not _insights_authorized(request):
             return _insights_denied()
         return JSONResponse(request.app.state.engine.daily_digest().build())
@@ -251,7 +251,7 @@ def create_app_from_config():
         return HTMLResponse(render_dashboard(digest))
 
     async def faq_endpoint(request: Request):
-        # Also triggers LLM spend on demand — must never be open to the internet.
+        # Also triggers LLM spend on demand – must never be open to the internet.
         if not _insights_authorized(request):
             return _insights_denied()
         entries = await request.app.state.engine.weekly_faq().generate(top_n=10)
@@ -260,7 +260,7 @@ def create_app_from_config():
         return JSONResponse({"faq": WeeklyFAQ.to_dict(entries)})
 
     async def metrics_endpoint(request: Request):
-        """Prometheus text exposition — token-gated like the other analytics
+        """Prometheus text exposition – token-gated like the other analytics
         surfaces (latency percentiles and volumes are business-sensitive)."""
         if not _insights_authorized(request):
             return _insights_denied()
@@ -294,7 +294,7 @@ def create_app_from_config():
 
     async def reingest_endpoint(request: Request):
         """HMAC-signed webhook: re-ingest stobox.io + GitHub (self-update loop).
-        Signature required — see ops/webhook.py."""
+        Signature required – see ops/webhook.py."""
         import os
 
         from ...ops.webhook import verify_signature

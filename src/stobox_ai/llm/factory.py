@@ -20,7 +20,7 @@ class FallbackProvider(LLMProvider):
     The factory's build-time fallback only covers a MISSING primary (no key /
     no SDK). This wrapper covers a primary that exists but is DOWN: when the
     primary exhausts its own retries (outage, 5xx storm, timeout), the same
-    request is tried once on the secondary — making the config promise
+    request is tried once on the secondary – making the config promise
     "fallback provider used if the primary errors out" actually true.
     """
 
@@ -61,7 +61,7 @@ def _reasoner(provider: str, model: str, temperature: float, max_tokens: int) ->
 
             return OpenAIProvider(model, secrets.openai_key, temperature, max_tokens)
     except ImportError as exc:
-        # SDK for the configured provider isn't installed — degrade instead of crash.
+        # SDK for the configured provider isn't installed – degrade instead of crash.
         log.error("reasoner.sdk_missing", provider=provider, error=str(exc))
     return None
 

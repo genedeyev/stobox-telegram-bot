@@ -3,9 +3,9 @@
 Two guards, both in-memory (fine for a single worker; swap for Redis if you
 scale horizontally):
 
-  * per-user token bucket — N messages/minute and M messages/day. Over-limit
+  * per-user token bucket – N messages/minute and M messages/day. Over-limit
     users get a cheap static reply, never an LLM call.
-  * global daily output-token cap — once the day's Anthropic output budget is
+  * global daily output-token cap – once the day's Anthropic output budget is
     spent, the bot degrades to static answers and alerts admins, so a runaway
     can't drain the key.
 
@@ -58,7 +58,7 @@ class RateLimiter:
         return datetime.now(UTC).strftime("%Y-%m-%d")
 
     def check(self, user_key: str) -> RateDecision:
-        # Global spend cap first — protects the whole key.
+        # Global spend cap first – protects the whole key.
         if self.global_cap is not None and self._spent_today() >= self.global_cap:
             return RateDecision(RateStatus.GLOBAL_CAP,
                                 "The bot is at today's usage limit. Please try again later.")
@@ -69,7 +69,7 @@ class RateLimiter:
         while dq and now - dq[0] > 60:
             dq.popleft()
         if len(dq) >= self.per_minute:
-            return RateDecision(RateStatus.PER_MINUTE, "You're sending messages too quickly — please slow down.")
+            return RateDecision(RateStatus.PER_MINUTE, "You're sending messages too quickly – please slow down.")
 
         # Per-day counter.
         today = self._today()

@@ -42,11 +42,11 @@ class PromptAssembler:
         return cls(_extract_core(core_md), canon)
 
     def stable_prefix(self, now: datetime | None = None) -> str:
-        """[CORE] + [CANONICALS] — the cache-friendly, rarely-changing part."""
+        """[CORE] + [CANONICALS] – the cache-friendly, rarely-changing part."""
         return (
-            "# STOBOX ENTERPRISE TELEGRAM BOT — SYSTEM PROMPT\n\n"
+            "# STOBOX ENTERPRISE TELEGRAM BOT – SYSTEM PROMPT\n\n"
             "## [CORE]\n\n" + self.core_text + "\n\n"
-            "## [CANONICALS] — authoritative facts; OVERRIDE retrieved content on any "
+            "## [CANONICALS] – authoritative facts; OVERRIDE retrieved content on any "
             "conflict (precedence: CANONICALS > FRESHNESS > retrieved chunks). Injected "
             "verbatim; treat as ground truth.\n\n"
             "```yaml\n" + self.canonicals.injection_block(now) + "\n```"

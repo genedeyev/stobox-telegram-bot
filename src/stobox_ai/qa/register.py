@@ -1,6 +1,6 @@
 """Pending-question state: capture, dedupe, answer.
 
-State persists to a JSON file (``data/qa_register.json`` — runtime state, not
+State persists to a JSON file (``data/qa_register.json`` – runtime state, not
 committed) so pending questions survive restarts. Similar questions collapse
 into one entry (token-Jaccard), collecting every asker so all of them get the
 answer when it lands.

@@ -1,10 +1,10 @@
 """Configuration loading.
 
 Layered config:
-  1. ``config/config.yaml``  — non-secret, versioned defaults (see spec "Configuration").
-  2. environment variables    — secrets + ``${VAR:-default}`` interpolation inside the YAML.
+  1. ``config/config.yaml`` – non-secret, versioned defaults (see spec "Configuration").
+  2. environment variables – secrets + ``${VAR:-default}`` interpolation inside the YAML.
 
-Secrets (API keys, tokens, DB URL) NEVER live in the YAML — only in env / vault.
+Secrets (API keys, tokens, DB URL) NEVER live in the YAML – only in env / vault.
 The parsed config is exposed as plain nested dicts wrapped by ``Config`` with
 dotted access, so new keys added to the YAML need no code changes.
 """
@@ -75,7 +75,7 @@ class Secrets:
     @property
     def admin_user_ids(self) -> set[int]:
         # Tolerant parse: a bad/placeholder value (e.g. "<gene_id>") must NEVER
-        # crash the bot on boot — skip anything that isn't a plain integer.
+        # crash the bot on boot – skip anything that isn't a plain integer.
         ids: set[int] = set()
         for x in os.environ.get("TELEGRAM_ADMIN_USER_IDS", "").replace(" ", "").split(","):
             if not x:
@@ -90,8 +90,8 @@ class Secrets:
 
     @property
     def admin_usernames(self) -> set[str]:
-        """Admins by @username (lowercased, no @). Less secure than IDs — usernames
-        can change — but lets you add someone before you have their numeric ID."""
+        """Admins by @username (lowercased, no @). Less secure than IDs – usernames
+        can change – but lets you add someone before you have their numeric ID."""
         raw = os.environ.get("TELEGRAM_ADMIN_USERNAMES", "")
         return {x.lower().lstrip("@") for x in raw.replace(" ", "").split(",") if x}
 

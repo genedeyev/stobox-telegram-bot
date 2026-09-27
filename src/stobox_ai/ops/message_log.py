@@ -1,11 +1,11 @@
-"""Internal message log — every message Stoby sees in a group, on the record.
+"""Internal message log – every message Stoby sees in a group, on the record.
 
 Append-only and built to hold ~months of history: writes are O(1) line-appends to
 a JSONL file (no whole-file rewrite per message), the in-memory copy is pruned by
 age (retention_days) and a hard per-chat ceiling, and the file is compacted on
 load so it can't grow without bound across restarts.
 
-Two jobs: (1) audit/context for admins (/log, /whosaid), and (2) recall — when
+Two jobs: (1) audit/context for admins (/log, /whosaid), and (2) recall – when
 Stoby answers, `relevant()` surfaces older messages related to the question so he
 can reference things said long before the short working-memory window.
 
@@ -186,7 +186,7 @@ class MessageLog:
     def _compact(self) -> None:
         import os
 
-        # Atomic: write the compacted log to a temp file, then swap it in — a
+        # Atomic: write the compacted log to a temp file, then swap it in – a
         # crash mid-compaction must never destroy the whole retained history.
         tmp = self.path.with_name(self.path.name + ".tmp")
         try:

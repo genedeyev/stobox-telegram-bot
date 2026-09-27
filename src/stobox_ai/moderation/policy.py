@@ -1,4 +1,4 @@
-"""Moderation severity matrix — progressive discipline.
+"""Moderation severity matrix – progressive discipline.
 
 Core principle: punish TARGETING, not vocabulary. Casual profanity is ignored;
 abuse aimed at a person, hate speech, scams, and doxxing are sanctioned on an
@@ -33,7 +33,7 @@ _B = ModerationAction.BAN
 
 # Ladders indexed by (strike_count - 1), clamped to the last step.
 POLICY: dict[str, list[Step]] = {
-    # Zero tolerance — no ladder, act on first offense.
+    # Zero tolerance – no ladder, act on first offense.
     "scam":        [Step(_B, delete=True)],
     "phishing":    [Step(_B, delete=True)],
     "hate_slur":   [Step(_M, 1440, delete=True), Step(_B, delete=True)],
@@ -44,12 +44,12 @@ POLICY: dict[str, list[Step]] = {
     "sexual_nsfw": [Step(_D, delete=True), Step(_M, 1440, delete=True), Step(_B, delete=True)],
     # Non-official link from a non-admin → remove the message, every time, but
     # never escalate to mute/ban on the link alone (a good-faith member sharing
-    # a news article shouldn't be punished — just kept to official links). Repeat
+    # a news article shouldn't be punished – just kept to official links). Repeat
     # SCAM links are still caught by the scam ladder above (ban).
     "external_link": [Step(_D, delete=True)],
     # Assume good faith: a first ad/spam post gets a friendly WARN (message stays),
     # then escalates to delete/mute/ban only if it keeps happening. Don't crack
-    # down on a newcomer's one clumsy link — save enforcement for real offenders.
+    # down on a newcomer's one clumsy link – save enforcement for real offenders.
     "advertising": [Step(_W), Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
     "spam":        [Step(_W), Step(_D, delete=True), Step(_M, 60, delete=True), Step(_B, delete=True)],
     "flood":       [Step(_M, 10), Step(_M, 60), Step(_M, 1440)],
@@ -64,7 +64,7 @@ POLICY: dict[str, list[Step]] = {
 # Categories that always ping admins immediately, regardless of action.
 ALERT_CATEGORIES = {"scam", "phishing", "hate_slur", "doxxing", "impersonation"}
 
-# Never sanctioned — these must fall through to the normal pipeline.
+# Never sanctioned – these must fall through to the normal pipeline.
 SAFE_CATEGORIES = {"criticism", "question", "none"}
 
 # Human-readable reason shown to the user in the DM explanation.

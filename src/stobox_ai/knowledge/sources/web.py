@@ -1,4 +1,4 @@
-"""Website source — crawl stobox.io into Documents.
+"""Website source – crawl stobox.io into Documents.
 
 Strategy per seed: try the domain's sitemap.xml first (fast, complete); if none,
 fall back to a polite breadth-first crawl restricted to allowed domains, bounded
@@ -24,7 +24,7 @@ _SKIP_EXT = re.compile(
 )
 _BINARY_DOC = re.compile(r"\.(pdf|docx?|pptx?|xlsx?)(\?|$)", re.I)
 _SITEMAP_LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
-# URLs embedded in llms.txt (markdown links or bare) — strip trailing punctuation.
+# URLs embedded in llms.txt (markdown links or bare) – strip trailing punctuation.
 _URL_IN_TEXT = re.compile(r"https?://[^\s)\]<>\"']+")
 # Publish date: JSON-LD "datePublished" (stobox blog) or <meta article:published_time>.
 _PUBLISHED = re.compile(
@@ -68,7 +68,7 @@ class WebSource(Source):
         self.delay = delay_seconds
         self.category = category
         # URL templates with {n} (e.g. ".../blog/page/{n}") walked n=2,3,… until
-        # the site stops serving new links — paginated archives (the blog!) are
+        # the site stops serving new links – paginated archives (the blog!) are
         # invisible to sitemap/llms discovery and too deep for bounded BFS.
         self.paginate = paginate or []
         self._robots: dict[str, RobotFileParser] = {}
@@ -145,7 +145,7 @@ class WebSource(Source):
     async def _discover_urls(self, fetcher: Fetcher, seed: str) -> list[str]:
         """Find page URLs to crawl: sitemap.xml first, then the AI-oriented
         llms-full.txt / llms.txt inventory (the modern replacement for a sitemap
-        — and exactly what stobox.io publishes)."""
+– and exactly what stobox.io publishes)."""
         base = f"{urlparse(seed).scheme}://{_host(seed)}"
 
         # 1) sitemap.xml (+ one level of nested sitemaps)

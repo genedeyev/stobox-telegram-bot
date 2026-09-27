@@ -109,7 +109,8 @@ async def channel(config):
 
 async def test_is_admin_by_id_and_username(channel):
     assert channel.is_admin(_user(uid=111))
-    assert channel.is_admin(_user(uid=9, username="AdminUser"))   # case-insensitive
+    # Usernames never grant admin (a released @username can be re-registered).
+    assert not channel.is_admin(_user(uid=9, username="AdminUser"))
     assert not channel.is_admin(_user(uid=9, username="rando"))
     assert not channel.is_admin(None)
 

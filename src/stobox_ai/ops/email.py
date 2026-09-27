@@ -3,9 +3,9 @@
 Used for the /email write-up and the MQL summary to the team inbox. Two ways to
 configure, checked in this order:
 
-  1. Resend  — set RESEND_API_KEY (+ EMAIL_FROM on a Resend-verified domain).
+  1. Resend – set RESEND_API_KEY (+ EMAIL_FROM on a Resend-verified domain).
                Simplest; just an API key, no SMTP server.
-  2. SMTP    — SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / EMAIL_FROM.
+  2. SMTP – SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / EMAIL_FROM.
 
 If neither is set, sending is disabled and callers degrade gracefully (the lead
 is still captured; the user is told the team will follow up). Never blocks chat.
@@ -22,7 +22,7 @@ from ..logging import get_logger
 
 log = get_logger(__name__)
 
-# Resend's shared test sender — works without domain verification but can only
+# Resend's shared test sender – works without domain verification but can only
 # deliver to the Resend account owner's own address. Fine for first smoke tests.
 _RESEND_TEST_FROM = "Stoby <onboarding@resend.dev>"
 
@@ -46,7 +46,7 @@ class EmailSender:
         return "resend" if self.resend_key else ("smtp" if self.host else "none")
 
     def send(self, to: str, subject: str, body_text: str) -> bool:
-        """Blocking send — call via asyncio.to_thread. Returns success.
+        """Blocking send – call via asyncio.to_thread. Returns success.
 
         Prefers Resend when RESEND_API_KEY is set, else SMTP.
         """

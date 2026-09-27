@@ -27,7 +27,7 @@ def test_populated_digest_renders_sections_and_escapes():
         "metrics": {"count": 42, "avg_latency_ms": 800},
     }
     html = render_dashboard(digest)
-    assert "Stoby — Community Analytics" in html
+    assert "Stoby – Community Analytics" in html
     assert "watch" in html and "Documentation gaps" in html
     assert "telegram:1" in html
     # User-derived content is HTML-escaped (no raw angle brackets injected).

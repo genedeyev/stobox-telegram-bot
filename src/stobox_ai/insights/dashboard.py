@@ -1,6 +1,6 @@
 """Render the analytics digest as a self-contained HTML dashboard.
 
-No external assets, no JS frameworks — inline CSS only, theme-aware, safe to
+No external assets, no JS frameworks – inline CSS only, theme-aware, safe to
 serve behind an auth gateway. Everything user-derived (questions, categories) is
 HTML-escaped. Shape mirrors DailyDigest.build().
 """
@@ -28,7 +28,7 @@ def render_dashboard(digest: dict[str, Any]) -> str:
         return _page(body)
 
     s = digest.get("sentiment", {})
-    label = s.get("label", "—")
+    label = s.get("label", " – ")
     health = float(s.get("health_score", 0)) * 100
     metrics = digest.get("metrics", {})
 
@@ -57,12 +57,12 @@ def render_dashboard(digest: dict[str, Any]) -> str:
         [escape(g["question"][:90]), str(g["asked"]), str(g["unresolved"]),
          f'{g["avg_confidence"]:.0%}']
         for g in gaps
-    ]) or '<tr><td colspan="4" class="muted">No gaps — nice.</td></tr>'
+    ]) or '<tr><td colspan="4" class="muted">No gaps – nice.</td></tr>'
 
     leads = digest.get("potential_leads", [])
     lead_rows = _rows([
-        [escape(str(ld.get("user_key", "—"))[:40]), str(ld.get("touches", 0)),
-         "✅" if ld.get("captured") else "—", escape(str(ld.get("last_q", ""))[:70])]
+        [escape(str(ld.get("user_key", " – "))[:40]), str(ld.get("touches", 0)),
+         "✅" if ld.get("captured") else " – ", escape(str(ld.get("last_q", ""))[:70])]
         for ld in leads
     ]) or '<tr><td colspan="4" class="muted">None yet</td></tr>'
 
@@ -79,10 +79,10 @@ def render_dashboard(digest: dict[str, Any]) -> str:
         mod_counts[key] = mod_counts.get(key, 0) + 1
     mod_rows = _rows([[escape(k), str(v)] for k, v in
                       sorted(mod_counts.items(), key=lambda x: -x[1])]) \
-        or '<tr><td colspan="2" class="muted">Quiet — no actions</td></tr>'
+        or '<tr><td colspan="2" class="muted">Quiet – no actions</td></tr>'
 
     body = f"""
-    <h1>Stoby — Community Analytics</h1>
+    <h1>Stoby – Community Analytics</h1>
     <p class="sub">Live view over the decision log · {digest.get('count', 0)} recent conversations</p>
     <div class="cards">{card_html}</div>
 
@@ -93,7 +93,7 @@ def render_dashboard(digest: dict[str, Any]) -> str:
     </section>
 
     <section>
-      <h2>🕳 Documentation gaps <span class="muted">— recurring & low-confidence</span></h2>
+      <h2>🕳 Documentation gaps <span class="muted"> – recurring & low-confidence</span></h2>
       <table><thead><tr><th>Question</th><th>Asked</th><th>Unresolved</th><th>Avg conf.</th></tr></thead>
       <tbody>{gap_rows}</tbody></table>
     </section>

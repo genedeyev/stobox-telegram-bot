@@ -1,7 +1,7 @@
 """Detecting Telegram "deleted accounts" for group hygiene.
 
 When a person deletes their Telegram account, their membership lingers in every
-group as a ghost "Deleted Account" — empty name, no username, never posts. Real
+group as a ghost "Deleted Account" – empty name, no username, never posts. Real
 accounts always carry a non-empty first_name, so the absence of one (together
 with no username and no last name, and not being a bot) is a reliable signal.
 
@@ -26,7 +26,7 @@ def is_deleted_account(user: _UserLike | None) -> bool:
     """True only for the unmistakable deleted-account shape.
 
     Telegram requires a non-empty ``first_name`` for every live human account, so
-    an empty one — with no username and no last name, and not a bot — means the
+    an empty one – with no username and no last name, and not a bot – means the
     account was deleted. Bots and any user with a name or handle are never
     flagged.
     """

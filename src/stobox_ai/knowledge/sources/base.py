@@ -23,7 +23,7 @@ USER_AGENT = "StoboxAI-KnowledgeBot/0.1 (+https://stobox.io; community assistant
 class Fetcher(Protocol):
     """Minimal async HTTP surface used by sources.
 
-    ``get_text`` returns ``(status, text, final_url)`` — the final URL after any
+    ``get_text`` returns ``(status, text, final_url)`` – the final URL after any
     redirects, so callers cite and resolve links against where the content
     actually lives (e.g. docs.stobox.io → www.stobox.io).
     """

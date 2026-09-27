@@ -10,6 +10,15 @@ production** (Railway + Supabase), no human in the loop for day-to-day operation
 
 **Status: 🟢 LIVE.** Handle `@stobox_assistant_bot` · display name "Stoby | AI Assistant".
 
+> **Stage 0 (27 September 2026).** The STBU migration closed before 15 September 2026, and
+> Stoby now says so: facts come from the live `stobox.io/llms-full.txt`, legacy contracts are
+> reported as discontinued, and claims close 31 December 2026, 23:59 UTC. Every "presence"
+> loop is off (scheduled posts, updates briefing, migration countdown, revival, win-back,
+> reminders): Stoby answers when asked and announces new blog posts. Output rails now remove
+> any non-official link and any address that is not in `canonicals.yaml`, and never emit an
+> em dash. Acceptance: `scripts/acceptance.py`. Some sections below describe features that
+> are switched off until the next stage.
+
 - **Setup / run locally:** [SETUP.md](SETUP.md)
 - **Deploy (Railway + Supabase):** [DEPLOY.md](DEPLOY.md)
 - **What's planned:** [ROADMAP.md](ROADMAP.md)

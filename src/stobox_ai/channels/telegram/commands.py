@@ -1,4 +1,4 @@
-"""Telegram slash commands — user + admin.
+"""Telegram slash commands – user + admin.
 
 User commands mostly funnel into the RAG pipeline (so answers stay cited and
 grounded). Admin commands operate the bot (reindex, stats, health, etc.) and are
@@ -38,7 +38,7 @@ def _is_admin(update, context) -> bool:
 
 
 # Per-user command cooldowns. /support, /report and /appeal fan out a DM to
-# EVERY admin and /check burns 4 chain-RPC calls — none of them pass through
+# EVERY admin and /check burns 4 chain-RPC calls – none of them pass through
 # the engine's rate limiter, so without this one hostile user in a public
 # group could flood every admin's inbox in a tight loop.
 _CMD_LAST: dict[str, float] = {}
@@ -59,60 +59,60 @@ def _cooldown_ok(update, cmd: str, seconds: float) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Interactive user guide (/guide) — button-navigated "what can Stoby do"
+# Interactive user guide (/guide) – button-navigated "what can Stoby do"
 # --------------------------------------------------------------------------- #
 _GUIDE_MENU = (
-    "🧭 <b>Stoby — quick guide</b>\n\n"
+    "🧭 <b>Stoby – quick guide</b>\n\n"
     "I'm the resident AI of the Stobox community. Tap a topic to see what I can do:"
 )
 _GUIDE_SECTIONS = {
     "ask": (
         "💬 <b>Ask me anything</b>\n\n"
-        "Just type your question — Stobox, tokenization, RWAs, Compass, STV3, ERC-3643, "
+        "Just type your question – Stobox, tokenization, RWAs, Compass, STV3, ERC-3643, "
         "jurisdictions, anything. I answer from the official docs and show my sources.\n\n"
-        "• Short answers by default — tap <b>📖 More detail</b> for the deep dive\n"
+        "• Short answers by default – tap <b>📖 More detail</b> for the deep dive\n"
         "• Tap <b>📩 Email me this</b> to get a full write-up by email\n"
         "• In groups, @mention me or reply to my message\n\n"
         "Try: <i>“What is Stobox Compass?”</i>"
     ),
     "migration": (
         "🪙 <b>STBU &amp; migration</b>\n\n"
-        "• /migrate — the STBU→Base migration, step by step\n"
-        "• /check — paste your <b>public</b> wallet address and I'll show your STBU across "
+        "• /migrate – the STBU→Base migration, step by step\n"
+        "• /check – paste your <b>public</b> wallet address and I'll show your STBU across "
         "every chain + your exact path (read-only, I never ask for keys)\n"
-        "• /remindme — reminders before the migration deadline\n"
-        "• /valuation — the company valuation (not a token price)\n\n"
+        "• /remindme – reminders before the migration deadline\n"
+        "• /valuation – the company valuation (not a token price)\n\n"
         "⚠️ Stobox staff never DM you first. Never share your seed phrase or private key."
     ),
     "tokenize": (
         "🏢 <b>Tokenize an asset</b>\n\n"
         "Exploring tokenization for your company, fund, or real estate?\n"
-        "• /qualify — a quick 30-second fit check (5 taps)\n"
-        "• /resources — the right guides for your asset &amp; jurisdiction\n"
-        "• /compass — run the free Readiness Score (25 questions, no card)\n"
+        "• /qualify – a quick 30-second fit check (5 taps)\n"
+        "• /resources – the right guides for your asset &amp; jurisdiction\n"
+        "• /compass – run the free Readiness Score (25 questions, no card)\n"
         "• Tell me about your asset and I'll point you to the right path\n"
-        "• /contact — reach the Stobox team\n\n"
+        "• /contact – reach the Stobox team\n\n"
         "Stobox's three layers: <b>Intelligence</b> (organize) → <b>Raisable</b> (raise) → "
         "<b>Compass</b> (tokenize)."
     ),
     "community": (
         "🏆 <b>Community &amp; rewards</b>\n\n"
         "Take part, earn XP, climb the leaderboard:\n"
-        "• /rank — your XP, level &amp; streak\n"
-        "• /leaderboard — this week's top members\n"
-        "• /ama — submit a question for the next community AMA\n"
-        "• /subscribe — pick topics (migration · RWA news · product) and I'll DM you "
+        "• /rank – your XP, level &amp; streak\n"
+        "• /leaderboard – this week's top members\n"
+        "• /ama – submit a question for the next community AMA\n"
+        "• /subscribe – pick topics (migration · RWA news · product) and I'll DM you "
         "the moment something ships\n"
         "• Answer quiz nights for bonus XP · keep a daily streak!\n\n"
         "Share a good answer with the ↗️ button to help the community grow."
     ),
     "verify": (
         "🔗 <b>Verify &amp; get help</b>\n\n"
-        "• /sources — the official Stobox links (verify I'm the real me)\n"
-        "• /contact — reach support / the team\n"
-        "• /help — the full command list\n"
-        "• /report — report an issue · /feedback — send feedback\n\n"
-        "I'm an AI — I can be wrong. Official pages and offering documents always take "
+        "• /sources – the official Stobox links (verify I'm the real me)\n"
+        "• /contact – reach support / the team\n"
+        "• /help – the full command list\n"
+        "• /report – report an issue · /feedback – send feedback\n\n"
+        "I'm an AI – I can be wrong. Official pages and offering documents always take "
         "precedence, and I don't give financial or legal advice."
     ),
 }
@@ -146,7 +146,7 @@ async def guide_cmd(update, context) -> None:
 # User commands
 # --------------------------------------------------------------------------- #
 async def start_cmd(update, context) -> None:
-    # Deep-link attribution: t.me/bot?start=<source> — first touch wins.
+    # Deep-link attribution: t.me/bot?start=<source> – first touch wins.
     # ref_<userid> payloads additionally credit the referrer.
     if context.args:
         payload = context.args[0][:64]
@@ -167,40 +167,31 @@ async def start_cmd(update, context) -> None:
         except Exception:  # noqa: BLE001 - attribution must never break /start
             pass
     await update.effective_message.reply_text(
-        "👋 I'm <b>Stoby</b> — the resident AI of the Stobox community. Part monster, part "
+        "👋 I'm <b>Stoby</b> – the resident AI of the Stobox community. Part monster, part "
         "mind, fully awake. Stobox is a tokenization infrastructure company that helps "
         "businesses issue and manage tokenized real-world assets and securities.\n\n"
         "How can I help?\n"
-        "• <b>Tokenize an asset</b> — tell me about it and I'll point you to the readiness "
+        "• <b>Tokenize an asset</b> – tell me about it and I'll point you to the readiness "
         "check (/compass) and the team.\n"
-        "• <b>STBU / STBX holder</b> — try /migrate, /valuation, or /remindme for "
+        "• <b>STBU / STBX holder</b> – try /migrate, /valuation, or /remindme for "
         "migration-deadline reminders.\n"
-        "• <b>Learn about Stobox</b> — ask me anything; I answer from stobox.io.\n\n"
+        "• <b>Learn about Stobox</b> – ask me anything; I answer from stobox.io.\n\n"
         "New here? Tap /guide for a quick tour. I share information, not investment "
-        "advice — verify me with /sources.",
+        "advice – verify me with /sources.",
         parse_mode="HTML", disable_web_page_preview=True,
     )
 
 
 async def remindme_cmd(update, context) -> None:
-    """Opt in to STBU migration deadline reminders (DM only)."""
+    """Migration reminders ended with the burn window; answer with the status."""
     engine = _engine(context)
-    chat = update.effective_chat
-    if chat.type != "private":
-        await update.effective_message.reply_text(
-            "Reminders are personal — DM me /remindme and I'll keep you posted. 👍"
-        )
-        return
     from ...guardrails.freshness import compute_migration_phase
 
     canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
     phase_text = compute_migration_phase(canon)[1] if canon else "See stobox.io for status."
-    new = engine.reminders.subscribe(str(chat.id))
     await update.effective_message.reply_text(
-        ("✅ You're on the list — I'll remind you before the STBU migration deadline "
-         "(and when claims open), right here.\n\n" if new else
-         "You're already subscribed — I've got you. 👍\n\n")
-        + f"Current status: {phase_text}\n\nStop anytime with /stopreminders.",
+        "Migration reminders have ended: the burn window closed before 15 September 2026.\n\n"
+        + f"Current status: {phase_text}",
         disable_web_page_preview=True,
     )
 
@@ -214,7 +205,7 @@ def _ama_button(qid: int, votes: int):
 
 async def ama_cmd(update, context) -> None:
     """Submit a question for the next AMA (during an open collection window).
-    Outside a window, a real question is ANSWERED (not dead-ended) — Arevik: a
+    Outside a window, a real question is ANSWERED (not dead-ended) – Arevik: a
     genuine question shouldn't get 'no AMA now'; the unanswered-question loop
     then captures anything Stoby can't answer for the team to /answer."""
     engine = _engine(context)
@@ -225,7 +216,7 @@ async def ama_cmd(update, context) -> None:
             await _adapter(context).process_query(update, context, text)
             return
         await update.effective_message.reply_text(
-            "No AMA is collecting questions right now — but ask me anything and "
+            "No AMA is collecting questions right now – but ask me anything and "
             "I'll answer, or the team will. I'll announce the next AMA here. 📢"
         )
         return
@@ -245,7 +236,7 @@ async def ama_cmd(update, context) -> None:
         )
     else:
         await update.effective_message.reply_text(
-            f"👍 Someone already asked something similar — I've added your vote to it "
+            f"👍 Someone already asked something similar – I've added your vote to it "
             f"(now {q.votes}):\n\n❓ <i>{html_escape(q.text)}</i>",
             parse_mode="HTML", reply_markup=_ama_button(q.qid, q.votes),
         )
@@ -262,7 +253,7 @@ async def amaopen_cmd(update, context) -> None:
         + "Submit your questions for the team with:\n<code>/ama your question</code>\n"
         "Then upvote the ones you most want answered. Top-voted questions get answered first!"
     )
-    # Broadcast to known groups (copy — handlers mutate the set concurrently).
+    # Broadcast to known groups (copy – handlers mutate the set concurrently).
     sent = 0
     for chat_id in list(getattr(_adapter(context), "known_chats", ())):
         try:
@@ -271,7 +262,7 @@ async def amaopen_cmd(update, context) -> None:
         except Exception:  # noqa: BLE001
             pass
     await update.effective_message.reply_text(
-        f"✅ AMA collection OPEN{f' — {topic}' if topic else ''}. Announced to {sent} group(s). "
+        f"✅ AMA collection OPEN{f' – {topic}' if topic else ''}. Announced to {sent} group(s). "
         "Close it with /amaclose, see submissions with /amalist."
     )
 
@@ -285,10 +276,10 @@ async def amaclose_cmd(update, context) -> None:
     if not ranked:
         await update.effective_message.reply_text("✅ AMA closed. No questions were submitted.")
         return
-    lines = ["✅ <b>AMA closed — ranked questions</b>"]
+    lines = ["✅ <b>AMA closed – ranked questions</b>"]
     for i, q in enumerate(ranked, 1):
         lines.append(f"\n<b>{i}. ({q.votes} 👍)</b> {html_escape(q.text)}"
-                     f"\n<i>— {html_escape(q.submitter_name or 'member')}</i>")
+                     f"\n<i> – {html_escape(q.submitter_name or 'member')}</i>")
     await update.effective_message.reply_text("\n".join(lines)[:4096], parse_mode="HTML")
 
 
@@ -328,7 +319,7 @@ async def rank_cmd(update, context) -> None:
     _, title = level_for(rec.xp)
     rank = engine.xp.rank(f"telegram:{user.id}")
     await update.effective_message.reply_text(
-        f"🏅 <b>{user.first_name}</b> — {title}\n"
+        f"🏅 <b>{user.first_name}</b> – {title}\n"
         f"XP: <b>{rec.xp}</b> (#{rank}) · this week: {rec.xp_week}\n"
         f"🔥 Streak: {rec.streak} day(s) (best {rec.best_streak})\n\n"
         "Earn XP: helpful questions, quiz wins, referrals, daily activity. /leaderboard",
@@ -344,7 +335,7 @@ async def leaderboard_cmd(update, context) -> None:
     board = weekly if weekly else engine.xp.top(10)
     if not board:
         await update.effective_message.reply_text(
-            "The leaderboard is wide open — be the first to score. Ask a question or catch the "
+            "The leaderboard is wide open – be the first to score. Ask a question or catch the "
             "next quiz! 🏆"
         )
         return
@@ -354,7 +345,7 @@ async def leaderboard_cmd(update, context) -> None:
         tag = medals[i] if i < 3 else f"{i+1}."
         _, title = level_for(u.xp)
         name = u.display_name or u.user_key.split(":")[-1]
-        lines.append(f"{tag} <b>{name}</b> — {u.xp_week} XP ({title})")
+        lines.append(f"{tag} <b>{name}</b> – {u.xp_week} XP ({title})")
     lines.append("\nCheck your own standing with /rank.")
     await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
 
@@ -383,18 +374,18 @@ async def resources_cmd(update, context) -> None:
 
 
 async def check_cmd(update, context) -> None:
-    """Check STBU balances for a public wallet address across eligible chains."""
+    """Read STBU on Base plus legacy (discontinued) balances for a public address."""
     addr = context.args[0].strip() if context.args else ""
     if not addr:
         await update.effective_message.reply_text(
-            "Send your <b>public</b> wallet address and I'll check your STBU across all "
-            "eligible chains:\n<code>/check 0xYourAddress</code>\n\n"
-            "🔒 I only read public balances — never share your seed phrase or private key.",
+            "Send your <b>public</b> wallet address and I'll read its STBU on Base and "
+            "any legacy (discontinued) STBU:\n<code>/check 0xYourAddress</code>\n\n"
+            "🔒 I only read public balances – never share your seed phrase or private key.",
             parse_mode="HTML",
         )
         return
     if not _cooldown_ok(update, "check", 20):
-        await update.effective_message.reply_text("One check at a time — try again in a few seconds.")
+        await update.effective_message.reply_text("One check at a time – try again in a few seconds.")
         return
     await update.effective_message.reply_text("🔎 Checking the chains…")
     report = await _engine(context).check_wallet(addr)
@@ -404,7 +395,7 @@ async def check_cmd(update, context) -> None:
 
 async def price_cmd(update, context) -> None:
     """Live STBU market price / market cap / 24h volume (CoinGecko, CMC fallback).
-    A published market FACT — with the 'not advice, not the company valuation' framing."""
+    A published market FACT – with the 'not advice, not the company valuation' framing."""
     engine = _engine(context)
     snap = await engine.market_snapshot()
     if not snap:
@@ -416,9 +407,10 @@ async def price_cmd(update, context) -> None:
         )
         return
     canon = getattr(engine.assembler, "canonicals", None) if engine.assembler else None
-    contracts = (
-        canon.get("tokens.stbu.migration.eligible_contracts", {}) if canon else {}
-    )
+    # Only the live Base contract is "official". The legacy contracts were
+    # discontinued on 15 Sep 2026 and must never be listed as official again.
+    base = canon.get("tokens.stbu.contract") if canon else None
+    contracts = {"base": base} if base else {}
     await update.effective_message.reply_text(
         snap.format_report(contracts=contracts),
         parse_mode="HTML", disable_web_page_preview=True,
@@ -434,7 +426,7 @@ async def email_cmd(update, context) -> None:
     chat = update.effective_chat
     if chat.type != "private":
         await update.effective_message.reply_text(
-            "Let's keep your email private — DM me /email you@address.com. 👍"
+            "Let's keep your email private – DM me /email you@address.com. 👍"
         )
         return
     if not context.args or not valid_email(context.args[0]):
@@ -453,7 +445,7 @@ async def email_cmd(update, context) -> None:
              or "How Stobox tokenization works")
     await engine.memory.save_profile(profile)
 
-    await update.effective_message.reply_text("📩 On it — composing your write-up…")
+    await update.effective_message.reply_text("📩 On it – composing your write-up…")
     resp = await engine.detailed_answer(topic, user_key=uk)
     from ...channels.base import Channel
     body = (
@@ -461,10 +453,10 @@ async def email_cmd(update, context) -> None:
         f"Here's the fuller answer to: “{topic}”\n\n"
         f"{_strip_html(resp.text)}\n"
         f"{_strip_html(Channel.render_citations(resp))}\n\n"
-        "Questions any time — just message Stoby on Telegram.\n"
-        "This is information, not investment advice.\n\n— Stoby, the Stobox community AI"
+        "Questions any time – just message Stoby on Telegram.\n"
+        "This is information, not investment advice.\n\n – Stoby, the Stobox community AI"
     )
-    subject = f"Stobox — {topic[:60]}"
+    subject = f"Stobox – {topic[:60]}"
     sent = False
     if engine.email.configured:
         sent = await _asyncio.to_thread(engine.email.send, addr, subject, body)
@@ -481,7 +473,7 @@ async def email_cmd(update, context) -> None:
         )
     else:
         await update.effective_message.reply_text(
-            f"✅ Got it — I've flagged your interest and the Stobox team will email {addr} "
+            f"✅ Got it – I've flagged your interest and the Stobox team will email {addr} "
             "the full details. Meanwhile, I'm right here for any questions."
         )
 
@@ -494,8 +486,8 @@ def _strip_html(text: str) -> str:
 async def stopreminders_cmd(update, context) -> None:
     removed = _engine(context).reminders.unsubscribe(str(update.effective_chat.id))
     await update.effective_message.reply_text(
-        "Done — no more reminders. You can rejoin anytime with /remindme."
-        if removed else "You weren't subscribed — nothing to stop. 🙂"
+        "Done – no more reminders. You can rejoin anytime with /remindme."
+        if removed else "You weren't subscribed – nothing to stop. 🙂"
     )
 
 
@@ -525,7 +517,7 @@ def _subs_summary(chat_id: str, book) -> str:
     if not active:
         return ("🔔 <b>Topic subscriptions</b>\nYou're not subscribed to anything yet. "
                 "Tap a topic below and I'll DM you the moment something in that lane ships "
-                "— nothing else. Opt out any time.")
+                " – nothing else. Opt out any time.")
     labels = ", ".join(TOPICS[t]["label"] for t in active if t in TOPICS)
     return (f"🔔 <b>Topic subscriptions</b>\nYou're getting: {labels}.\n"
             "Tap to toggle. I only DM when there's real news, and every message has a way out.")
@@ -536,7 +528,7 @@ async def subscribe_cmd(update, context) -> None:
     chat = update.effective_chat
     if chat.type != "private":
         await update.effective_message.reply_text(
-            "Subscriptions are personal — DM me /subscribe and pick your topics. 👍"
+            "Subscriptions are personal – DM me /subscribe and pick your topics. 👍"
         )
         return
     from ...ops.subscriptions import TOPICS, valid_topic
@@ -558,7 +550,7 @@ async def subscribe_cmd(update, context) -> None:
             return
         added = book.subscribe(chat_id, topic)
         meta = TOPICS[topic]
-        head = (f"✅ Subscribed to {meta['label']} — {meta['blurb']}"
+        head = (f"✅ Subscribed to {meta['label']} – {meta['blurb']}"
                 if added else f"You're already on {meta['label']}. 👍")
         await update.effective_message.reply_text(
             head + "\n\nTap to adjust:", reply_markup=_subs_markup(chat_id, book)
@@ -586,19 +578,19 @@ async def unsubscribe_cmd(update, context) -> None:
         topic = args[0].lower().strip().lstrip("#")
         if valid_topic(topic) and book.unsubscribe(chat_id, topic):
             await update.effective_message.reply_text(
-                f"Done — you're off {TOPICS[topic]['label']}. Re-join anytime with /subscribe."
+                f"Done – you're off {TOPICS[topic]['label']}. Re-join anytime with /subscribe."
             )
             return
     removed = book.unsubscribe_all(chat_id)
     await update.effective_message.reply_text(
-        "Done — all topic subscriptions off. You can re-pick anytime with /subscribe."
+        "Done – all topic subscriptions off. You can re-pick anytime with /subscribe."
         if removed else "You weren't subscribed to any topics. 🙂"
     )
 
 
 async def help_cmd(update, context) -> None:
     await update.effective_message.reply_text(
-        "<b>Stoby — commands</b>\n"
+        "<b>Stoby – commands</b>\n"
         "/guide – interactive tour of what I can do\n"
         "/migrate – STBU→Base migration explainer\n"
         "/check – check your STBU across chains (paste a public address)\n"
@@ -621,7 +613,7 @@ async def about_cmd(update, context) -> None:
     engine = _engine(context)
     synced = engine.last_sync.strftime("%d %b %Y %H:%M UTC") if engine.last_sync else "unknown"
     await update.effective_message.reply_text(
-        "I'm <b>Stoby</b>, the resident AI of the Stobox community — part monster, part mind, "
+        "I'm <b>Stoby</b>, the resident AI of the Stobox community – part monster, part mind, "
         "fully awake. I'm grounded in stobox.io's published content and updated automatically "
         "when the site updates. I'm an AI, not a human; official pages and offering documents "
         "always take precedence over me, and I can be wrong.\n\n"
@@ -671,19 +663,22 @@ async def migrate_cmd(update, context) -> None:
             "STBU migration details: please check https://stobox.io for the current guide."
         )
         return
-    m = canon.get("tokens.stbu.migration", {})
     from ...guardrails.freshness import compute_migration_phase
     from ...guardrails.rails import IMPERSONATION_WARNING
 
+    stbu = canon.get("tokens.stbu", {}) or {}
     _, phase_text = compute_migration_phase(canon)
+    pages = stbu.get("pages", {}) or {}
     lines = [
         "<b>STBU → Base migration</b>",
-        f"Pattern: {m.get('pattern', 'burn-and-mint, 1:1, same-wallet only')}.",
-        f"Destination chain: {m.get('destination_chain', 'Base')}.",
-        f"Status: {phase_text}",
-        f"Legacy V1 tokens: {m.get('legacy_v1', 'not eligible')}.",
-        "Consolidate all STBU to ONE wallet before migrating.",
-        "Confirm the exact burn address via official Stobox channels only.",
+        phase_text,
+        "",
+        f"Live STBU on Base: <code>{stbu.get('contract', '')}</code>",
+        "Legacy STBU on Ethereum, BNB Chain, Polygon and Arbitrum was discontinued on "
+        "15 September 2026: it is not STBU and cannot be migrated, even where some "
+        "interfaces still show a price for it.",
+        f"Record with figures from the chain: {pages.get('record', 'https://www.stobox.io/stbu')}",
+        "Help with a specific burn or claim: support@stobox.io",
         "",
         IMPERSONATION_WARNING,
     ]
@@ -699,10 +694,10 @@ async def compass_cmd(update, context) -> None:
             f"<b>{c.get('name', 'Stobox Compass')}</b>\n"
             f"{c.get('what', 'Tokenization readiness platform')}.\n"
             f"{(c.get('chains_phrasing') or '').strip()}\n"
-            "Run the readiness check: https://stobox.io/compass"
+            "Compass: https://www.stobox.io/compass · readiness score: https://www.stobox.io/readiness"
         )
     else:
-        text = "Stobox Compass — tokenization readiness platform: https://stobox.io/compass"
+        text = "Stobox Compass issues the token, permissioned: https://www.stobox.io/compass"
     await update.effective_message.reply_text(text, parse_mode="HTML",
                                               disable_web_page_preview=True)
 
@@ -715,7 +710,7 @@ async def valuation_cmd(update, context) -> None:
     await update.effective_message.reply_text(
         "<b>Stobox company valuation</b>\n"
         f"{val_line.lstrip('- ')}\n"
-        "Note: this is a COMPANY valuation (Eqvista) — not the STBX token price, not an "
+        "Note: this is a COMPANY valuation (Eqvista) – not the STBX token price, not an "
         "offer, not investment advice.",
         parse_mode="HTML", disable_web_page_preview=True,
     )
@@ -734,7 +729,7 @@ async def sources_cmd(update, context) -> None:
     }
     links = links or default
     order = ["website", "app", "x", "linkedin", "telegram", "youtube", "github", "support_email"]
-    lines = ["<b>Official Stobox links</b> — verify me against these:"]
+    lines = ["<b>Official Stobox links</b> – verify me against these:"]
     for k in order:
         if links.get(k):
             lines.append(f"{k}: {links[k]}")
@@ -747,14 +742,14 @@ async def blog_cmd(update, context) -> None:
     """Point readers at the blog + the freshest posts from the index."""
     engine = _engine(context)
     lines = [
-        "📰 <b>The Stobox Blog</b> — tokenization news, deep dives, and the weekly "
+        "📰 <b>The Stobox Blog</b> – tokenization news, deep dives, and the weekly "
         "<b>RWA &amp; Tokenization Digest</b>:",
         "https://www.stobox.io/blog",
     ]
     if engine.blog_posts:
         lines.append("\nLatest:")
-        lines += [f"• {p['title'][:80]} — {p['url']}" for p in engine.blog_posts[:5]]
-    lines.append("\nAsk me about anything you read — I'll pull up the details.")
+        lines += [f"• {p['title'][:80]} – {p['url']}" for p in engine.blog_posts[:5]]
+    lines.append("\nAsk me about anything you read – I'll pull up the details.")
     await update.effective_message.reply_text(
         "\n".join(lines), parse_mode="HTML", disable_web_page_preview=True
     )
@@ -772,7 +767,7 @@ async def contact_cmd(update, context) -> None:
 async def support_cmd(update, context) -> None:
     if not _cooldown_ok(update, "support", 120):
         await update.effective_message.reply_text(
-            "The team has already been flagged — hold tight, someone will follow up."
+            "The team has already been flagged – hold tight, someone will follow up."
         )
         return
     await _adapter(context).dm_admins(
@@ -781,19 +776,19 @@ async def support_cmd(update, context) -> None:
         f"in {update.effective_chat.title or 'private'}.",
     )
     await update.effective_message.reply_text(
-        "I've flagged the team for you. Someone will follow up. Meanwhile I can try to help — just ask."
+        "I've flagged the team for you. Someone will follow up. Meanwhile I can try to help – just ask."
     )
 
 
 async def report_cmd(update, context) -> None:
     if not _cooldown_ok(update, "report", 60):
         await update.effective_message.reply_text(
-            "Got it — your previous report is already with the team."
+            "Got it – your previous report is already with the team."
         )
         return
     text = " ".join(context.args) if context.args else "(no details)"
     await _adapter(context).dm_admins(context, f"⚠️ Report: {text[:500]}")
-    await update.effective_message.reply_text("Thanks — your report has been sent to the team.")
+    await update.effective_message.reply_text("Thanks – your report has been sent to the team.")
 
 
 async def feedback_cmd(update, context) -> None:
@@ -944,7 +939,7 @@ async def strikes_cmd(update, context) -> None:
         return
     from collections import Counter
     cats = Counter(s.category for s in rec.strikes)
-    lines = [f"🛡 <b>{rec.display_name or uid}</b> — {len(rec.strikes)} total strike(s)"
+    lines = [f"🛡 <b>{rec.display_name or uid}</b> – {len(rec.strikes)} total strike(s)"
              + (" · <b>BANNED</b>" if rec.banned else "")]
     lines += [f"• {c}: {n}" for c, n in cats.most_common()]
     lines.append("\n/warn /mute /ban (reply) · /clearstrikes <id> to reset")
@@ -1062,7 +1057,7 @@ async def cleanup_cmd(update, context) -> None:
         ok = await adapter._remove_deleted_account(context, chat, target)
         await update.effective_message.reply_text(
             "🧹 Removed a deleted account." if ok else
-            "Couldn't remove it — make sure I'm an admin with ban rights here."
+            "Couldn't remove it – make sure I'm an admin with ban rights here."
         )
         return
     removed = getattr(adapter, "deleted_removed", 0)
@@ -1074,7 +1069,7 @@ async def cleanup_cmd(update, context) -> None:
         "To remove one right now, <b>reply to a message from that deleted account</b> "
         "with /cleanup.\n\n"
         "⚠️ Telegram doesn't let bots list every member, so I can't sweep all "
-        "existing ghosts in one shot — I clear them as they surface. For a full "
+        "existing ghosts in one shot – I clear them as they surface. For a full "
         "one-time purge of old ones, use a Telegram desktop client's member view.",
         parse_mode="HTML",
     )
@@ -1098,7 +1093,7 @@ async def appeal_cmd(update, context) -> None:
     """User contests a moderation action → routed to admins."""
     if not _cooldown_ok(update, "appeal", 300):
         await update.effective_message.reply_text(
-            "Your appeal is already with the admins — they'll review it fairly."
+            "Your appeal is already with the admins – they'll review it fairly."
         )
         return
     user = update.effective_user
@@ -1111,12 +1106,12 @@ async def appeal_cmd(update, context) -> None:
         html=True,
     )
     await update.effective_message.reply_text(
-        "Thanks — your appeal has been sent to a human admin. We'll review it fairly."
+        "Thanks – your appeal has been sent to a human admin. We'll review it fairly."
     )
 
 
 async def forgetme_cmd(update, context) -> None:
-    """GDPR erasure (Art. 17): delete everything stored about the requester —
+    """GDPR erasure (Art. 17): delete everything stored about the requester – 
     profile, conversation memory, logged messages, decisions, XP, opt-ins."""
     if update.effective_chat.type != "private":
         await update.effective_message.reply_text(
@@ -1174,7 +1169,7 @@ async def approve_cmd(update, context) -> None:
     entry = _engine(context).qa.get(qid)
     if not entry or not entry.draft:
         await update.effective_message.reply_text(
-            f"#{qid} has no draft to approve — use /answer {qid} <text>."
+            f"#{qid} has no draft to approve – use /answer {qid} <text>."
         )
         return
     await _finalize_answer(update, context, qid, entry.draft)
@@ -1204,7 +1199,7 @@ async def _finalize_answer(update, context, qid: int, text: str) -> None:
         entry.register_number = number
         engine.qa._save()
 
-    # 2) Into local knowledge NOW — the docs watcher hot-reloads it, so the bot
+    # 2) Into local knowledge NOW – the docs watcher hot-reloads it, so the bot
     #    starts answering with Gene's wording immediately.
     try:
         qa_file = Path(engine.config.get("knowledge.docs_path", "docs")) / "community-qa.md"
@@ -1214,7 +1209,7 @@ async def _finalize_answer(update, context, qid: int, text: str) -> None:
     except Exception as exc:  # noqa: BLE001
         await update.effective_message.reply_text(f"⚠️ Local knowledge append failed: {exc}")
 
-    # 3) Deliver to everyone who asked (their own conversation — not cold contact).
+    # 3) Deliver to everyone who asked (their own conversation – not cold contact).
     delivered = 0
     for asker in entry.askers:
         chat_id = asker["chat_id"]
@@ -1231,7 +1226,7 @@ async def _finalize_answer(update, context, qid: int, text: str) -> None:
             pass
 
     await update.effective_message.reply_text(
-        f"✅ #{qid} saved{' to register §' + str(number) if number else ' (register mirror failed — kept locally)'}, "
+        f"✅ #{qid} saved{' to register §' + str(number) if number else ' (register mirror failed – kept locally)'}, "
         f"knowledge updated, delivered to {delivered}/{len(entry.askers)} asker(s)."
     )
 
@@ -1243,7 +1238,7 @@ async def quiz_cmd(update, context) -> None:
     await update.effective_message.reply_text("🧠 Quiz time! Generating…")
     ok = await _adapter(context).send_quiz(context, update.effective_chat.id)
     if not ok:
-        await update.effective_message.reply_text("Couldn't build a quiz right now — try /sync first.")
+        await update.effective_message.reply_text("Couldn't build a quiz right now – try /sync first.")
 
 
 async def pause_cmd(update, context) -> None:
@@ -1308,7 +1303,7 @@ async def content_cmd(update, context) -> None:
     results = await engine.flywheel.run(decisions, dry_run=not do_file, limit=5)
     if not results:
         await update.effective_message.reply_text(
-            "No fresh content themes yet — need a few more recurring questions. "
+            "No fresh content themes yet – need a few more recurring questions. "
             "Check /gaps for what's building."
         )
         return
@@ -1316,9 +1311,9 @@ async def content_cmd(update, context) -> None:
     for r in results:
         tag = "🕳 gap" if r["is_gap"] else f"{r['count']}×"
         if r["filed"]:
-            lines.append(f"✅ #{r['issue']} · {tag} — {r['title'][:70]}")
+            lines.append(f"✅ #{r['issue']} · {tag} – {r['title'][:70]}")
         else:
-            lines.append(f"• {tag} — {r['title'][:70]}")
+            lines.append(f"• {tag} – {r['title'][:70]}")
     if not do_file:
         has_token = bool(engine.flywheel.token)
         lines.append("\n<i>Preview only.</i> " + (
@@ -1424,7 +1419,7 @@ async def admin_cmd(update, context) -> None:
 async def _admin_stub(update, context, label: str) -> None:
     if not _is_admin(update, context):
         return
-    await update.effective_message.reply_text(f"[{label}] — see /stats and /health for live data.")
+    await update.effective_message.reply_text(f"[{label}] – see /stats and /health for live data.")
 
 
 def registry() -> dict:

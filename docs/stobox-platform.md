@@ -1,8 +1,8 @@
 ---
-title: The Stobox Platform — Intelligence, Raisable, Compass
-version: "2026.07"
+title: The Stobox products
+version: "2026-09-27"
 author: Stobox
-date: 2026-07-14
+date: 2026-09-27
 category: product
 product: Stobox
 language: en
@@ -10,36 +10,22 @@ visibility: public
 source_url: https://www.stobox.io/intelligence
 ---
 
-# The Stobox Platform — three layers, one intelligence core
+# The Stobox products
 
-Stobox delivers one intelligence core across three layers of the private-company
-lifecycle: **Intelligence (Organize) → Raisable (Raise) → Compass (Tokenize)**.
+Source: https://www.stobox.io/llms-full.txt, read on 27 September 2026.
 
-## Stobox Intelligence — Organize
+Three products against one problem. Intelligence turns a company into one
+canonical, verifiable record and scores it. Raisable turns that record into a
+regulated offering, prepared by specialists and sold through licensed
+broker-dealer partners. Compass issues the token, permissioned, with the
+compliance enforced by the asset itself.
 
-Stobox Intelligence turns a private company into one canonical, verifiable
-record, scored across the **7 AXIS readiness pillars**. AXIS (Asset eXperience
-Intelligence Score) is the open methodology also used by Stobox Compass to
-evaluate tokenized real-world assets.
-See https://www.stobox.io/intelligence
+Fees are published and flat. Stobox never takes a percentage of a raise, at any
+layer, at any point: https://www.stobox.io/pricing.
 
-## Stobox Raisable — Raise
+Since 2018: $305M+ assets structured and supported, 100+ clients, 20+
+jurisdictions. Stobox is not a broker-dealer, investment adviser, custodian or
+law firm. There is no promise of liquidity; listing decisions rest with the venue.
 
-Stobox Raisable converts that verified record into a broker-acceptance-grade
-regulated offering, for a **flat fee — never a percentage of the raise**. The
-live site describes the supported offering frameworks; which framework applies
-to any specific offering is a question for its offering documents.
-See https://www.stobox.io/raisable
-
-## Stobox Compass — Tokenize
-
-Stobox Compass issues a live, compliant tokenized security with an on-chain
-registry and Asset Passport, non-custodial — primarily on Base, with Arbitrum
-and Canton (and other EVM networks) also supported.
-See https://www.stobox.io/compass
-
-## Where to start
-
-The best entry point for a new company is the **free Readiness Score**:
-25 questions, no credit card, same methodology as Stobox Compass.
-See https://www.stobox.io/readiness
+Where to start: the readiness score, https://www.stobox.io/readiness, or the
+team, https://www.stobox.io/contact.

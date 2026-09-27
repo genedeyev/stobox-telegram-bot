@@ -2,12 +2,12 @@
 progressive-discipline policy.
 
 Pipeline per message (groups, non-admins only):
-  1. impersonation check (display name vs protected terms) — highest priority;
+  1. impersonation check (display name vs protected terms) – highest priority;
   2. deterministic filters (flood, hard slurs, doxxing, scam/phishing patterns);
   3. LLM classifier for nuance (harassment vs banter, FUD vs honest criticism);
   4. the strike-aware policy maps (category, active-strike-count) → graded action.
 
-Casual profanity is NOT policed — only targeting, hate, scams, doxxing. Honest
+Casual profanity is NOT policed – only targeting, hate, scams, doxxing. Honest
 criticism falls through untouched.
 """
 
@@ -30,7 +30,7 @@ from .strikes import StrikeBook
 
 log = get_logger(__name__)
 
-# High-precision phishing/scam signals — no LLM needed.
+# High-precision phishing/scam signals – no LLM needed.
 _SCAM_PATTERNS = [
     re.compile(r"\bseed\s*phrase\b", re.I),
     re.compile(r"\bprivate\s*key\b", re.I),
@@ -43,7 +43,7 @@ _SCAM_PATTERNS = [
 _DM_BAIT = re.compile(r"\bdm\s+me\b|\bmessage\s+me\b|\bcontact\s+(me|support|admin)\b|t\.me/\S+", re.I)
 _LINK = re.compile(r"https?://|t\.me/|www\.", re.I)
 
-# Doxxing: personal data posted about others (conservative — needs a directive).
+# Doxxing: personal data posted about others (conservative – needs a directive).
 _DOXX = re.compile(
     r"\b(his|her|their|this\s+guy'?s?|@\w+'?s?)\s+(phone|number|address|home|"
     r"email|real\s+name|passport|id)\b|"
@@ -60,7 +60,7 @@ _HARD_SLURS_SEED = [
 ]
 
 _LEVEL_SENSITIVITY = {"off": 2.0, "light": 0.85, "standard": 0.6, "strict": 0.4}
-# Default protected identity terms — display names containing these, from a
+# Default protected identity terms – display names containing these, from a
 # non-allowlisted account, are treated as impersonation risks.
 _PROTECTED_TERMS = ["stobox", "support", "admin", "moderator", "official", "team"]
 
@@ -92,7 +92,7 @@ class Moderator:
         m = config.section("moderation")
         self.enabled = bool(m.get("enabled", True))
         # Coexist mode: ChatKeeperBot is the moderator. When enforce is False,
-        # Stoby DETECTS but never deletes/bans/mutes — it only flags active
+        # Stoby DETECTS but never deletes/bans/mutes – it only flags active
         # scams/impersonation to admins. No message of anyone's is removed.
         self.enforce = bool(m.get("enforce", True))
         self.level = m.get("level", "standard")
@@ -109,14 +109,14 @@ class Moderator:
         self.allowlist = {str(x) for x in (m.get("impersonation_allowlist") or [])}
         self._slur_re = self._build_slur_re(m.get("blocklist_path"))
         # Link allowlist: only official Stobox links survive from a non-admin;
-        # every other link is removed (admins are exempt — see evaluate()).
+        # every other link is removed (admins are exempt – see evaluate()).
         from .links import LinkPolicy
 
         lp = m.section("link_policy")
         self.link_policy_enabled = bool(lp.get("enabled", True))
         self.links = LinkPolicy(lp.get("allow") or [])
         # Admin-impersonation is ALWAYS enforced (ban+delete), even in coexist
-        # mode — Arevik's explicit exception. These are the exact admin display
+        # mode – Arevik's explicit exception. These are the exact admin display
         # names; a non-admin using one is a scammer (real admins are exempt by
         # verified ID). High precision → safe to auto-ban.
         self.protected_admin_names = [
@@ -140,7 +140,7 @@ class Moderator:
         if not self.enabled or self.level == "off" or msg.author.is_admin:
             return ModerationVerdict()
 
-        # COEXIST (production default): Stoby takes ZERO moderation action —
+        # COEXIST (production default): Stoby takes ZERO moderation action – 
         # ChatKeeper owns all of it. No deletes, no bans, no mutes, and NO
         # admin-impersonation auto-ban (that risked deleting a real admin whose
         # ID/username didn't match). Nothing destructive happens unless someone
@@ -151,7 +151,7 @@ class Moderator:
         user_key = f"{msg.channel}:{msg.author.external_id}"
         text = msg.text or ""
 
-        # Admin impersonation — only when enforcing.
+        # Admin impersonation – only when enforcing.
         if self._is_admin_impersonator(msg.author):
             return self._impersonation_ban(user_key, msg)
 
@@ -180,7 +180,7 @@ class Moderator:
             if pat.search(text):
                 return self._sanction(user_key, "scam", 0.98, msg, f"pattern:{pat.pattern[:24]}")
 
-        # 2b) Link allowlist — only official Stobox links survive from a non-admin.
+        # 2b) Link allowlist – only official Stobox links survive from a non-admin.
         # Admins already returned at the top of evaluate(), so any link here is
         # from a regular user. Runs after scam patterns so a phishing link bans
         # rather than merely deletes.
@@ -279,7 +279,7 @@ class Moderator:
             dm_text = (
                 "🗑 Heads-up: your message was removed because this group only allows "
                 "official Stobox links (anything on stobox.io). It's a scam-prevention "
-                "rule — nothing personal. Feel free to repost your point without the "
+                "rule – nothing personal. Feel free to repost your point without the "
                 "outside link, and reply /appeal if you think this was a mistake."
             )
         else:
@@ -305,7 +305,7 @@ class Moderator:
         if not head:
             return ""
         return (
-            f"{head} — reason: {reason} (strike {strike}). "
+            f"{head} – reason: {reason} (strike {strike}). "
             "Our community stays constructive and scam-free. If you believe this was a "
             "mistake, reply /appeal and a human admin will review it."
         )

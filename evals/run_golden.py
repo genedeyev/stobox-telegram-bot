@@ -45,6 +45,9 @@ def check_answer(answer: str, q: dict) -> Check:
     for s in q.get("forbid_contains", []):
         if s.lower() in low:
             reasons.append(f"contains forbidden: {s!r}")
+    # House rule for every external text (stage 0): never an em dash.
+    if "\u2014" in (answer or ""):
+        reasons.append("contains an em dash (U+2014)")
     return Check(passed=not reasons, reasons=reasons)
 
 

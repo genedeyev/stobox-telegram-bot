@@ -1,4 +1,4 @@
-"""Filesystem watcher — hot re-index on documentation changes (no restart).
+"""Filesystem watcher – hot re-index on documentation changes (no restart).
 
 watchdog runs on a background thread; changes are debounced and marshalled onto
 the asyncio loop where the Indexer runs. Satisfies the spec: "Watch filesystem.

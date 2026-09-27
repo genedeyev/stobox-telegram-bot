@@ -1,4 +1,4 @@
-"""Preflight readiness check — run before launching, or via ``stobox-doctor``.
+"""Preflight readiness check – run before launching, or via ``stobox-doctor``.
 
 Tells you exactly what is configured and what is missing, so a Telegram test
 "just works" instead of failing cryptically. Distinguishes hard blockers
@@ -61,7 +61,7 @@ class Preflight:
             if c.fix and c.level != Level.OK:
                 lines.append(f"     → {c.fix}")
         lines.append("─" * 40)
-        lines.append("READY TO START ✅" if self.ready else "NOT READY — resolve ⛔ blockers above")
+        lines.append("READY TO START ✅" if self.ready else "NOT READY – resolve ⛔ blockers above")
         return "\n".join(lines)
 
 
@@ -96,7 +96,7 @@ def run_preflight() -> Preflight:
     else:
         pf.checks.append(Check(
             "Reasoning LLM", Level.BLOCK, "no ANTHROPIC_API_KEY or OPENAI_API_KEY",
-            "Set ANTHROPIC_API_KEY (recommended) — without it the bot only echoes and can't answer",
+            "Set ANTHROPIC_API_KEY (recommended) – without it the bot only echoes and can't answer",
         ))
 
     # --- Embeddings (quality warning) ---

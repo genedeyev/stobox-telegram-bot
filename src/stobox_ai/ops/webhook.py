@@ -3,7 +3,7 @@
 The GitHub Action in the site repo POSTs to `/api/reingest` after a successful
 Vercel deploy, signing the body with a shared secret (GitHub-style
 `X-Hub-Signature-256: sha256=<hex>`). We verify with a constant-time compare
-before triggering a sync — an unauthenticated reingest is a DoS / poisoning
+before triggering a sync – an unauthenticated reingest is a DoS / poisoning
 vector, so the signature is mandatory.
 """
 

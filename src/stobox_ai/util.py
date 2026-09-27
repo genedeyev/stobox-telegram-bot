@@ -15,7 +15,7 @@ def filter_dataclass_kwargs(cls: type, d: dict) -> dict:
 
     Persisted JSON/JSONB payloads outlive schema changes: hydrating an old row
     with ``Cls(**d)`` after a field was removed/renamed raises TypeError on
-    every load — bricking that user/record forever. Filtering to the current
+    every load – bricking that user/record forever. Filtering to the current
     field set makes removals safe; additions are already safe via defaults.
     """
     from dataclasses import fields
@@ -28,7 +28,7 @@ def extract_json(text: str, want: str = "object") -> Any | None:
     """Best-effort parse of a JSON object/array embedded in model output.
 
     Models sometimes wrap JSON in prose or code fences. Returns the parsed value
-    or ``None`` — never raises — so callers can fall back cleanly.
+    or ``None`` – never raises – so callers can fall back cleanly.
     """
     if not text:
         return None

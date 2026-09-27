@@ -13,7 +13,7 @@ log = get_logger(__name__)
 
 
 def _retryable(exc: BaseException) -> bool:
-    """Retry transient failures only — 4xx request errors are handled inline."""
+    """Retry transient failures only – 4xx request errors are handled inline."""
     from anthropic import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
     if isinstance(exc, (APIConnectionError, APITimeoutError, RateLimitError)):
@@ -29,7 +29,7 @@ class AnthropicProvider(LLMProvider):
         # Imported lazily so the package imports without the SDK installed.
         from anthropic import AsyncAnthropic
 
-        # Explicit request timeout (SDK default is 600s — a hung call must not
+        # Explicit request timeout (SDK default is 600s – a hung call must not
         # stall the bot) and max_retries=0: tenacity owns the retry policy.
         self._client = AsyncAnthropic(api_key=api_key, timeout=45.0, max_retries=0)
         # Newer models (e.g. claude-opus-4-8) reject `temperature` as deprecated.
@@ -62,10 +62,10 @@ class AnthropicProvider(LLMProvider):
             "messages": convo,
             "max_tokens": max_tokens or self.max_tokens,
         }
-        # Only send `system` when present — system=None is a 400 on the API.
+        # Only send `system` when present – system=None is a 400 on the API.
         # Multiple system messages = (stable…, dynamic) convention: everything
         # before the last is a stable prefix ([CORE]+[CANONICALS], ~8K tokens)
-        # marked with cache_control so Anthropic prompt-caches it — otherwise
+        # marked with cache_control so Anthropic prompt-caches it – otherwise
         # it's re-billed at the full input rate on every single call.
         if len(system_texts) > 1:
             kwargs["system"] = [

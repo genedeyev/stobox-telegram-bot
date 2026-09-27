@@ -26,7 +26,7 @@ async def _acquire_leader_lock():
     cause Telegram 409 conflict storms, doubled broadcasts, and split-brain
     rate limiting. With a DATABASE_URL we hold a Postgres advisory lock for
     the process lifetime; a second replica exits 0 (an intentional standby
-    shutdown, not a failure — restart policies leave it down).
+    shutdown, not a failure – restart policies leave it down).
 
     Returns the lock-holding connection (keep it alive!), or None when no DB
     is configured (single-instance is then an operator responsibility).
@@ -49,7 +49,7 @@ async def _acquire_leader_lock():
         await conn.close()
         log.error("leader_lock.duplicate_instance",
                   hint="another bot replica is already polling this token")
-        print("Another bot instance holds the leader lock — standing down to "
+        print("Another bot instance holds the leader lock – standing down to "
               "avoid Telegram 409 conflicts and doubled broadcasts.")
         raise SystemExit(0)
     log.info("leader_lock.acquired")
@@ -63,7 +63,7 @@ async def run() -> None:
     pf = run_preflight()
     print(pf.render())
     if not pf.ready:
-        print("\nStartup aborted — resolve the blockers above. See SETUP.md.")
+        print("\nStartup aborted – resolve the blockers above. See SETUP.md.")
         # Exit non-zero so orchestrators (Railway ON_FAILURE, compose, systemd)
         # treat a mis-configured boot as a failure, not a clean shutdown.
         raise SystemExit(1)
@@ -93,7 +93,7 @@ async def run() -> None:
     channel = TelegramChannel(engine)
     await channel.start()
 
-    # Auto-load the live Stobox corpus in the BACKGROUND after boot — the bot
+    # Auto-load the live Stobox corpus in the BACKGROUND after boot – the bot
     # answers immediately from seed docs + canonicals while the full index
     # streams in. Hash-gated, so with a persistent DB this is a cheap no-op.
     sync_task: asyncio.Task | None = None
@@ -137,6 +137,13 @@ async def run() -> None:
 
 def main() -> None:
     configure_logging()
+    import os
+
+    # The container starts as root only so deploy/entrypoint.py can hand the
+    # state volume to the app user; the app itself must never run as root.
+    if hasattr(os, "getuid") and os.getuid() == 0 and not os.environ.get("STOBY_ALLOW_ROOT"):
+        log.error("main.refuse_root", hint="start via /entrypoint.py, which drops root")
+        raise SystemExit(78)
     try:
         asyncio.run(run())
     except KeyboardInterrupt:  # pragma: no cover

@@ -17,7 +17,7 @@ def configure_logging(level: str | None = None) -> None:
     log_level = (level or os.environ.get("LOG_LEVEL", "INFO")).upper()
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=log_level)
 
-    # SECURITY: httpx logs full request URLs at INFO — for the Telegram API the
+    # SECURITY: httpx logs full request URLs at INFO – for the Telegram API the
     # bot token is IN the URL, so those lines would leak it into logs/screens.
     # Keep third-party HTTP client logs at WARNING and above.
     for noisy in ("httpx", "httpcore", "telegram", "openai", "anthropic"):

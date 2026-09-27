@@ -1,6 +1,6 @@
 """Link allowlist policy for community moderation.
 
-Rule (per Gene): a link is OFFICIAL — never removed, even from a regular user —
+Rule (per Gene): a link is OFFICIAL – never removed, even from a regular user – 
 only when it is a Stobox property. Everything else posted by a NON-admin is
 removed (admins are exempted upstream in Moderator.evaluate). Deterministic, no
 LLM: a scammer's `stobox-support.io` never passes as "from Stobox".
@@ -8,7 +8,7 @@ LLM: a scammer's `stobox-support.io` never passes as "from Stobox".
 Official =
   * any host on the stobox.io domain (stobox owns it: www./app./docs. …), OR
   * an exact official handle on a shared platform (x.com/StoboxCompany,
-    t.me/stobox_community, youtube.com/@stobox, …) — matched by host + first
+    t.me/stobox_community, youtube.com/@stobox, …) – matched by host + first
     path segment, so x.com/ScamStobox is NOT official.
 Extra trusted entries come from config (moderation.link_policy.allow).
 """
@@ -41,7 +41,7 @@ _DEFAULT_HOSTS: tuple[str, ...] = ("stobox-platform.medium.com",)
 # Link-like tokens Telegram will auto-link: explicit http(s), t.me/, www., and
 # BARE domains with a common TLD (scammers post "wallet-sync.io" with no scheme).
 # The TLD list is curated to avoid false positives on filenames/versions
-# ("app.py", "v2.0", "index.html" — none of those TLDs are listed).
+# ("app.py", "v2.0", "index.html" – none of those TLDs are listed).
 _LINK_TLDS = (
     "io|com|net|org|xyz|finance|app|co|me|link|click|vip|top|site|online|pro|"
     "info|biz|dev|fi|cc|gg|ai|to|ly|sh|id|so|fun|live|world|network|exchange|wtf"
@@ -88,10 +88,10 @@ class LinkPolicy:
         host = _norm_host(p.netloc or p.path.split("/")[0])
         if not host:
             return False
-        # Stobox-owned domain — any subdomain, any path.
+        # Stobox-owned domain – any subdomain, any path.
         if host == "stobox.io" or host.endswith(".stobox.io"):
             return True
-        # Trusted whole hosts — match the domain and any subdomain
+        # Trusted whole hosts – match the domain and any subdomain
         # (sepolia.etherscan.io, api.coingecko.com, …).
         if any(host == h or host.endswith("." + h) for h in self._hosts):
             return True

@@ -186,7 +186,7 @@ Two behavioral changes shipped alongside, per community-admin direction:
   can override). Wired in `engine._answer`: when `msg.author.is_admin` (the *verified* flag —
   never a mere claim, consistent with the §4 prompt-injection rail), the answer context tells
   Stoby the speaker is a verified admin whose corrections to apply. Admin roster lives in the
-  `TELEGRAM_ADMIN_USER_IDS` Railway env (Gene `588583272`, Arevik `8959594471`).
+  `TELEGRAM_ADMIN_USER_IDS` Railway env (numeric ids live only there).
 5. Pilot in DM-only mode; then enable in t.me/stobox_community with group rules.
 
 ## 10. Proactive updates briefing — added 16 Jul 2026

@@ -14,7 +14,7 @@ def _now() -> datetime:
 class ConversationTurn:
     role: str          # "user" | "assistant"
     text: str
-    name: str | None = None   # speaker's display name — distinguishes users in a
+    name: str | None = None   # speaker's display name – distinguishes users in a
                               # shared group thread so identities never bleed together
     at: datetime = field(default_factory=_now)
 
@@ -35,6 +35,7 @@ class UserProfile:
     recent_questions: list[str] = field(default_factory=list)
     lead_score: int = 0                             # 0..100
     mql_notified: bool = False                       # admins DM'd once when they became an MQL
+    crm_posted: list[str] = field(default_factory=list)  # emails already sent to the CRM (once each)
     helpful_answers: int = 0                        # drives the share-with-a-friend cadence
     source: str = ""                                # first-touch attribution (/start payload)
     referrals: int = 0                              # users who joined via this user's ref link

@@ -46,7 +46,8 @@ def test_migration_line_deadline_day_is_today():
 
 def test_migration_line_claims_open():
     line = migration_status_line(_Canon(MIGRATION), date(2026, 9, 15))
-    assert "claims are open" in line.lower()
+    assert "claim at stbu.stobox.io" in line.lower()
+    assert "burn window is closed" in line.lower()
 
 
 def test_migration_line_window_closed_before_claims():
