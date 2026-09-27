@@ -17,7 +17,10 @@ questions:
     needs_model: true
     category: canonical
     question: "What class of shares is STBX?"
-    expect_contains: ["Class-C", "Stobox Tokenized Equities Ltd"]
+    # Stage 0: the bot uses the site's phrasing ("tokenized Class-C equity in
+    # Stobox Technologies Inc."); the issuer name is optional.
+    expect_contains: ["Class-C"]
+    expect_any: ["Stobox Technologies", "Stobox Tokenized Equities"]
     forbid_contains: ["Class-A", "Holdings", "Stobox Holdings"]
 
   - id: stbx-exemption
