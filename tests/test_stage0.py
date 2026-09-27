@@ -270,3 +270,14 @@ def test_stbx_answers_do_not_invite_an_investment_talk():
         "What class of shares is STBX?",
     ).text
     assert "Class-C" in out and "Want to know" not in out
+
+
+def test_claim_questions_always_name_the_official_claim_site():
+    from stobox_ai.guardrails.rails import ComplianceRails
+
+    out = ComplianceRails().post_process(
+        "No, that link is not official. Do not connect your wallet to it.",
+        "Someone said the new claim site is https://stbu-claim.xyz, is that right?",
+    ).text
+    assert "stbu-claim.xyz" not in out
+    assert out.rstrip().endswith("https://stbu.stobox.io")

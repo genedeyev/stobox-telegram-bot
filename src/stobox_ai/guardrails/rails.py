@@ -391,6 +391,14 @@ class ComplianceRails:
                 result.category = result.category or "buy_intent"
         result.text = strip_trade_invitations(result.text, user_text)
 
+        # 2c) Any question about claiming STBU names the one official claim site,
+        #     so a scam link in the question never stands unanswered (27.09.2026).
+        if (re.search(r"(?i)\bclaim", user_text or "")
+                and re.search(r"(?i)\bstbu\b|\btoken|\bmigrat|\blegacy|https?://|\bsite\b", user_text or "")
+                and "stbu.stobox.io" not in result.text):
+            result.text = (result.text.rstrip() + "\n\nThe only place to claim STBU is "
+                           "https://stbu.stobox.io")
+
         # 3) Investment disclaimer where relevant.
         if _INVESTMENT_TOPIC.search(user_text + " " + result.text):
             if DISCLAIMER.lower() not in result.text.lower():
