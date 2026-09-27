@@ -92,6 +92,60 @@ def scrub_links_and_addresses(text: str) -> tuple[str, int]:
     return text, n
 
 
+# Buy / sell / trade / price questions: no invitation, no offer to help buy
+# (stage 0 securities review; the prompt alone did not hold on the fallback
+# model, 27.09.2026). Deterministic: drop offer sentences and closing questions.
+_TRADE_Q = re.compile(r"(?i)\b(buy|buying|sell|selling|trade|trading|price|market\s*cap|purchase|acquire|stbx)\b")
+_OFFER = re.compile(
+    r"(?i)\b(walk (you )?through|help you (buy|purchase|get set up|set up|get started)|"
+    r"guide you through|would it help|want me to|want to know more|shall i|should i show|"
+    r"let me show you|happy to help you (buy|set up))\b"
+)
+_SENT = re.compile(r"[^.!?\n]+[.!?]*[ \t]*|\n")
+
+
+def strip_trade_invitations(text: str, user_text: str) -> str:
+    if not _TRADE_Q.search(user_text or ""):
+        return text
+    out = []
+    for m in _SENT.finditer(text or ""):
+        sent = m.group(0)
+        if _OFFER.search(sent):
+            continue
+        out.append(sent)
+    body = "".join(out)
+    # Any paragraph that is a question to the reader is an invitation here.
+    paras = [p for p in body.split("\n\n") if not p.strip().endswith("?")]
+    return re.sub(r"\n{3,}", "\n\n", "\n\n".join(paras)).strip()
+
+
+# "How / where do I buy STBU" never gets a generated answer: an issuer's bot
+# walking a person through a purchase reads as solicitation, and the fallback
+# model wrote step lists despite the prompt (27.09.2026). Canon text only.
+_BUY_INTENT = re.compile(
+    r"(?i)\b(how|where|can i|could i|want to|wanna|walk me|help me|best way to|steps to)\b"
+    r".{0,40}\b(buy|purchase|acquire|get hold of)\b|\b(buy|purchase)\s+(some\s+)?stbu\b"
+)
+
+
+def canned_buy_answer() -> str | None:
+    try:
+        import yaml
+
+        with open("canonicals.yaml", encoding="utf-8") as f:
+            stbu = (yaml.safe_load(f) or {}).get("tokens", {}).get("stbu", {})
+    except (OSError, ValueError):
+        return None
+    where = stbu.get("where_to_buy")
+    venue = (stbu.get("pool") or {}).get("venue")
+    if not where or not venue:
+        return None
+    where = where[0].lower() + where[1:]
+    return (f"STBU trades in one public pool: {venue}. It can be bought {where}\n\n"
+            "Before any trade, check which pool is the issuer's: "
+            "https://www.stobox.io/stbu/safety")
+
+
 def no_em_dash(text: str) -> str:
     """Stobox house rule: an em dash never reaches the chat."""
     out = re.sub(r"[ \t]*\u2014[ \t]*", " \u2013 ", text or "")
@@ -328,6 +382,14 @@ class ComplianceRails:
         if _WALLET_TOPIC.search(user_text) and not already_warned:
             result.text = result.text.rstrip() + "\n\n" + IMPERSONATION_WARNING
             result.impersonation_added = True
+
+        # 2b) Buy intent: canon text only. Other trade/price questions: no invitation.
+        if _BUY_INTENT.search(user_text or "") and re.search(r"(?i)\bstbu\b", user_text or ""):
+            canned = canned_buy_answer()
+            if canned:
+                result.text = canned
+                result.category = result.category or "buy_intent"
+        result.text = strip_trade_invitations(result.text, user_text)
 
         # 3) Investment disclaimer where relevant.
         if _INVESTMENT_TOPIC.search(user_text + " " + result.text):

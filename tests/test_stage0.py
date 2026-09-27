@@ -235,3 +235,38 @@ def test_entrypoint_hands_volume_over_then_drops_root(monkeypatch, tmp_path):
     order = [c[0] for c in calls if c[0] != "chown"]
     assert order == ["setgroups", "setgid", "setuid", "exec"]
     assert calls[-1] == ("exec", ("python", "-m", "stobox_ai"))
+
+
+def test_buy_intent_gets_canon_text_only():
+    from stobox_ai.guardrails.rails import ComplianceRails
+
+    out = ComplianceRails().post_process(
+        "Sure! Steps to buy STBU: 1. Set up MetaMask. 2. Fund it. Want me to help?",
+        "I want to buy STBU today. Can you walk me through it?",
+    ).text
+    assert "does not sell STBU" in out and "stbu/safety" in out
+    assert "MetaMask" not in out and "Want me to" not in out
+    assert "not investment advice" in out
+
+
+def test_trade_questions_lose_invitations():
+    from stobox_ai.guardrails.rails import ComplianceRails
+
+    out = ComplianceRails().post_process(
+        "The price is $0.002 (CoinGecko). I can walk you through the pool.\n\n"
+        "Want to know more about how STBU works?",
+        "What is the STBU price?",
+    ).text
+    assert "$0.002" in out
+    assert "walk you through" not in out and "Want to know more" not in out
+
+
+def test_stbx_answers_do_not_invite_an_investment_talk():
+    from stobox_ai.guardrails.rails import ComplianceRails
+
+    out = ComplianceRails().post_process(
+        "STBX is tokenized Class-C equity in Stobox Technologies Inc. Details: "
+        "https://www.stobox.io/stbx\n\nWant to know how Class-C shares differ?",
+        "What class of shares is STBX?",
+    ).text
+    assert "Class-C" in out and "Want to know" not in out
