@@ -32,8 +32,9 @@ def stbu_text(site: SiteFacts) -> str:
         lines.append(f"Live contract on Base: {live}")
     if claims:
         lines.append(claims)
-    if legacy:
-        lines.append("Discontinued on 15 September 2026, not STBU, not migratable: "
+    discontinued = site.bullet("STBU, the token", "Discontinued")
+    if legacy and discontinued:
+        lines.append(discontinued.split(":", 1)[0] + ": "
                      + "; ".join(f"{k} {v}" for k, v in legacy.items()))
     lines += ["Record with figures from the chain: https://www.stobox.io/stbu",
               "Before any trade: https://www.stobox.io/stbu/safety", "", IMPERSONATION_WARNING]
@@ -59,8 +60,9 @@ async def check_text(arg: str, site: SiteFacts, chain: ChainReader) -> str:
             out.append(f"Base (live STBU): {'unreachable' if h.balance is None else f'{h.balance:,.2f}'}")
     old = [h for h in rows if h.chain != "Base" and h.balance]
     if old:
-        out.append("Legacy tokens named STBU, discontinued on 15 September 2026 "
-                   "(not STBU, cannot be migrated):")
+        discontinued = site.bullet("STBU, the token", "Discontinued") or "Discontinued legacy tokens"
+        out.append("Legacy tokens named STBU (" + discontinued.split(":", 1)[0].lower()
+                   + "; not STBU, cannot be migrated):")
         out += [f"{h.chain}: {h.balance:,.2f}" for h in old]
     down = [h.chain for h in rows if h.balance is None and h.chain != "Base"]
     if down:

@@ -91,7 +91,7 @@ def test_a1_1_no_fact_files_and_no_addresses_in_the_package():
     assert not re.search(r"\d", prompt), "the behaviour prompt carries no figures or dates"
     for f in pkg.rglob("*.py"):
         assert not re.search(r"0x[0-9a-fA-F]{40}", f.read_text()), f
-        for needle in ("31 December 2026", "216,563,456", "$305M", "250,000,000"):
+        for needle in ("31 December 2026", "216,563,456", "$305M", "250,000,000", "15 September 2026"):
             assert needle not in f.read_text(), (f, needle)
 
 
@@ -298,3 +298,12 @@ async def test_chain_reader_marks_unreachable(tmp_path):
 
 def test_module_exports():
     assert answer_mod.CANT_VERIFY.startswith("I can't verify")
+
+
+def test_stbu_command_text_comes_from_the_site():
+    from stoby.commands import stbu_text
+
+    facts = SiteFacts.parse(FIXTURE, time.time())
+    text = stbu_text(facts)
+    assert LIVE in text and "Discontinued on 15 September 2026" in text
+    assert "Claims close 31 December 2026" in text
