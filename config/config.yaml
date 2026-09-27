@@ -13,7 +13,7 @@ app:
 llm:
   reasoning:
     provider: anthropic            # anthropic | openai
-    model: claude-opus-4-8         # config value; swap freely
+    model: claude-sonnet-5         # Gene 27.09.2026: answers on Sonnet 5 (cost); was claude-opus-4-8
     temperature: 0.3
     max_tokens: 1200
     # Fallback provider used if the primary errors out.

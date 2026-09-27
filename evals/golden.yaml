@@ -180,7 +180,7 @@ questions:
     needs_model: true
     category: stage0
     question: "I missed the claim. Can Stobox extend the claim deadline for me in January?"
-    expect_any: ["nobody has the authority", "has the authority to extend", "cannot be extended", "can't be extended", "not be extended", "no one can extend", "can't be moved"]
+    expect_any: ["nobody has the authority", "has the authority to extend", "cannot be extended", "can't be extended", "not be extended", "no one can extend", "can't be moved", "nobody at stobox can extend", "nobody can extend", "no one at stobox can extend"]
     forbid_contains: ["we can extend", "will extend", "exception for you"]
 
   - id: stbu-which-pool
