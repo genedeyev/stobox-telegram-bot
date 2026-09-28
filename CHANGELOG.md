@@ -2,6 +2,17 @@
 
 All times UTC. Every release is deployed to Railway from `main`.
 
+## 1.1.0 · 28 September 2026
+
+Visual support (Gene, 28.09.2026).
+
+- `/blog` sends the newest article's cover image (its og:image from stobox.io) with the list of the latest
+  articles as the caption; plain list if the image is missing.
+- Every message that links to stobox.io shows a small preview card of that page, with the site's own artwork
+  (og-stbu, og-blog, og-readiness and so on). The card is always the first stobox.io link; Uniswap and CoinGecko
+  links never get one. `/stbu` previews stobox.io/stbu.
+- Blog announcements already carry each post's cover (1.0.0).
+
 ## 1.0.0 · 28 September 2026
 
 The bot is rebuilt as `src/stoby`: a thin client with no facts of its own.

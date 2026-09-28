@@ -12,9 +12,9 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ChatType, ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import LinkPreviewOptions, Message
 
-from .announce import RSS_URL, parse_rss
+from .announce import RSS_URL, og_image, parse_rss
 from .answer import Pipeline
 from .commands import (
     CONTACT,
@@ -27,7 +27,7 @@ from .commands import (
     sources_text,
     stbu_text,
 )
-from .format import is_stbu_topic, links_block, to_html
+from .format import is_stbu_topic, links_block, preview_url, to_html
 from .leads import Leads
 from .ledger import log
 from .sources.chain import ChainReader
@@ -103,17 +103,22 @@ class StobyBot:
         r.message(F.text.startswith("/"))(self.on_other_command)
         r.message(F.text)(self.on_text)
 
-    async def _send(self, message: Message, text: str) -> None:
-        """Send Telegram HTML; if Telegram rejects the markup, send it as plain
-        text rather than dropping the answer."""
-        for part in split_for_telegram(text):
+    async def _send(self, message: Message, text: str, preview: str | None = None) -> None:
+        """Send Telegram HTML with a small preview card of our own page (its
+        og:image) when the message links to stobox.io (Gene, 28.09.2026: visual
+        support). If Telegram rejects the markup, the same text goes out plain."""
+        parts = split_for_telegram(text)
+        for i, part in enumerate(parts):
+            url = (preview or preview_url(part)) if i == len(parts) - 1 else None
+            opts = (LinkPreviewOptions(url=url, prefer_small_media=True) if url
+                    else LinkPreviewOptions(is_disabled=True))
             try:
-                await message.reply(part, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+                await message.reply(part, parse_mode=ParseMode.HTML, link_preview_options=opts)
             except TelegramBadRequest as exc:
                 log.warning("send.html_rejected", error=str(exc)[:120])
                 plain = re.sub(r"<[^>]+>", "", part).replace("&lt;", "<").replace("&gt;", ">") \
                     .replace("&amp;", "&")
-                await message.reply(plain, disable_web_page_preview=True)
+                await message.reply(plain, link_preview_options=opts)
 
     def _mine(self, message: Message) -> bool:
         """ChatKeeper moderates the group and answers the generic commands there.
@@ -150,7 +155,7 @@ class StobyBot:
         except SiteUnavailable:
             await self._send(message, "I can't read the published record right now: https://www.stobox.io/stbu")
             return
-        await self._send(message, stbu_text(site))
+        await self._send(message, stbu_text(site), preview="https://www.stobox.io/stbu")
 
     async def cmd_check(self, message: Message, command: CommandObject) -> None:
         if not self.limit.allow(str(message.from_user.id if message.from_user else 0)):
@@ -173,7 +178,16 @@ class StobyBot:
                 posts = parse_rss(r.text)
         except Exception as exc:  # noqa: BLE001
             log.warning("blog.feed_unreadable", error=type(exc).__name__)
-        await self._send(message, blog_text(posts))
+        text = blog_text(posts)
+        # The newest post's cover, large, with the list as its caption.
+        img = await og_image(posts[0].url) if posts else None
+        if img and len(re.sub(r"<[^>]+>", "", text)) <= 1024:
+            try:
+                await message.reply_photo(img, caption=text, parse_mode=ParseMode.HTML)
+                return
+            except TelegramBadRequest as exc:
+                log.warning("blog.photo_rejected", error=str(exc)[:120])
+        await self._send(message, text, preview="https://www.stobox.io/blog")
 
     async def on_other_command(self, message: Message) -> None:
         """A command that is not Stoby's never reaches the model. Addressed to

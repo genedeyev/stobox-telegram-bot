@@ -54,6 +54,21 @@ def caption(post: Post) -> str:
             f"👉 <a href=\"{html.escape(post.url, quote=True)}\">Read the article</a>")
 
 
+async def og_image(url: str, client: httpx.AsyncClient | None = None) -> str | None:
+    """The page's og:image (every stobox.io page and post has one)."""
+    own = client is None
+    client = client or httpx.AsyncClient(timeout=15, follow_redirects=True)
+    try:
+        r = await client.get(url)
+        m = _OG_IMAGE.search(r.text[:60000])
+        return m.group(1) if m else None
+    except httpx.HTTPError:
+        return None
+    finally:
+        if own:
+            await client.aclose()
+
+
 class Announcer:
     def __init__(self, bot, chats: list, state_dir: Path, rss_url: str = RSS_URL,
                  client: httpx.AsyncClient | None = None, per_tick: int = 3) -> None:

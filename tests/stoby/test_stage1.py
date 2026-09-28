@@ -428,3 +428,49 @@ async def test_unknown_commands_never_reach_the_model():
     await bot.on_other_command(SimpleNamespace(text="/migrate@stobox_assistant_bot", chat=group))
     await bot.on_other_command(SimpleNamespace(text="/valuation", chat=dm))
     assert len(sent) == 2 and all("I don't have that command" in s for s in sent)
+
+
+def test_preview_card_is_our_page_never_an_external_link():
+    from stoby.format import preview_url
+
+    t = ('🦄 <a href="https://app.uniswap.org/explore/pools/base/0xabc">pool</a> and '
+         '<a href="https://www.stobox.io/stbu">STBU on stobox.io</a>.')
+    assert preview_url(t) == "https://www.stobox.io/stbu"
+    assert preview_url("see https://www.coingecko.com/en/coins/stobox-token") is None
+
+
+async def test_blog_command_sends_the_newest_cover_with_the_list(monkeypatch):
+    from types import SimpleNamespace
+
+    from stoby import telegram as tg
+    from stoby.announce import Post
+
+    shots, texts = [], []
+
+    async def fake_image(url, client=None):
+        return "https://www.stobox.io/assets/og/og-blog-x.jpg"
+
+    class FakeClient:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url):
+            return SimpleNamespace(text="<rss/>", raise_for_status=lambda: None)
+
+    monkeypatch.setattr(tg, "og_image", fake_image)
+    monkeypatch.setattr(tg, "parse_rss", lambda _t: [Post("https://www.stobox.io/blog/x", "X", "", "")])
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    async def reply_photo(photo, caption, parse_mode):
+        shots.append((photo, caption))
+
+    msg = SimpleNamespace(reply_photo=reply_photo)
+    bot = tg.StobyBot.__new__(tg.StobyBot)
+
+    async def _send(message, text, preview=None):
+        texts.append(text)
+    bot._send = _send
+    await bot.cmd_blog(msg)
+    assert shots and shots[0][0].endswith("og-blog-x.jpg") and "stobox.io/blog/x" in shots[0][1]
+    assert texts == []

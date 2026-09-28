@@ -6,4 +6,4 @@ SIG MCP server (https://mcp.stobox.io) and Base mainnet. See wiki page "Stoby" i
 the Stobox vault for the programme and acceptance criteria A1-1…A1-7.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

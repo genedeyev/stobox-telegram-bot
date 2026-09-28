@@ -76,3 +76,14 @@ def to_html(text: str) -> str:
     out = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", out)
     out = _ADDR.sub(lambda m: f"<code>{m.group(0)}</code>", out)
     return re.sub(r"(?m)^[-*] +", "• ", out)
+
+
+_SITE_URL = re.compile(r"https://(?:www\.)?stobox\.io(?:/[^\s\"<>)]*)?")
+
+
+def preview_url(text: str) -> str | None:
+    """The page Telegram should show as a small preview card: the first stobox.io
+    link in the message (its og:image is the site's own artwork). External links
+    (Uniswap, CoinGecko) never get the card."""
+    m = _SITE_URL.search(text or "")
+    return m.group(0).rstrip(".,;:!?") if m else None
