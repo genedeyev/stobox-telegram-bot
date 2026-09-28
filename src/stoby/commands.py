@@ -28,6 +28,7 @@ HELP = (
     "<b>Handy commands</b>\n"
     "🪙 /stbu – the new STBU on Base, contracts and links\n"
     "🔎 /check <code>0xYourAddress</code> – see the STBU in a wallet\n"
+    "📰 /blog – the latest articles from the Stobox blog\n"
     "✅ /sources – our official channels\n"
     "📨 /contact – talk to the team"
 )
@@ -35,6 +36,30 @@ SOURCES_FALLBACK = ("✅ <b>Official links</b>\n\n🌐 https://www.stobox.io\n\n
                     "🚫 Anyone else using the Stobox name is not us.")
 CONTACT = (f"💬 <b>Need a hand?</b>\n\nWrite to {SUPPORT} – the team is happy to help.\n\n"
            "🛡️ We will never DM you first or ask for your seed phrase.")
+
+
+# The one menu Telegram shows for this bot (setMyCommands at every boot). Only
+# commands Stoby really has; ChatKeeper's (/rules /report /ca /base /adminlist
+# /partner) are never listed here.
+MENU = (
+    ("stbu", "The new STBU on Base: contracts and links"),
+    ("check", "See the STBU in a wallet: /check 0xAddress"),
+    ("blog", "Latest articles from the Stobox blog"),
+    ("sources", "Official Stobox channels"),
+    ("contact", "Talk to the team"),
+    ("help", "What Stoby can do"),
+)
+KNOWN = {c for c, _ in MENU} | {"start"}
+UNKNOWN = ("🤔 I don't have that command. Here's what I can do:\n\n"
+           + "\n".join(f"/{c} – {d}" for c, d in MENU))
+
+
+def blog_text(posts) -> str:
+    if not posts:
+        return "📰 The latest articles are on https://www.stobox.io/blog"
+    rows = [f"• <a href=\"{html.escape(p.url, quote=True)}\">{html.escape(p.title)}</a>" for p in posts[:5]]
+    return ("📰 <b>Latest on the Stobox blog</b>\n\n" + "\n\n".join(rows)
+            + "\n\n👉 All articles: https://www.stobox.io/blog")
 
 
 def _sentence(text: str) -> str:
