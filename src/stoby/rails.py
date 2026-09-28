@@ -43,12 +43,16 @@ LINK_REMOVED = "[link removed: official links only, see /sources]"
 ADDR_REMOVED = "[address removed: verify addresses only at https://www.stobox.io/stbu]"
 # Stage 1: trusted addresses are the ones the live site publishes (SiteFacts),
 # passed in per answer. No site, no trusted address: fail closed.
-def _url_allowed(url: str) -> bool:
+def _url_allowed(url: str, trusted: frozenset[str] = frozenset()) -> bool:
     u = re.sub(r"(?i)^https?://", "", url).lower()
     u = u[4:] if u.startswith("www.") else u
     host = u.split("/", 1)[0].split(":", 1)[0].rstrip(".")
     if any(host == h or host.endswith("." + h) for h in _ALLOWED_HOSTS):
         return True
+    # Uniswap links only to the issuer's pool or token (an address the site
+    # publishes); a Uniswap link to a copycat pool is exactly the scam to stop.
+    if host == "app.uniswap.org":
+        return any(a in u for a in _ADDR.findall(u) if a.lower() in trusted)
     return any(u.startswith(p) for p in _ALLOWED_PREFIXES)
 
 
@@ -60,7 +64,7 @@ def scrub_links_and_addresses(text: str, trusted: frozenset[str] = frozenset()) 
         nonlocal n
         url = m.group(0).rstrip(".,;:!?")
         tail = m.group(0)[len(url):]
-        if _url_allowed(url):
+        if _url_allowed(url, trusted):
             return m.group(0)
         n += 1
         return LINK_REMOVED + tail

@@ -9,12 +9,14 @@ import time
 from collections import defaultdict, deque
 
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.enums import ChatType
+from aiogram.enums import ChatType, ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
 from .answer import Pipeline
 from .commands import CONTACT, HELP, check_text, sources_text, stbu_text
+from .format import is_stbu_topic, links_block, to_html
 from .leads import Leads
 from .ledger import log
 from .sources.chain import ChainReader
@@ -89,8 +91,16 @@ class StobyBot:
         r.message(F.text)(self.on_text)
 
     async def _send(self, message: Message, text: str) -> None:
+        """Send Telegram HTML; if Telegram rejects the markup, send it as plain
+        text rather than dropping the answer."""
         for part in split_for_telegram(text):
-            await message.reply(part, disable_web_page_preview=True)
+            try:
+                await message.reply(part, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            except TelegramBadRequest as exc:
+                log.warning("send.html_rejected", error=str(exc)[:120])
+                plain = re.sub(r"<[^>]+>", "", part).replace("&lt;", "<").replace("&gt;", ">") \
+                    .replace("&amp;", "&")
+                await message.reply(plain, disable_web_page_preview=True)
 
     async def cmd_help(self, message: Message) -> None:
         await self._send(message, HELP)
@@ -152,7 +162,16 @@ class StobyBot:
         except Exception:  # noqa: BLE001
             pass
         reply = await self.pipeline.answer(text, chat=str(message.chat.id), user=user)
-        await self._send(message, reply.text)
+        body = to_html(reply.text)
+        buying = reply.meta.get("category") == "buy_intent"
+        if (reply.outcome == "answered" and is_stbu_topic(text)) or buying:
+            try:
+                site = await self.site.facts()
+                # The buy answer already carries the safety check line.
+                body += "\n\n" + links_block(site, compact=not buying, safety=not buying)
+            except SiteUnavailable:
+                pass
+        await self._send(message, body)
         summary = await self.leads.consider(private=private, user_id=user,
                                             name=message.from_user.full_name, text=text,
                                             history=list(hist))

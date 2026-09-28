@@ -339,3 +339,28 @@ def test_friendly_voice_one_address_no_medium():
         assert "info@" not in text, text
         assert "—" not in text
     assert "support@stobox.io" in commands.CONTACT and "support@stobox.io" in answer_mod.CANT_VERIFY
+
+
+def test_layout_contracts_copyable_and_links_present():
+    """Gene, 28.09.2026: contracts labelled, in <code> on their own line with
+    space around them; links to the STBU page, the Uniswap pool and CoinGecko."""
+    from stoby import commands
+    from stoby.format import to_html
+
+    facts = SiteFacts.parse(FIXTURE, time.time())
+    t = commands.stbu_text(facts)
+    assert f"\n\n<code>{LIVE}</code>\n\n" in t
+    assert "app.uniswap.org/explore/pools/base/0x28bd1d1a" in t
+    assert "coingecko.com/en/coins/stobox-token" in t and "www.stobox.io/stbu" in t
+    assert "readiness" in t
+    h = to_html(f"The live STBU contract is {LIVE} on Base. **Safe** <tag> & more\n- one")
+    assert f"\n\n<code>{LIVE}</code>\n\n" in h and "<b>Safe</b>" in h
+    assert "&lt;tag&gt; &amp; more" in h and "\n• one" in h
+
+
+def test_uniswap_links_only_to_site_addresses():
+    trusted = frozenset({"0x28bd1d1afcc57d766c5d1c5c38bd8beb376a0c98de719460cdcef60900f7b8b5"})
+    good = "https://app.uniswap.org/explore/pools/base/0x28bd1d1afcc57d766c5d1c5c38bd8beb376a0c98de719460cdcef60900f7b8b5"
+    bad = "https://app.uniswap.org/explore/pools/base/0x" + "9" * 64
+    out = ComplianceRails().post_process(f"Pool: {good} or {bad}", "which pool?", trusted=trusted).text
+    assert good in out and bad not in out
