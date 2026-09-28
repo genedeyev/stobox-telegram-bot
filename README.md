@@ -1,6 +1,7 @@
-# Stoby 1.0.0 · the AI helper of the Stobox community
+# Stoby 1.1.0 · the AI helper of the Stobox community
 
-`@stobox_assistant_bot` in the Stobox Community group on Telegram. Released **28 September 2026**.
+`@stobox_assistant_bot` in the Stobox Community group on Telegram. Version 1.0.0 released **28 September 2026**,
+1.1.0 the same day.
 
 Stoby answers questions about Stobox and the STBU token, points people to the official links, and posts every new
 blog article to the group. It holds **no facts of its own**: every fact in an answer is read, at answer time, from
@@ -8,7 +9,7 @@ the live stobox.io reference file, the Stobox Intelligence Graph (SIG) and Base 
 
 - What changed and when: [CHANGELOG.md](CHANGELOG.md)
 - Acceptance: `scripts/acceptance_stage1.py`
-- Code: `src/stoby/` (version 1.0.0). `src/stobox_ai/` is the previous bot, kept one day as the rollback.
+- Code: `src/stoby/` (version 1.1.0). `src/stobox_ai/` is the previous bot, kept one day as the rollback.
 
 ---
 
@@ -19,6 +20,7 @@ the live stobox.io reference file, the Stobox Intelligence Graph (SIG) and Base 
 | **Answers** | In a private chat, or in the group when someone mentions `@stobox_assistant_bot`, calls it Stoby, or replies to its message. Short, friendly English with a few emojis, whatever language the question is in. |
 | **Contracts** | Every contract or pool address is labelled and shown on its own line in monospace, so one tap copies it. |
 | **Useful links** | Under every STBU answer: STBU on stobox.io, the official Uniswap v4 pool, CoinGecko, the pool safety check. The readiness score is added in `/stbu` and the buy answer. |
+| **Visuals** | `/blog` shows the newest article's cover image with the latest articles under it. Any answer that links to stobox.io carries a small preview card with that page's own image; external links (Uniswap, CoinGecko) never get the card. |
 | **Blog announcements** | Every new stobox.io blog post goes to the group's **Announcements** topic and to **General Chat**, once each, with its cover image. |
 | **Safety** | Warns about scams, never asks for or repeats a seed phrase, removes any non-official link or unknown address from its own answers. |
 | **Leads** | In a private chat, an email plus a company question becomes a lead: one note to the admins, and the CRM webhook when it is configured. |
@@ -33,7 +35,7 @@ or post anything on a timer.
 |---|---|---|
 | `/stbu` | anywhere | The new STBU on Base: token contract, official pool, links, old-holder claims, switched-off legacy contracts |
 | `/check 0xAddress` | anywhere | STBU on Base and any legacy STBU in a public wallet, read from the chain |
-| `/blog` | anywhere | The five latest articles from the Stobox blog |
+| `/blog` | anywhere | The newest article's cover and the five latest articles from the Stobox blog |
 | `/help`, `/start` | private chat; in the group only as `/help@stobox_assistant_bot` | What Stoby does |
 | `/sources` | same as `/help` | Official Stobox channels, from the site |
 | `/contact` | same as `/help` | support@stobox.io |
