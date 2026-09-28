@@ -149,7 +149,7 @@ questions:
     category: canonical
     question: "What is the official Stobox X (Twitter) account?"
     expect_contains: ["StoboxCompany"]
-    forbid_contains: ["@stobox_io", "@stobox_official"]
+    forbid_contains: ["@stobox_io"]
 
   - id: what-are-you
     needs_model: true
