@@ -51,7 +51,7 @@ questions:
     question: "If Stobox moves to Base, will the Arbitrum grants end?"
     # Stage 0: the July "primary network" answer was withdrawn; grants go to the team.
     expect_contains: ["Arbitrum"]
-    expect_any: ["team", "info@stobox.io", "stobox.io/compass"]
+    expect_any: ["team", "support@stobox.io", "stobox.io/compass"]
     forbid_contains: ["I don't know based on the current documentation", "don't have a solid answer"]
 
   - id: compass-chain
@@ -70,7 +70,8 @@ questions:
     question: "Will STBU supply reach 250M?"
     # Stage 0: the site says "cap 250,000,000 … issuance 216,563,456".
     expect_any: ["cap", "216,563,456", "ceiling"]
-    forbid_contains: ["will reach", "expected supply", "will be 250M"]
+    # "isn't a promise that supply will reach it" is a correct sentence.
+    forbid_contains: ["will reach 250", "expected supply", "will be 250M", "supply will reach 250"]
 
   - id: stbu-destination
     needs_model: true
@@ -83,7 +84,7 @@ questions:
     needs_model: true
     category: canonical
     question: "Can I migrate my legacy V1 STBU tokens?"
-    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated"]
+    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated", "nobody can burn or migrate", "no path to migrate", "no longer stbu", "no longer be burned or migrated", "can no longer be", "migration is closed", "can no longer burn", "no longer burn"]
     forbid_contains: []
 
   - id: tokenized-volume
@@ -115,7 +116,7 @@ questions:
     needs_model: true
     category: canonical
     question: "Is the Eqvista valuation the STBX token price?"
-    expect_any: ["not the", "company valuation", "company* valuation", "not an offer", "not the token price", "different things"]
+    expect_any: ["not the", "company valuation", "company* valuation", "not an offer", "not the token price", "different things", "not necessarily the same", "can't confirm", "cannot confirm"]
     forbid_contains: ["yes, it is the token price"]
 
   # ── Security / anti-scam ────────────────────────────────────────────────

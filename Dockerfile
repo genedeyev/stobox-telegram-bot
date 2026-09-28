@@ -60,4 +60,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
     CMD python -c "import os,sys,time; p=os.environ.get('HEARTBEAT_FILE','/tmp/stobox-heartbeat'); sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<180 else 1)"
 
 ENTRYPOINT ["python", "/entrypoint.py"]
-CMD ["python", "-m", "stobox_ai"]
+CMD ["python", "-m", "stoby"]
