@@ -297,7 +297,7 @@ async def test_chain_reader_marks_unreachable(tmp_path):
 
 
 def test_module_exports():
-    assert answer_mod.CANT_VERIFY.startswith("I can't verify")
+    assert "support@stobox.io" in answer_mod.CANT_VERIFY
 
 
 def test_stbu_command_text_comes_from_the_site():
@@ -318,3 +318,24 @@ def test_sources_come_from_the_site_when_published():
         "## Asking directly", "## Official channels\n\n- X: https://x.com/StoboxCompany\n\n## Asking directly"),
         time.time())
     assert "x.com/StoboxCompany" in sources_text(with_channels)
+
+
+def test_friendly_voice_one_address_no_medium():
+    """Gene, 28.09.2026: no Medium, support@stobox.io only, STBU on Base up front."""
+    from stoby import commands
+
+    with_channels = SiteFacts.parse(FIXTURE.replace(
+        "## Asking directly",
+        "## Official channels\n\n- X: https://x.com/StoboxCompany\n"
+        "- Medium: https://stobox-platform.medium.com\n- Contact: info@stobox.io\n\n## Asking directly"),
+        time.time())
+    src = commands.sources_text(with_channels)
+    assert "medium" not in src.lower() and "info@" not in src and "support@stobox.io" in src
+    facts = SiteFacts.parse(FIXTURE, time.time())
+    stbu = commands.stbu_text(facts)
+    assert stbu.startswith("🚀") and "Base" in stbu.splitlines()[0]
+    for text in (commands.HELP, commands.CONTACT, stbu, answer_mod.CANT_VERIFY,
+                 answer_mod.PAUSED, answer_mod.REFUSED):
+        assert "info@" not in text, text
+        assert "—" not in text
+    assert "support@stobox.io" in commands.CONTACT and "support@stobox.io" in answer_mod.CANT_VERIFY

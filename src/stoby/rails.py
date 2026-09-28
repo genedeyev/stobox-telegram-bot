@@ -29,7 +29,7 @@ _ALLOWED_HOSTS = ("stobox.io",)                      # + every subdomain
 _ALLOWED_PREFIXES = (
     "x.com/stoboxcompany", "twitter.com/stoboxcompany", "t.me/stobox_community",
     "linkedin.com/company/stobox", "youtube.com/@stobox", "github.com/stoboxtechnologies",
-    "facebook.com/stoboxforbusiness", "stobox-platform.medium.com",
+    "facebook.com/stoboxforbusiness",
     "coingecko.com/en/coins/stobox-token",
     "basescan.org", "etherscan.io", "arbiscan.io", "bscscan.com", "polygonscan.com",
 )
@@ -122,9 +122,8 @@ def canned_buy_answer(where_to_buy: str | None) -> str | None:
     """The site's own "Where to buy" line, nothing generated."""
     if not where_to_buy:
         return None
-    return (f"Where to buy STBU, in the site's words: {where_to_buy}\n\n"
-            "Before any trade, check which pool is the issuer's: "
-            "https://www.stobox.io/stbu/safety")
+    return (f"🚀 STBU lives on Base. Where to get it, in stobox.io's own words: {where_to_buy}\n\n"
+            "🛡️ Before you trade, check the one real pool: https://www.stobox.io/stbu/safety")
 
 
 # SIG's public canon carries sentences about the company's own raise (27.09.2026).
@@ -152,14 +151,16 @@ def no_em_dash(text: str) -> str:
     """Stobox house rule: an em dash never reaches the chat."""
     out = re.sub(r"[\u00ad\u200b\u200c\u200d\ufeff]", "", text or "")   # soft hyphen, zero-width
     out = re.sub(r"[ \t]*\u2014[ \t]*", " \u2013 ", out)
+    # A spaced hyphen between words is a dash too (Sonnet 5 writes " - ").
+    # Bullets ("- item" at a line start) are left alone.
+    out = re.sub(r"(?<=[^\s\n])[ \t]+-[ \t]+(?=\S)", " \u2013 ", out)
     return re.sub(r"(^|\n) \u2013 ", "\\1\u2013 ", out)
 
-DISCLAIMER = "This is information, not investment advice."
+DISCLAIMER = "ℹ️ Just info, not investment advice."
 
 IMPERSONATION_WARNING = (
-    "⚠️ Scam warning: Stobox staff never DM you first and never ask you to "
-    "\"validate\" or \"sync\" a wallet. Only trust links from stobox.io. When in "
-    "doubt, verify via official channels (/sources)."
+    "🛡️ Stay safe: the Stobox team never DMs you first and never asks you to "
+    "\"validate\" or \"sync\" a wallet. Trust only stobox.io links. Not sure? /sources"
 )
 
 _SEED_TERMS = re.compile(
@@ -405,7 +406,7 @@ class ComplianceRails:
 
         # 3) Investment disclaimer where relevant.
         if _INVESTMENT_TOPIC.search(user_text + " " + result.text):
-            if DISCLAIMER.lower() not in result.text.lower():
+            if "not investment advice" not in result.text.lower():
                 result.text = result.text.rstrip() + "\n\n" + DISCLAIMER
                 result.disclaimer_added = True
 

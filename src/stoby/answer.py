@@ -18,12 +18,12 @@ from .sources.sig import SigClient, SigDown
 from .sources.site import SiteSource, SiteUnavailable
 from .verify import ungrounded
 
-CANT_VERIFY = ("I can't verify that against the published record right now, so I won't guess. "
-               "The official record is https://www.stobox.io/stbu and the team is at info@stobox.io.")
-PAUSED = ("I've reached my limit for today and I'm pausing answers until tomorrow. "
-          "The official record is https://www.stobox.io and the team is at info@stobox.io.")
-REFUSED = ("I can't help with that one. For anything about Stobox, the official record is "
-           "https://www.stobox.io and the team is at info@stobox.io.")
+CANT_VERIFY = ("🤔 I can't check that right now, so I won't guess. "
+               "You'll find the facts on https://www.stobox.io/stbu, or ask the team at support@stobox.io 💬")
+PAUSED = ("😴 I've answered a lot today and I'm taking a break until tomorrow. "
+          "Meanwhile: https://www.stobox.io or support@stobox.io 💬")
+REFUSED = ("🙏 I can't help with that one. For anything about Stobox: https://www.stobox.io "
+           "or support@stobox.io 💬")
 
 
 @dataclass

@@ -1,4 +1,8 @@
-"""Fixed-text commands. Facts in them are read from the site at request time."""
+"""Fixed-text commands. Facts in them are read from the site at request time.
+
+Voice (Gene, 28.09.2026): friendly, simple words, a few emojis, the new STBU on
+Base up front, one contact address only: support@stobox.io.
+"""
 
 from __future__ import annotations
 
@@ -6,74 +10,88 @@ from .rails import IMPERSONATION_WARNING
 from .sources.chain import ChainReader, contracts_from_site, is_address, is_private_key
 from .sources.site import SiteFacts
 
+SUPPORT = "support@stobox.io"
+# Gene, 28.09.2026: Medium is not listed among the official channels.
+HIDDEN_CHANNELS = ("medium",)
+
 HELP = (
-    "I'm Stoby, the AI assistant of the Stobox community. Ask me about Stobox, its products "
-    "and the STBU token; I answer from the published record at stobox.io.\n\n"
-    "In the group, mention me or reply to my message. Commands:\n"
-    "/stbu – the STBU record\n/check 0xAddress – read a wallet's STBU\n"
-    "/sources – official links\n/contact – reach the team"
+    "Hi, I'm Stoby 👋 the AI helper of the Stobox community.\n\n"
+    "🚀 STBU now lives on Base. Ask me anything about it, or about Stobox, "
+    "and I'll answer from stobox.io.\n\n"
+    "In the group, just mention me or reply to my message.\n\n"
+    "Handy commands:\n"
+    "🪙 /stbu – the new STBU on Base\n"
+    "🔎 /check 0xYourAddress – see the STBU in a wallet\n"
+    "✅ /sources – our official links\n"
+    f"💬 /contact – talk to the team ({SUPPORT})"
 )
-# Until the site publishes its channels (stobox-v15#938), the only fact the bot
-# keeps of its own is the website address itself.
-SOURCES_FALLBACK = ("Official Stobox links are listed on https://www.stobox.io. "
-                    "Anything else claiming to be Stobox is not us.")
+SOURCES_FALLBACK = ("✅ Our official links are on https://www.stobox.io\n\n"
+                    "🚫 Anyone else using the Stobox name is not us.")
+CONTACT = (f"💬 Need a hand? Write to {SUPPORT}, the team is happy to help.\n\n"
+           "🛡️ We will never DM you first or ask for your seed phrase.")
+
+
+def _channel_ok(line: str) -> bool:
+    low = line.lower()
+    if any(h in low for h in HIDDEN_CHANNELS):
+        return False
+    return not low.startswith("contact")          # one address only: support@
 
 
 def sources_text(site: SiteFacts | None) -> str:
-    channels = site.bullets("Official channels") if site else []
+    channels = [c for c in (site.bullets("Official channels") if site else []) if _channel_ok(c)]
     if not channels:
         return SOURCES_FALLBACK
-    return ("Official Stobox channels, from the published record:\n" + "\n".join(channels)
-            + "\n\nAnything else claiming to be Stobox is not us.")
-CONTACT = ("The team: info@stobox.io or https://www.stobox.io/contact. "
-           "For a specific STBU burn or claim: support@stobox.io.")
+    return ("✅ Official Stobox channels:\n\n" + "\n".join(f"• {c}" for c in channels)
+            + f"\n• Support: {SUPPORT}\n\n🚫 Anyone else using the Stobox name is not us.")
 
 
 def stbu_text(site: SiteFacts) -> str:
     live, legacy = contracts_from_site(site)
     claims = site.bullet("STBU, the token", "Legacy claims:") or ""
-    lines = ["STBU, from the published record:"]
+    lines = ["🚀 The new STBU lives on Base!"]
     if live:
-        lines.append(f"Live contract on Base: {live}")
+        lines += ["", f"🪙 Contract on Base:\n{live}"]
     if claims:
-        lines.append(claims)
+        lines += ["", f"📥 {claims}"]
     discontinued = site.bullet("STBU, the token", "Discontinued")
     if legacy and discontinued:
-        lines.append(discontinued.split(":", 1)[0] + ": "
-                     + "; ".join(f"{k} {v}" for k, v in legacy.items()))
-    lines += ["Record with figures from the chain: https://www.stobox.io/stbu",
-              "Before any trade: https://www.stobox.io/stbu/safety", "", IMPERSONATION_WARNING]
+        lines += ["", "🗄️ The old STBU contracts are switched off. "
+                  + discontinued.split(":", 1)[0] + ":\n"
+                  + "\n".join(f"• {k}: {v}" for k, v in legacy.items())]
+    lines += ["", "📊 Live figures: https://www.stobox.io/stbu",
+              "🛡️ Before you trade, check the one real pool: https://www.stobox.io/stbu/safety",
+              "", IMPERSONATION_WARNING]
     return "\n".join(lines)
 
 
 async def check_text(arg: str, site: SiteFacts, chain: ChainReader) -> str:
     arg = (arg or "").strip()
     if is_private_key(arg):
-        return ("That looks like a private key, not a wallet address. Never share it with "
-                "anyone, including me. If you posted it anywhere, treat that wallet as "
-                "compromised and move your funds to a new wallet now.")
+        return ("🚨 Careful! That's a private key, not a wallet address. Never share it with "
+                "anyone, me included. If you posted it anywhere, move your funds to a new "
+                "wallet right now.")
     if not is_address(arg):
-        return "Send a public wallet address: /check 0xYourAddress (42 characters, starts with 0x)."
+        return "🔎 Send me a public wallet address like this: /check 0xYourAddress"
     live, legacy = contracts_from_site(site)
     if not live:
-        return "I can't read the published contract right now. The record is https://www.stobox.io/stbu"
+        return "😕 I can't read the contract right now. You can check it here: https://www.stobox.io/stbu"
     rows = await chain.balances(arg, live, legacy)
     short = f"{arg[:6]}…{arg[-4:]}"
-    out = [f"STBU check for {short}"]
+    out = [f"🔎 Wallet {short}"]
     for h in rows:
         if h.chain == "Base":
-            out.append(f"Base (live STBU): {'unreachable' if h.balance is None else f'{h.balance:,.2f}'}")
+            bal = "couldn't reach Base, try again in a minute" if h.balance is None else f"{h.balance:,.2f}"
+            out.append(f"🚀 New STBU on Base: {bal}")
     old = [h for h in rows if h.chain != "Base" and h.balance]
     if old:
-        discontinued = site.bullet("STBU, the token", "Discontinued") or "Discontinued legacy tokens"
-        out.append("Legacy tokens named STBU (" + discontinued.split(":", 1)[0].lower()
-                   + "; not STBU, cannot be migrated):")
-        out += [f"{h.chain}: {h.balance:,.2f}" for h in old]
+        out += ["", "🗄️ Old STBU (switched off, can't be moved to Base any more):"]
+        out += [f"• {h.chain}: {h.balance:,.2f}" for h in old]
     down = [h.chain for h in rows if h.balance is None and h.chain != "Base"]
     if down:
         out.append(f"(Couldn't reach: {', '.join(down)})")
     claims = site.bullet("STBU, the token", "Legacy claims:")
     if claims:
-        out += ["", claims]
+        out += ["", f"📥 {claims}"]
     out += ["", IMPERSONATION_WARNING]
     return "\n".join(out)
