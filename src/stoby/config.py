@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -38,7 +39,7 @@ class Settings:
     # Chats that get every new blog post (Gene, 28.09.2026): in production the
     # community group and the Stobox Announcements channel. Empty = no posting,
     # which is what a test bot must have.
-    announce_chats: tuple[int, ...] = ()
+    announce_chats: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -57,5 +58,8 @@ class Settings:
             daily_cap_usd=float(e("STOBY_DAILY_CAP_USD", cls.daily_cap_usd)),
             crm_webhook_url=e("CRM_WEBHOOK_URL", ""),
             crm_webhook_secret=e("CRM_WEBHOOK_SECRET", ""),
-            announce_chats=tuple(sorted(_ids(e("STOBY_ANNOUNCE_CHATS", "")))),
+            # "chat" or "chat:topic" – the community group is a forum, and its
+            # Announcements is a topic (Gene, 28.09.2026: t.me/stobox_community/90839).
+            announce_chats=tuple(x.strip() for x in e("STOBY_ANNOUNCE_CHATS", "").split(",")
+                                 if re.fullmatch(r"-?\d+(:\d+)?", x.strip())),
         )

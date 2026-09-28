@@ -55,7 +55,7 @@ def caption(post: Post) -> str:
 
 
 class Announcer:
-    def __init__(self, bot, chats: list[int], state_dir: Path, rss_url: str = RSS_URL,
+    def __init__(self, bot, chats: list, state_dir: Path, rss_url: str = RSS_URL,
                  client: httpx.AsyncClient | None = None, per_tick: int = 3) -> None:
         self.bot, self.chats, self.rss_url, self.client = bot, chats, rss_url, client
         self.path = state_dir / "announced.json"
@@ -120,11 +120,14 @@ class Announcer:
             for chat in self.chats:
                 if str(chat) in done:
                     continue
+                chat_id, _, topic = str(chat).partition(":")
+                where = {"message_thread_id": int(topic)} if topic else {}
                 try:
                     if img:
-                        await self.bot.send_photo(chat, photo=img, caption=text[:1024], parse_mode="HTML")
+                        await self.bot.send_photo(int(chat_id), photo=img, caption=text[:1024],
+                                                  parse_mode="HTML", **where)
                     else:
-                        await self.bot.send_message(chat, text, parse_mode="HTML")
+                        await self.bot.send_message(int(chat_id), text, parse_mode="HTML", **where)
                     done.add(str(chat))
                     sent += 1
                     log.info("announce.posted", chat=chat, url=post.url)
