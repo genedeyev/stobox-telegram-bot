@@ -13,7 +13,7 @@ app:
 llm:
   reasoning:
     provider: anthropic            # anthropic | openai
-    model: claude-opus-4-8         # config value; swap freely
+    model: claude-sonnet-5         # Gene 27.09.2026: answers on Sonnet 5 (cost); was claude-opus-4-8
     temperature: 0.3
     max_tokens: 1200
     # Fallback provider used if the primary errors out.
@@ -155,8 +155,11 @@ proactive:
   blog_announcements:
     enabled: true                  # announce every newly published blog post
     interval_minutes: 10           # how often to check for new posts (cheap diff)
-    chat_ids: []                   # extra chats to announce in (e.g. the community
-                                   # group id); groups the bot has seen are included
+    # Gene, 28.09.2026: every new blog post goes to the community chat AND the
+    # "Stobox Announcements" channel (@stobox_official). The bot must be an
+    # admin of the channel with "Post messages"; until then Telegram refuses
+    # and the job logs it. Groups the bot has seen are included as before.
+    chat_ids: ["-1001349044622"]
   reminders:
     enabled: false                 # opt-in /remindme deadline blasts (hourly check)
   winback:

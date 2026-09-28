@@ -267,7 +267,9 @@ _FORBIDDEN = [
 # Known impostor handles → deterministically scrubbed from output (never shown,
 # even in warnings – an official bot must not give fake accounts name recognition).
 _SCRUB = [
-    (re.compile(r"@?stobox_io\b|@?stobox_official\b", re.I), "an unofficial account"),
+    # @stobox_official is the real "Stobox Announcements" channel (checked with
+    # getChat 28.09.2026), not an impostor; it left this list that day.
+    (re.compile(r"@?stobox_io\b", re.I), "an unofficial account"),
 ]
 
 # Securities-exemption attribution to a Stobox token → block.

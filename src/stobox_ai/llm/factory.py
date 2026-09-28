@@ -71,7 +71,7 @@ def build_reasoner(config: Config) -> LLMProvider:
     temperature = float(r.get("temperature", 0.3))
     max_tokens = int(r.get("max_tokens", 1200))
     primary = _reasoner(
-        r.get("provider", "anthropic"), r.get("model", "claude-opus-4-8"),
+        r.get("provider", "anthropic"), r.get("model", "claude-sonnet-5"),
         temperature, max_tokens,
     )
     fb = _reasoner(

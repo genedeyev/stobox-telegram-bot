@@ -168,10 +168,10 @@ def test_rails_supply_mitigation_not_blocked():
 def test_rails_scrub_impostor_handles():
     r = ComplianceRails()
     res = r.post_process(
-        "The official account is @StoboxCompany — beware of @stobox_io and @stobox_official.",
+        "The official account is @StoboxCompany — beware of @stobox_io.",
         "what is the official X account?",
     )
-    assert "@stobox_io" not in res.text and "@stobox_official" not in res.text
+    assert "@stobox_io" not in res.text
     assert "@StoboxCompany" in res.text          # the real handle survives
     assert "an unofficial account" in res.text   # scrub replacement present
 
