@@ -374,3 +374,20 @@ def test_uniswap_links_only_to_site_addresses():
     bad = "https://app.uniswap.org/explore/pools/base/0x" + "9" * 64
     out = ComplianceRails().post_process(f"Pool: {good} or {bad}", "which pool?", trusted=trusted).text
     assert good in out and bad not in out
+
+
+def test_generic_commands_in_the_group_only_when_addressed_to_stoby():
+    from types import SimpleNamespace
+
+    from aiogram.enums import ChatType
+
+    from stoby.telegram import StobyBot
+
+    bot = StobyBot.__new__(StobyBot)
+    bot.username = "stobox_assistant_bot"
+    group = SimpleNamespace(type=ChatType.SUPERGROUP)
+    dm = SimpleNamespace(type=ChatType.PRIVATE)
+    msg = lambda text, chat: SimpleNamespace(text=text, chat=chat)  # noqa: E731
+    assert not bot._mine(msg("/help", group))                        # ChatKeeper's
+    assert bot._mine(msg("/help@stobox_assistant_bot", group))
+    assert bot._mine(msg("/help", dm))

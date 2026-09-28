@@ -102,10 +102,24 @@ class StobyBot:
                     .replace("&amp;", "&")
                 await message.reply(plain, disable_web_page_preview=True)
 
+    def _mine(self, message: Message) -> bool:
+        """ChatKeeper moderates the group and answers the generic commands there.
+        In a group, /start /help /sources /contact are Stoby's only when addressed
+        to it (/help@stobox_assistant_bot); a bare one is left to ChatKeeper, so the
+        two bots never answer the same command (Gene, 28.09.2026: work in parallel)."""
+        if message.chat.type == ChatType.PRIVATE:
+            return True
+        head = (message.text or "").split(maxsplit=1)[0].lower()
+        return bool(self.username) and head.endswith("@" + self.username.lower())
+
     async def cmd_help(self, message: Message) -> None:
+        if not self._mine(message):
+            return
         await self._send(message, HELP)
 
     async def cmd_sources(self, message: Message) -> None:
+        if not self._mine(message):
+            return
         try:
             site = await self.site.facts()
         except SiteUnavailable:
@@ -113,6 +127,8 @@ class StobyBot:
         await self._send(message, sources_text(site))
 
     async def cmd_contact(self, message: Message) -> None:
+        if not self._mine(message):
+            return
         await self._send(message, CONTACT)
 
     async def cmd_stbu(self, message: Message) -> None:

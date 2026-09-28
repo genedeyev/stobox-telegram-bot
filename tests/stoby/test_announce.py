@@ -74,3 +74,26 @@ def test_parse_and_caption():
     c = caption(posts[0])
     assert c.startswith("📰 <b>New on the Stobox blog</b>") and "Read the article" in c
     assert "—" not in c
+
+
+async def test_forum_topic_entries_post_into_the_topic(tmp_path):
+    calls = []
+
+    class TopicBot(Bot):
+        async def send_photo(self, chat, photo, caption, parse_mode, message_thread_id=None):
+            calls.append((chat, message_thread_id))
+
+    st = {"feed": feed("a")}
+    a = Announcer(TopicBot(), [f"{COMMUNITY}:90839", str(COMMUNITY)], tmp_path,
+                  "https://www.stobox.io/rss.xml", client(st))
+    await a.tick()
+    st["feed"] = feed("new", "a")
+    assert await a.tick() == 2
+    assert (COMMUNITY, 90839) in calls and (COMMUNITY, None) in calls
+
+
+def test_settings_parse_chat_and_topic(monkeypatch):
+    from stoby.config import Settings
+
+    monkeypatch.setenv("STOBY_ANNOUNCE_CHATS", "-1001438480522:90839, -1001438480522, junk")
+    assert Settings.from_env().announce_chats == ("-1001438480522:90839", "-1001438480522")
