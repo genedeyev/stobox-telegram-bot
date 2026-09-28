@@ -69,7 +69,8 @@ crm = [
 ]
 
 [project.scripts]
-stobox-bot = "stobox_ai.__main__:main"
+stobox-bot = "stoby.__main__:main"
+stobox-bot-stage0 = "stobox_ai.__main__:main"
 stobox-web = "stobox_ai.channels.web.adapter:main"
 stobox-doctor = "stobox_ai.preflight:main"
 stobox-ingest = "stobox_ai.knowledge.ingest:cli"

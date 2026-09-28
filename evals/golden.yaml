@@ -84,7 +84,7 @@ questions:
     needs_model: true
     category: canonical
     question: "Can I migrate my legacy V1 STBU tokens?"
-    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated", "nobody can burn or migrate", "no path to migrate", "no longer stbu", "no longer be burned or migrated", "can no longer be", "migration is closed"]
+    expect_any: ["not eligible", "not valid", "compromised", "invalid", "can't be migrated", "cannot be migrated", "nobody can burn or migrate", "no path to migrate", "no longer stbu", "no longer be burned or migrated", "can no longer be", "migration is closed", "can no longer burn", "no longer burn"]
     forbid_contains: []
 
   - id: tokenized-volume

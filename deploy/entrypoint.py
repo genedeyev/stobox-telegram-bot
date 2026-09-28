@@ -35,7 +35,7 @@ def main() -> None:
         os.setgid(GID)
         os.setuid(UID)
         os.environ["HOME"] = "/home/stobox"
-    argv = sys.argv[1:] or ["python", "-m", "stobox_ai"]
+    argv = sys.argv[1:] or ["python", "-m", "stoby"]
     os.execvp(argv[0], argv)
 
 

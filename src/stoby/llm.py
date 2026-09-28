@@ -15,7 +15,13 @@ import anthropic
 
 from .ledger import cost_usd
 
-PROMPT_PATH = Path(__file__).resolve().parents[2] / "config" / "prompts" / "stoby.md"
+# In the image the package lives in /venv site-packages while config/ is copied
+# to the working directory /app, so the prompt is looked up there first.
+PROMPT_CANDIDATES = (
+    Path.cwd() / "config" / "prompts" / "stoby.md",
+    Path(__file__).resolve().parents[2] / "config" / "prompts" / "stoby.md",
+)
+PROMPT_PATH = next((p for p in PROMPT_CANDIDATES if p.exists()), PROMPT_CANDIDATES[0])
 
 
 class ModelDown(Exception):

@@ -44,7 +44,7 @@ def site_client(text: str = FIXTURE, status: int = 200):
 
 
 def sig_client(verdict: str = "no_contradiction_detected", status: int = 200, correction=None,
-               calls: list | None = None):
+               calls: list | None = None, issues: list | None = None):
     def handler(request: httpx.Request) -> httpx.Response:
         if status != 200:
             return httpx.Response(status, text="down")
@@ -58,7 +58,7 @@ def sig_client(verdict: str = "no_contradiction_detected", status: int = 200, co
                 res = {"query": c["params"]["arguments"]["query"], "entities": [
                     {"id": "stobox", "description": "Founded in 2018. Founder and CEO: Gene Deyev."}]}
             else:
-                res = {"verdict": verdict, "issues": [], "correction": correction}
+                res = {"verdict": verdict, "issues": issues or [], "correction": correction}
             out.append({"jsonrpc": "2.0", "id": c["id"],
                         "result": {"content": [{"type": "text", "text": json.dumps(res)}]}})
         return httpx.Response(200, json=out)
@@ -209,10 +209,20 @@ async def test_contradicted_draft_is_regenerated_with_the_correction(tmp_path):
 
     model = M(["Stobox sells STBU.", "Stobox does not sell STBU."])
     p = pipeline(tmp_path, model, sig_kwargs={"verdict": "contradicted",
-                                              "correction": "Stobox does not sell STBU."})
+                                              "correction": "Stobox does not sell STBU.",
+                                              "issues": [{"rule": "stbu-sale"}]})
     reply = await p.answer("Does Stobox sell STBU?")
     assert seen[1] == "Stobox does not sell STBU."
     assert reply.outcome == "fixed_unverified"     # the fake SIG contradicts every draft
+
+
+async def test_sig_model_disagreement_without_a_rule_does_not_outrank_the_site(tmp_path):
+    model = FakeModel(["STBX is tokenized Class-C equity in Stobox Technologies Inc."])
+    p = pipeline(tmp_path, model, sig_kwargs={"verdict": "contradicted",
+                                              "correction": "issued by Tokenized Equities Ltd"})
+    reply = await p.answer("What class of shares is STBX?")
+    assert reply.outcome == "answered" and reply.meta["verdict"] == "sig_model_disputed"
+    assert model.calls == 1
 
 
 async def test_daily_cap_stops_the_model(tmp_path):

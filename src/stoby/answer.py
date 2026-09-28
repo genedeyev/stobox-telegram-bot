@@ -94,7 +94,17 @@ class Pipeline:
             except SigDown as exc:
                 return Reply(CANT_VERIFY, "fixed_sig_down", usd, {"error": str(exc)})
             verdict = fc.verdict
-            if verdict == "contradicted":
+            # Only SIG's deterministic canon rules (named issues) can reject a
+            # draft. A contradiction from SIG's model alone, with no rule
+            # behind it, does not outrank the site: 28.09.2026 it rejected the
+            # site's own sentence "STBX is tokenized Class-C equity in Stobox
+            # Technologies Inc." (equity in Technologies, issued by Tokenized
+            # Equities Ltd: both true). It is logged for the canon, not obeyed.
+            if verdict == "contradicted" and not fc.issues:
+                log.warning("sig.model_disagrees", correction=(fc.correction or "")[:200],
+                            draft=draft.text[:200])
+                verdict = "sig_model_disputed"
+            elif verdict == "contradicted":
                 correction = fc.correction or "; ".join(i.get("truth", "") for i in fc.issues)
                 continue
             text = draft.text
