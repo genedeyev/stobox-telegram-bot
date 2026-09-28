@@ -8,6 +8,7 @@ import sys
 
 from aiogram import Bot
 
+from .announce import Announcer
 from .answer import Pipeline
 from .config import Settings
 from .leads import Leads
@@ -41,14 +42,19 @@ def main() -> None:
     bot = Bot(s.telegram_token)
     stoby = StobyBot(bot, pipeline, site, chain, leads, s.admin_ids)
     log.info("boot", version="stage1", model=s.answer_model, sig=s.sig_url, site=s.site_url,
-             sig_token=bool(s.sig_token), crm=bool(s.crm_webhook_url))
+             sig_token=bool(s.sig_token), crm=bool(s.crm_webhook_url),
+             announce_chats=list(s.announce_chats))
 
     async def _run() -> None:
         hb = asyncio.create_task(heartbeat(os.environ.get("HEARTBEAT_FILE", "/tmp/stobox-heartbeat")))
+        tasks = [hb]
+        if s.announce_chats:
+            tasks.append(asyncio.create_task(Announcer(bot, list(s.announce_chats), s.state_dir).run()))
         try:
             await run(bot, stoby)
         finally:
-            hb.cancel()
+            for t in tasks:
+                t.cancel()
 
     try:
         asyncio.run(_run())
