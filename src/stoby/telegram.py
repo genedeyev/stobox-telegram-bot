@@ -14,8 +14,19 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
+from .announce import RSS_URL, parse_rss
 from .answer import Pipeline
-from .commands import CONTACT, HELP, check_text, sources_text, stbu_text
+from .commands import (
+    CONTACT,
+    HELP,
+    KNOWN,
+    MENU,
+    UNKNOWN,
+    blog_text,
+    check_text,
+    sources_text,
+    stbu_text,
+)
 from .format import is_stbu_topic, links_block, to_html
 from .leads import Leads
 from .ledger import log
@@ -88,6 +99,8 @@ class StobyBot:
         r.message(Command("contact"))(self.cmd_contact)
         r.message(Command("stbu"))(self.cmd_stbu)
         r.message(Command("check"))(self.cmd_check)
+        r.message(Command("blog"))(self.cmd_blog)
+        r.message(F.text.startswith("/"))(self.on_other_command)
         r.message(F.text)(self.on_text)
 
     async def _send(self, message: Message, text: str) -> None:
@@ -149,6 +162,32 @@ class StobyBot:
             return
         await self._send(message, await check_text(command.args or "", site, self.chain))
 
+    async def cmd_blog(self, message: Message) -> None:
+        import httpx
+
+        posts = []
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
+                r = await c.get(RSS_URL)
+                r.raise_for_status()
+                posts = parse_rss(r.text)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("blog.feed_unreadable", error=type(exc).__name__)
+        await self._send(message, blog_text(posts))
+
+    async def on_other_command(self, message: Message) -> None:
+        """A command that is not Stoby's never reaches the model. Addressed to
+        Stoby (or in a DM): say what Stoby can do. Bare, in the group: it may be
+        ChatKeeper's, so stay silent."""
+        head = (message.text or "").split(maxsplit=1)[0]
+        name, _, bot = head[1:].partition("@")
+        if name.lower() in KNOWN:
+            return                              # handled by its own router entry
+        to_me = message.chat.type == ChatType.PRIVATE or (
+            bool(self.username) and bot.lower() == self.username.lower())
+        if to_me:
+            await self._send(message, UNKNOWN)
+
     def addressed(self, message: Message) -> bool:
         if message.chat.type == ChatType.PRIVATE:
             return True
@@ -208,6 +247,22 @@ async def run(bot: Bot, stoby: StobyBot) -> None:
     dp.include_router(stoby.router)
     me = await bot.get_me()
     stoby.username = me.username or ""
+    # The menu people see is set by the code at every boot, so it can never lag
+    # behind the commands the bot really has (28.09.2026: it still listed the
+    # previous bot's 16 commands, and /blog fell through to the model).
+    from aiogram.types import (
+        BotCommand,
+        BotCommandScopeAllGroupChats,
+        BotCommandScopeAllPrivateChats,
+    )
+
+    commands = [BotCommand(command=c, description=d) for c, d in MENU]
+    for scope in (None, BotCommandScopeAllPrivateChats(), BotCommandScopeAllGroupChats()):
+        try:
+            await bot.set_my_commands(commands, scope=scope) if scope else await bot.set_my_commands(commands)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("menu.set_failed", error=str(exc)[:120])
+    log.info("menu.set", commands=[c for c, _ in MENU])
     log.info("telegram.start", username=stoby.username)
     await dp.start_polling(bot, allowed_updates=["message"])
 

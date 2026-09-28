@@ -8,6 +8,7 @@ import sys
 
 from aiogram import Bot
 
+from . import __version__
 from .announce import Announcer
 from .answer import Pipeline
 from .config import Settings
@@ -41,7 +42,8 @@ def main() -> None:
     leads = Leads(s.state_dir, s.crm_webhook_url, s.crm_webhook_secret, s.crm_daily_cap)
     bot = Bot(s.telegram_token)
     stoby = StobyBot(bot, pipeline, site, chain, leads, s.admin_ids)
-    log.info("boot", version="stage1", model=s.answer_model, sig=s.sig_url, site=s.site_url,
+    log.info("boot", version=__version__, commit=os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")[:7],
+             model=s.answer_model, sig=s.sig_url, site=s.site_url,
              sig_token=bool(s.sig_token), crm=bool(s.crm_webhook_url),
              announce_chats=list(s.announce_chats))
 

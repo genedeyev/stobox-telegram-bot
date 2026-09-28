@@ -106,6 +106,8 @@ class Pipeline:
                 verdict = "sig_model_disputed"
             elif verdict == "contradicted":
                 correction = fc.correction or "; ".join(i.get("truth", "") for i in fc.issues)
+                log.info("sig.rule_rejected", rules=[i.get("rule") for i in fc.issues],
+                         draft=draft.text[:200])
                 continue
             text = draft.text
             break

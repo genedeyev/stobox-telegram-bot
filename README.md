@@ -1,192 +1,133 @@
-# Stoby — the resident AI of the Stobox community
+# Stoby 1.0.0 · the AI helper of the Stobox community
 
-> *"Stoby — the resident AI of the Stobox community. Part monster, part mind, fully awake.
-> Ask me anything about tokenization."*
+`@stobox_assistant_bot` in the Stobox Community group on Telegram. Released **28 September 2026**.
 
-Stoby is an enterprise-grade, compliance-gated community AI for Telegram. It answers from
-stobox.io's published content (with citations), defends the brand, grows and retains the
-community, qualifies leads, moderates, and keeps itself up to date — **running 24/7 in
-production** (Railway + Supabase), no human in the loop for day-to-day operation.
+Stoby answers questions about Stobox and the STBU token, points people to the official links, and posts every new
+blog article to the group. It holds **no facts of its own**: every fact in an answer is read, at answer time, from
+the live stobox.io reference file, the Stobox Intelligence Graph (SIG) and Base mainnet.
 
-**Status: 🟢 LIVE.** Handle `@stobox_assistant_bot` · display name "Stoby | AI Assistant".
-
-> **Stage 0 (27 September 2026).** The STBU migration closed before 15 September 2026, and
-> Stoby now says so: facts come from the live `stobox.io/llms-full.txt`, legacy contracts are
-> reported as discontinued, and claims close 31 December 2026, 23:59 UTC. Every "presence"
-> loop is off (scheduled posts, updates briefing, migration countdown, revival, win-back,
-> reminders): Stoby answers when asked and announces new blog posts. Output rails now remove
-> any non-official link and any address that is not in `canonicals.yaml`, and never emit an
-> em dash. Acceptance: `scripts/acceptance.py`. Some sections below describe features that
-> are switched off until the next stage.
-
-- **Setup / run locally:** [SETUP.md](SETUP.md)
-- **Deploy (Railway + Supabase):** [DEPLOY.md](DEPLOY.md)
-- **What's planned:** [ROADMAP.md](ROADMAP.md)
-- **Compliance spec:** [SYSTEM-PROMPT.md](SYSTEM-PROMPT.md) · [canonicals.yaml](canonicals.yaml) · [ARCHITECTURE.md](ARCHITECTURE.md)
+- What changed and when: [CHANGELOG.md](CHANGELOG.md)
+- Acceptance: `scripts/acceptance_stage1.py`
+- Code: `src/stoby/` (version 1.0.0). `src/stobox_ai/` is the previous bot, kept one day as the rollback.
 
 ---
 
-## What's live
+## What it does
 
-### 🧠 Answers you can trust
-- **Grounded RAG with citations** — every Stobox fact comes from `canonicals.yaml`, the live
-  [FRESHNESS] state, or retrieved docs; never invented. Below a confidence threshold Stoby
-  says *"I don't know based on the current documentation"* and flags it, rather than guessing.
-- **Three-block compliance prompt** — `[CORE]` behavior + `[CANONICALS]` facts (PR-gated) +
-  `[FRESHNESS]` (live date, migration phase, valuation, latest posts). Precedence:
-  **CANONICALS > FRESHNESS > retrieved**.
-- **Deterministic rails** — no financial advice, no price predictions, no securities-exemption
-  language, never accepts seed phrases/keys, proactive anti-impersonation warnings, prompt-
-  injection resistance, forbidden-claim blocking. Enforced in code, not just the prompt.
-- **Golden-question gate** — a trap suite (`evals/golden.yaml`) that must pass before any
-  prompt/index change ships; runs in CI.
-- **English-only, human, adaptive** — understands any language, always replies in English;
-  short answers with **📖 More detail** / **📩 Email me this** progressive disclosure; adapts
-  depth to the user; warm and expressive, sober on compliance topics. Link discipline: at most
-  1–2 official links, never a menu of URLs.
-- **Never misses a question** — a deterministic backstop (trailing `?` or an opening
-  interrogative) guarantees a clear question is engaged even if the classifier waffles.
-- **Long-term recall** — references relevant older group messages (up to ~3 months back) from
-  the message log, not just the ~12-turn working window.
+| | |
+|---|---|
+| **Answers** | In a private chat, or in the group when someone mentions `@stobox_assistant_bot`, calls it Stoby, or replies to its message. Short, friendly English with a few emojis, whatever language the question is in. |
+| **Contracts** | Every contract or pool address is labelled and shown on its own line in monospace, so one tap copies it. |
+| **Useful links** | Under every STBU answer: STBU on stobox.io, the official Uniswap v4 pool, CoinGecko, the pool safety check. The readiness score is added in `/stbu` and the buy answer. |
+| **Blog announcements** | Every new stobox.io blog post goes to the group's **Announcements** topic and to **General Chat**, once each, with its cover image. |
+| **Safety** | Warns about scams, never asks for or repeats a seed phrase, removes any non-official link or unknown address from its own answers. |
+| **Leads** | In a private chat, an email plus a company question becomes a lead: one note to the admins, and the CRM webhook when it is configured. |
 
-### 📚 Knowledge that updates itself
-- Ingests **stobox.io `llms.txt`/`llms-full.txt`**, crawls the site, and pulls the
-  **StoboxTechnologies GitHub repos** — plus the private **Community Q&A register**.
-- **Self-updating:** daily 04:00 UTC reconciliation + an HMAC `/api/reingest` webhook +
-  a hot-reload docs watcher. New blog posts are announced automatically with OG-image cards.
-
-### 🌱 Growth & 🔁 retention
-- **New-member welcome**, **deep-link attribution** (`?start=blog|x|ref_<id>`), **referral
-  tracking**, **share buttons**, **email follow-up** (`/email`).
-- **Engagement engine** — XP, daily streaks, levels (Newcomer → Community OG), **weekly
-  leaderboard**, **native quiz nights** (auto-scored), **AMA collector** (crowd-ranked).
-- **Opt-in migration reminders** (`/remindme`) counting down to the Sep 15 deadline.
-- **Topic subscriptions** (`/subscribe migration|rwa-news|product`) — new blog posts are
-  keyword-routed and DM-pushed only to that topic's subscribers, each with a one-tap out.
-- **Win-back nudges** — one gentle, cooled-down check-in for subscribers who've gone quiet
-  (14-day inactive, opt-in only). Never a cold DM.
-
-### 🛡 Moderation (Stoby is a group admin)
-- 4 layers: deterministic filters (slurs, doxxing, scams, flood) + LLM classifier + **strike
-  ledger** (30-day decay) + **severity policy** (scam = instant ban, hate = mute→ban,
-  harassment = delete→mute→ban; **honest criticism never touched**).
-- **Impersonation defense** (fake "Stobox Support" → alert or ban), **mod-log** with one-tap
-  Pardon/Ban, offender DMs with `/appeal`.
-- **Deleted-account removal** (`/cleanup`) — auto-kicks ghost accounts as they surface.
-- **Sentiment-aware de-escalation** — reads each message's emotional temperature and, when the
-  room is heated or spreading FUD, replies calmly with published facts; a **coordinated-FUD
-  spike** DMs admins immediately (not just the daily digest).
-
-### 💰 Leads & conversion
-- **In-chat pre-qualifier** (`/qualify`) — a 5-tap fit check that routes to the free Readiness
-  Score, plus a **resource matcher** (`/resources`) mapping asset + jurisdiction to the right
-  published guides. Neither ever fabricates a score, case study, or legal conclusion.
-- Buying-intent detection, lead scoring, **on-chain wallet migration checker** (`/check` reads
-  STBU balances across chains, read-only).
-- **Lead handoff** — a qualified MQL is emailed as a summary to `info@stobox.io` (via **Resend**
-  or SMTP) *and* DM'd to admins as a zero-config safety net; users are routed to self-serve
-  (app.stobox.io · contact form · Readiness Score). CRM is a one-line `CRM_WEBHOOK_URL` switch.
-
-### 🤖 Runs itself + keeps you in control
-- **Unanswered-question loop** — Stoby captures what it can't answer, proposes a draft, DMs
-  admins; you tap `/approve` or `/answer`, and it replies to everyone who asked + saves the
-  wording to the register.
-- **Daily digest**, **weekly FAQ**, **documentation-gap** detection, full **decision log**.
-- **Content flywheel** (`/content`) — recurring/low-confidence questions become blog-outline
-  briefs filed as GitHub issues (dedup'd; weekly preview DM'd to admins).
-- **Analytics dashboard** — a self-contained, theme-aware HTML view at `GET /insights`
-  (community health, top questions, doc gaps, potential leads, languages, moderation).
-- **Internal message log** — every group message on the record (`/log`, `/whosaid <term|@user>`),
-  age-pruned to ~90 days; powers both audit and long-term recall.
-- **Quiet-chat revival** — after ~3h of silence Stoby surfaces a real blog post (rotated) or a
-  fact, backs off after a couple of unanswered nudges, and skips quiet hours.
-- **Privacy controls** — `memory.retain_questions` / `max_recent_questions` bound per-user
-  retention; `message_log.enabled` gates the transcript.
-- **Ops safety:** per-user rate limiting + global spend cap + `/pause` kill switch.
-
-### 🔌 Channel-agnostic core
-Telegram, a Web/HTTP API, and Discord are three adapters over the same engine (proven by a
-same-engine multi-channel test).
-
----
+What it does **not** do: moderate (ChatKeeper moderates the group; Stoby never deletes, mutes, bans or welcomes),
+give investment advice, predict prices, state market cap, confirm any capital raise, name a securities exemption,
+or post anything on a timer.
 
 ## Commands
 
-**Everyone**
-`/guide` (interactive tour) · `/qualify` · `/resources` · `/migrate` · `/check <address>` ·
-`/price` · `/compass` · `/valuation` · `/blog` · `/sources` · `/rank` · `/leaderboard` ·
-`/ama <question>` · `/subscribe` · `/remindme` · `/email <addr>` · `/contact` · `/report` ·
-`/feedback` · `/forgetme` (GDPR erasure, DM) · `/about` · `/help`
+| Command | Where | What |
+|---|---|---|
+| `/stbu` | anywhere | The new STBU on Base: token contract, official pool, links, old-holder claims, switched-off legacy contracts |
+| `/check 0xAddress` | anywhere | STBU on Base and any legacy STBU in a public wallet, read from the chain |
+| `/blog` | anywhere | The five latest articles from the Stobox blog |
+| `/help`, `/start` | private chat; in the group only as `/help@stobox_assistant_bot` | What Stoby does |
+| `/sources` | same as `/help` | Official Stobox channels, from the site |
+| `/contact` | same as `/help` | support@stobox.io |
 
-**Admins** (allowlisted via `TELEGRAM_ADMIN_USER_IDS`, or `TELEGRAM_ADMIN_USERNAMES` for @handles)
-- Knowledge/ops: `/sync` `/reindex` `/stats` `/health` `/digest` `/faq` `/gaps` `/content`
-  `/pause` `/resume`
-- Message log: `/log [N]` · `/whosaid <term|@user>` · `/userid` (reply → numeric ID)
-- Unanswered-question loop: `/pending` `/answer <id> <text>` `/approve <id>`
-- Moderation (reply to a user): `/warn` `/mute [min]` `/unmute` `/ban` · `/unban <id>`
-  `/strikes` `/clearstrikes` `/cleanup` `/modstats`
-- Engagement: `/quiz` · `/amaopen [topic]` `/amaclose` `/amalist` `/amaclear`
+In the group, bare `/help`, `/start`, `/sources` and `/contact` are left to ChatKeeper, so the two bots never
+answer the same command. ChatKeeper's own commands (`/rules`, `/report`, `/ca`, `/base`, `/adminlist`,
+`/partner`) are never in Stoby's menu.
 
----
+The command menu Telegram shows is set by the code at every boot (`setMyCommands`, default, private and group
+scopes), so it always matches the commands above. A command Stoby does not have never goes to the model: in a
+private chat or addressed to Stoby it gets the list of real commands; bare in the group it is left alone.
 
-## Architecture (brief)
+## How one answer is made
 
 ```
-Telegram / Web / Discord (adapters)
-        │
-   AgentEngine (channel-agnostic)
-        ├─ guardrails/   3-block prompt · canonicals · rails · golden gate
-        ├─ knowledge/    ingest · chunk · pgvector · hybrid retrieval · sources · sync
-        ├─ moderation/   filters · classifier · strikes · policy
-        ├─ engagement/   xp · quiz · ama
-        ├─ qa/           unanswered-question loop → register
-        ├─ ops/          rate limit · reminders · email · webhook
-        ├─ chain/        on-chain STBU wallet checker
-        ├─ leads/ · insights/ · analytics/ · memory/
-        └─ agents/       intent router · confidence
+question
+  → rails before the model      seed phrase, prompt injection, advice, raise questions: fixed reply, no model
+  → daily spend cap ($5)        over the cap: a polite pause, no model
+  → site                        stobox.io/llms-full.txt, 10-minute cache, last good copy kept 24 h
+  → buy intent?                 "where / how do I buy STBU": the site's own words, no model
+  → SIG context                 stobox_answer_context over MCP, partner token
+  → claude-sonnet-5             adaptive thinking, the site block cached in the system prompt
+  → grounding check             every figure and address in the draft must appear in the sources
+  → SIG fact_check              a named canon rule rejects the draft (one regeneration, then a fixed reply)
+  → rails after the model       official links only, known addresses only, no em dash, no buy invitations,
+                                claim questions always name stbu.stobox.io, disclaimer where needed
+  → Telegram HTML               bold titles, <code> addresses, bullets; plain text if Telegram rejects the markup
+  → one JSON "answer" log line  outcome, dollars, verdict, latency
 ```
 
-Postgres + pgvector in production (Supabase); in-memory fallback for local dev. Persisted
-state (strikes, XP, reminders, question queue) lives under `/app/data` as atomic JSON files
-**and is mirrored to Postgres** (`bot_state` table) — it survives redeploys even on platforms
-with no persistent volume. A Postgres advisory **leader lock** keeps a second replica from
-double-polling. Production conventions (atomic statefiles, flood-controlled sends, prompt
-caching, absolute confidence gating) are documented in `ARCHITECTURE.md §12–13`; the full
-audit lives in `AUDIT-REPORT.md`.
+Any source down (site, SIG, model) means a fixed "I can't check that right now" reply and **no model call**:
+Stoby never answers from the model's memory. Precedence when sources differ: site, then chain, then SIG.
 
----
+## Code map
 
-## Develop & test
+| File | Role |
+|---|---|
+| `src/stoby/__main__.py` | Boot: refuse to run as root, wire the sources, start polling and the announcer |
+| `src/stoby/config.py` | Settings from the environment (no facts) |
+| `src/stoby/sources/site.py` | Reads and parses stobox.io/llms-full.txt; fails closed if the STBU section is missing |
+| `src/stoby/sources/sig.py` | SIG MCP client: batched JSON-RPC, read tools only, 8 s timeout, circuit breaker, question scrubbing |
+| `src/stoby/sources/chain.py` | `/check` balance reads on Base and the legacy chains |
+| `src/stoby/answer.py` | The pipeline above |
+| `src/stoby/llm.py` | The one model call and its cost |
+| `src/stoby/verify.py` | Grounding check |
+| `src/stoby/rails.py` | Compliance and output rails |
+| `src/stoby/format.py` | Telegram HTML, the useful-links block |
+| `src/stoby/commands.py` | Fixed-text commands |
+| `src/stoby/announce.py` | Blog announcer (site RSS, every 10 minutes) |
+| `src/stoby/leads.py` | Leads |
+| `src/stoby/ledger.py` | JSON logs, dollars per answer, daily spend |
+| `config/prompts/stoby.md` | Behaviour prompt: tone and rules only, no figures, dates or addresses |
+
+## Configuration
+
+| Variable | Needed | Meaning |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | yes | Bot token |
+| `ANTHROPIC_API_KEY` | yes | Model key |
+| `STOBY_SIG_TOKEN` | yes in production | SIG partner token (the public tier allows 20 calls a day) |
+| `TELEGRAM_ADMIN_USER_IDS` | yes | Numeric ids that receive lead notes |
+| `STOBY_ANNOUNCE_CHATS` | for announcements | Comma list of `chat` or `chat:topic`. Empty: no posting (test bots) |
+| `STOBY_ANSWER_MODEL`, `STOBY_ANSWER_EFFORT` | no | Default `claude-sonnet-5`, `medium` |
+| `STOBY_DAILY_CAP_USD` | no | Default 5 |
+| `STOBY_SITE_URL`, `STOBY_SIG_URL`, `STOBY_BASE_RPC` | no | Source addresses |
+| `STOBY_STATE_DIR` | no | Defaults to the Railway volume (`/app/data`) |
+| `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET` | no | Lead intake (https only) |
+
+## Run, test, accept
 
 ```bash
 pip install -e ".[dev]"
-stobox-doctor          # preflight: what's configured / missing
-pytest -q              # 260 offline tests (no keys, no network, no DB)
-stobox-golden          # compliance gate (needs API keys for the full run)
-ruff check src evals tests
+python -m pytest -q                                   # unit tests, offline fakes
+python -m evals.run_stoby --set all --max-usd 2.5 --out evals.json   # golden 31 + injection 22, real model
+python scripts/acceptance_stage1.py --evals evals.json --live-sig-down
+python -m stoby                                       # needs TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY
 ```
 
-Console scripts: `stobox-bot` (run) · `stobox-web` · `stobox-doctor` · `stobox-sync` ·
-`stobox-golden`. `scripts/set_identity.py` sets Stoby's Telegram name/description/menu.
+The eval run costs real money (about $0.35 for 53 questions); run it once per release, not in a loop.
 
----
+## Deploy
 
-## What's planned
+Railway service `Stoby AI`, deployed automatically from `main`. The image starts
+`python /entrypoint.py python -m stoby`: the entrypoint hands the volume to the app user and drops root.
+Rollback to the previous bot: set the start command in `railway.json` back to `python -m stobox_ai`.
 
-See **[ROADMAP.md](ROADMAP.md)**. Waves 1–4 are shipped (pre-qualifier, resource matcher,
-subscriptions, win-back, de-escalation, FUD alarm, deleted-account removal, content flywheel,
-analytics dashboard). Still open: the real **Twenty CRM** connector (needs credentials —
-`CRM_WEBHOOK_URL` is the switch), multimodal ingestion, and a Slack adapter.
+## Acceptance of 1.0.0 (28.09.2026)
 
-**📖 Full field guide:** [`docs/stoby-guide.html`](docs/stoby-guide.html) — a complete,
-browser-ready walkthrough of what Stoby does, how he thinks, what he knows, and what he can
-(and can't) access.
-
----
-
-## Safety & compliance
-
-Stoby represents a regulated-securities issuer. It never invents roadmap/tokenomics/pricing/
-partnerships, distinguishes documentation from opinion, gives no financial or legal advice,
-and treats every wallet-adjacent conversation as a potential scam. `canonicals.yaml` is
-changed only by human-reviewed PR — the auto-sync pipeline updates *data*, never *claims*.
+| # | Attempt | Result |
+|---|---|---|
+| A1-1 | No fact files in the tree | Package clean; the previous bot's files go with the cleanup |
+| A1-2 | A site edit reaches the answer with no commit | Done (offline) |
+| A1-3 | Golden traps | 31/31 |
+| A1-4 | Prompt injection set | 22/22 |
+| A1-5 | SIG down means no model call | Done, offline and live |
+| A1-6 | A person tests in the group | Pending |
+| A1-7 | Cost per answer | mean $0.0092, p95 $0.0101 (ceiling $0.03 / $0.06) |

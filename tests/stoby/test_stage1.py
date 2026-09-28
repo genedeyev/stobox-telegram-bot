@@ -391,3 +391,40 @@ def test_generic_commands_in_the_group_only_when_addressed_to_stoby():
     assert not bot._mine(msg("/help", group))                        # ChatKeeper's
     assert bot._mine(msg("/help@stobox_assistant_bot", group))
     assert bot._mine(msg("/help", dm))
+
+
+def test_menu_lists_only_stobys_commands_and_blog_is_one():
+    from stoby.announce import parse_rss
+    from stoby.commands import KNOWN, MENU, blog_text
+
+    names = [c for c, _ in MENU]
+    assert names == ["stbu", "check", "blog", "sources", "contact", "help"]
+    for chatkeeper in ("rules", "report", "ca", "base", "adminlist", "partner"):
+        assert chatkeeper not in KNOWN
+    posts = parse_rss('<?xml version="1.0"?><rss><channel><item><title>A &amp; B</title>'
+                      '<link>https://www.stobox.io/blog/a</link></item></channel></rss>')
+    t = blog_text(posts)
+    assert "stobox.io/blog/a" in t and "A &amp; B" in t and "stobox.io/blog" in t
+
+
+async def test_unknown_commands_never_reach_the_model():
+    from types import SimpleNamespace
+
+    from aiogram.enums import ChatType
+
+    from stoby.telegram import StobyBot
+
+    sent = []
+    bot = StobyBot.__new__(StobyBot)
+    bot.username = "stobox_assistant_bot"
+
+    async def _send(message, text):
+        sent.append(text)
+    bot._send = _send
+    group = SimpleNamespace(type=ChatType.SUPERGROUP)
+    dm = SimpleNamespace(type=ChatType.PRIVATE)
+    await bot.on_other_command(SimpleNamespace(text="/rules", chat=group))          # ChatKeeper's
+    assert sent == []
+    await bot.on_other_command(SimpleNamespace(text="/migrate@stobox_assistant_bot", chat=group))
+    await bot.on_other_command(SimpleNamespace(text="/valuation", chat=dm))
+    assert len(sent) == 2 and all("I don't have that command" in s for s in sent)

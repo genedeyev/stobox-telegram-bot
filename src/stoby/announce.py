@@ -113,6 +113,9 @@ class Announcer:
             return set() if ALL in done else set(map(str, self.chats)) - done
 
         fresh = [p for p in reversed(posts) if pending(p.url)]      # oldest new first
+        # One line per check, so "is the announcer alive and reading the feed?"
+        # is answered by the log (acceptance reads it), not by silence.
+        log.info("announce.checked", posts=len(posts), new=len(fresh))
         for post in fresh[: self.per_tick]:
             done = set(map(str, seen.get(post.url, [])))
             img = await self._image(post.url)
