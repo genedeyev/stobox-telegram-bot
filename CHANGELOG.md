@@ -2,6 +2,10 @@
 
 All times UTC. Every release is deployed to Railway from `main`.
 
+## Unreleased
+
+- Documentation to the Stobox repository standard of 16 October 2026: a README in the standard layout, `documentation/ARCHITECTURE.md` and `documentation/OPERATIONS.md` (a separate directory, because `docs/` holds the previous bot's knowledge files), and a `VERSION` file.
+
 ## 1.1.0 · 28 September 2026
 
 Visual support (Gene, 28.09.2026).

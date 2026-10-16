@@ -1,135 +1,140 @@
-# Stoby 1.1.0 · the AI helper of the Stobox community
+# Stoby, the AI helper of the Stobox community
 
-`@stobox_assistant_bot` in the Stobox Community group on Telegram. Version 1.0.0 released **28 September 2026**,
-1.1.0 the same day.
+A Telegram assistant for the Stobox Community group that answers questions about Stobox and the STBU token from live
+sources, and posts every new blog article to the group. For community members and the Stobox team that runs it.
 
-Stoby answers questions about Stobox and the STBU token, points people to the official links, and posts every new
-blog article to the group. It holds **no facts of its own**: every fact in an answer is read, at answer time, from
-the live stobox.io reference file, the Stobox Intelligence Graph (SIG) and Base mainnet.
+![visibility: public](https://img.shields.io/badge/visibility-public-brightgreen)
+![version: 1.1.0](https://img.shields.io/badge/version-1.1.0-blue)
+![owner: genedeyev](https://img.shields.io/badge/owner-genedeyev-informational)
+![python: 3.12](https://img.shields.io/badge/python-3.12-blue)
 
-- What changed and when: [CHANGELOG.md](CHANGELOG.md)
-- Acceptance: `scripts/acceptance_stage1.py`
-- Code: `src/stoby/` (version 1.1.0). `src/stobox_ai/` is the previous bot, kept one day as the rollback.
+## Status
 
----
+Production. Version 1.0.0 and 1.1.0 were released on 28 September 2026 (tags `v1.0.0`, `v1.1.0`). The current code is
+`src/stoby`; `src/stobox_ai` is the previous bot, kept in the tree as the rollback. Checked 16 October 2026.
 
-## What it does
+## What it is and why it exists
+
+Stoby is `@stobox_assistant_bot`. It holds **no facts of its own**: every fact in an answer is read at answer time from the
+live site reference file (`llms-full.txt` on stobox.io), the Stobox Intelligence Graph (SIG) and Base mainnet, so a change on
+the site reaches the answers without a commit here. If any source is down, Stoby says it cannot check that right now and
+makes no model call; it never answers from the model's memory.
 
 | | |
 |---|---|
-| **Answers** | In a private chat, or in the group when someone mentions `@stobox_assistant_bot`, calls it Stoby, or replies to its message. Short, friendly English with a few emojis, whatever language the question is in. |
-| **Contracts** | Every contract or pool address is labelled and shown on its own line in monospace, so one tap copies it. |
-| **Useful links** | Under every STBU answer: STBU on stobox.io, the official Uniswap v4 pool, CoinGecko, the pool safety check. The readiness score is added in `/stbu` and the buy answer. |
-| **Visuals** | `/blog` shows the newest article's cover image with the latest articles under it. Any answer that links to stobox.io carries a small preview card with that page's own image; external links (Uniswap, CoinGecko) never get the card. |
-| **Blog announcements** | Every new stobox.io blog post goes to the group's **Announcements** topic and to **General Chat**, once each, with its cover image. |
-| **Safety** | Warns about scams, never asks for or repeats a seed phrase, removes any non-official link or unknown address from its own answers. |
-| **Leads** | In a private chat, an email plus a company question becomes a lead: one note to the admins, and the CRM webhook when it is configured. |
+| **Answers** | In a private chat, or in the group when it is mentioned by `@username`, called by name, or replied to. Short English with a few emojis, whatever language the question is in. |
+| **Contracts and links** | Every contract or pool address is labelled and on its own line in monospace; official links sit under STBU answers. |
+| **Visuals** | `/blog` shows the newest article's cover and the latest articles; answers that link to stobox.io carry a small preview card. |
+| **Blog announcements** | Each new blog post goes once to the group's Announcements topic and to General Chat. |
+| **Safety** | Warns about scams, never asks for or repeats a seed phrase, removes non-official links and unknown addresses from its own answers. |
+| **Leads** | In a private chat an email plus a company question becomes a lead: one note to the admins, and a CRM webhook when configured. |
 
-What it does **not** do: moderate (ChatKeeper moderates the group; Stoby never deletes, mutes, bans or welcomes),
-give investment advice, predict prices, state market cap, confirm any capital raise, name a securities exemption,
-or post anything on a timer.
+It does not moderate (a separate bot moderates the group), give investment advice, predict prices or post on a timer.
 
-## Commands
+Commands: `/stbu`, `/check 0xAddress`, `/blog`, `/sources`, `/contact`, `/help`, `/start`. Their details are in
+[documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md).
 
-| Command | Where | What |
-|---|---|---|
-| `/stbu` | anywhere | The new STBU on Base: token contract, official pool, links, old-holder claims, switched-off legacy contracts |
-| `/check 0xAddress` | anywhere | STBU on Base and any legacy STBU in a public wallet, read from the chain |
-| `/blog` | anywhere | The newest article's cover and the five latest articles from the Stobox blog |
-| `/help`, `/start` | private chat; in the group only as `/help@stobox_assistant_bot` | What Stoby does |
-| `/sources` | same as `/help` | Official Stobox channels, from the site |
-| `/contact` | same as `/help` | support@stobox.io |
+## Where it runs
 
-In the group, bare `/help`, `/start`, `/sources` and `/contact` are left to ChatKeeper, so the two bots never
-answer the same command. ChatKeeper's own commands (`/rules`, `/report`, `/ca`, `/base`, `/adminlist`,
-`/partner`) are never in Stoby's menu.
+A long-running worker on Railway, deployed from `main` (`railway.json`, `Dockerfile`), polling Telegram. It reads
+`stobox.io/llms-full.txt`, the SIG MCP server and a Base RPC endpoint, and calls an Anthropic model (`claude-sonnet-5` by
+default). State (spend ledger, last good copy of the site file, announcer record) lives on a mounted volume. Owner: the
+repository owner, `genedeyev`.
 
-The command menu Telegram shows is set by the code at every boot (`setMyCommands`, default, private and group
-scopes), so it always matches the commands above. A command Stoby does not have never goes to the model: in a
-private chat or addressed to Stoby it gets the list of real commands; bare in the group it is left alone.
+## Architecture at a glance
 
-## How one answer is made
-
-```
-question
-  → rails before the model      seed phrase, prompt injection, advice, raise questions: fixed reply, no model
-  → daily spend cap ($5)        over the cap: a polite pause, no model
-  → site                        stobox.io/llms-full.txt, 10-minute cache, last good copy kept 24 h
-  → buy intent?                 "where / how do I buy STBU": the site's own words, no model
-  → SIG context                 stobox_answer_context over MCP, partner token
-  → claude-sonnet-5             adaptive thinking, the site block cached in the system prompt
-  → grounding check             every figure and address in the draft must appear in the sources
-  → SIG fact_check              a named canon rule rejects the draft (one regeneration, then a fixed reply)
-  → rails after the model       official links only, known addresses only, no em dash, no buy invitations,
-                                claim questions always name stbu.stobox.io, disclaimer where needed
-  → Telegram HTML               bold titles, <code> addresses, bullets; plain text if Telegram rejects the markup
-  → one JSON "answer" log line  outcome, dollars, verdict, latency
+```mermaid
+flowchart LR
+    U[Telegram message] --> R1[Rails before the model]
+    R1 -->|seed phrase, injection, advice| FIX[Fixed reply, no model]
+    R1 --> CAP[Daily spend cap]
+    CAP --> SITE[Site: llms-full.txt]
+    SITE --> SIG[SIG: answer context]
+    SIG --> LLM[Model: one call]
+    LLM --> V[Grounding check + SIG fact check]
+    V --> R2[Rails after the model]
+    R2 --> OUT[Telegram HTML reply]
+    CHAIN[Base mainnet] -.-> LLM
+    RSS[Site RSS] --> ANN[Blog announcer]
 ```
 
-Any source down (site, SIG, model) means a fixed "I can't check that right now" reply and **no model call**:
-Stoby never answers from the model's memory. Precedence when sources differ: site, then chain, then SIG.
+The full pipeline, the code map and the failure modes are in [documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md).
 
-## Code map
+## Repository layout
 
-| File | Role |
+| Path | What it holds |
 |---|---|
-| `src/stoby/__main__.py` | Boot: refuse to run as root, wire the sources, start polling and the announcer |
-| `src/stoby/config.py` | Settings from the environment (no facts) |
-| `src/stoby/sources/site.py` | Reads and parses stobox.io/llms-full.txt; fails closed if the STBU section is missing |
-| `src/stoby/sources/sig.py` | SIG MCP client: batched JSON-RPC, read tools only, 8 s timeout, circuit breaker, question scrubbing |
-| `src/stoby/sources/chain.py` | `/check` balance reads on Base and the legacy chains |
-| `src/stoby/answer.py` | The pipeline above |
-| `src/stoby/llm.py` | The one model call and its cost |
-| `src/stoby/verify.py` | Grounding check |
-| `src/stoby/rails.py` | Compliance and output rails |
-| `src/stoby/format.py` | Telegram HTML, the useful-links block |
-| `src/stoby/commands.py` | Fixed-text commands |
-| `src/stoby/announce.py` | Blog announcer (site RSS, every 10 minutes) |
-| `src/stoby/leads.py` | Leads |
-| `src/stoby/ledger.py` | JSON logs, dollars per answer, daily spend |
-| `config/prompts/stoby.md` | Behaviour prompt: tone and rules only, no figures, dates or addresses |
+| `src/stoby/` | The current bot (version 1.1.0): pipeline, rails, Telegram layer, announcer, leads, ledger, `sources/` |
+| `src/stobox_ai/` | The previous bot (stage 0), kept as the rollback |
+| `config/` | The behaviour prompt `config/prompts/stoby.md` (tone and rules only) and the previous bot's configuration |
+| `evals/` | Golden traps (31), the prompt-injection set (22) and the eval runners |
+| `tests/` | Unit tests with offline fakes; `tests/stoby/` covers the current bot |
+| `scripts/` | Stage 1 acceptance, Telegram identity setup and helper scripts |
+| `deploy/` | Container entrypoint (drops root after fixing the volume owner) |
+| `examples/` | A sample web widget page for the previous bot's web channel |
+| `Procfile`, `render.yaml`, `docker-compose.yml`, `Makefile` | Run and deploy targets of the previous bot (`make run` starts `stobox_ai`) |
+| `docs/` | Knowledge documents read by the previous bot; not documentation of this repository |
+| `documentation/` | Architecture and operations of the current bot |
+| `ARCHITECTURE.md`, `DEPLOY.md`, `SETUP.md`, `ROADMAP.md`, `SYSTEM-PROMPT.md`, `AUDIT-REPORT.md`, `VERIFICATION.md`, `SUBPROCESSORS.md` | Documents of the previous bot (July 2026), kept as written |
+
+## Quick start
+
+```bash
+pip install -e ".[dev,web,crm]" httpx
+python -m pytest -q                                   # unit tests, offline fakes
+python -m stoby                                       # needs TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY
+```
+
+The real-model eval run costs money (about $0.35 for 53 questions); run it once per release. Acceptance and eval commands
+are in [documentation/OPERATIONS.md](documentation/OPERATIONS.md).
 
 ## Configuration
+
+Names only; values go in `.env` (ignored by git) or the host's secret store.
 
 | Variable | Needed | Meaning |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | yes | Bot token |
 | `ANTHROPIC_API_KEY` | yes | Model key |
-| `STOBY_SIG_TOKEN` | yes in production | SIG partner token (the public tier allows 20 calls a day) |
+| `STOBY_SIG_TOKEN` | in production | SIG partner token |
 | `TELEGRAM_ADMIN_USER_IDS` | yes | Numeric ids that receive lead notes |
-| `STOBY_ANNOUNCE_CHATS` | for announcements | Comma list of `chat` or `chat:topic`. Empty: no posting (test bots) |
-| `STOBY_ANSWER_MODEL`, `STOBY_ANSWER_EFFORT` | no | Default `claude-sonnet-5`, `medium` |
-| `STOBY_DAILY_CAP_USD` | no | Default 5 |
-| `STOBY_SITE_URL`, `STOBY_SIG_URL`, `STOBY_BASE_RPC` | no | Source addresses |
-| `STOBY_STATE_DIR` | no | Defaults to the Railway volume (`/app/data`) |
-| `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET` | no | Lead intake (https only) |
+| `STOBY_ANNOUNCE_CHATS` | for announcements | `chat` or `chat:topic`, comma list; empty means no posting |
 
-## Run, test, accept
+The full list, with defaults, is in [documentation/OPERATIONS.md](documentation/OPERATIONS.md).
 
-```bash
-pip install -e ".[dev]"
-python -m pytest -q                                   # unit tests, offline fakes
-python -m evals.run_stoby --set all --max-usd 2.5 --out evals.json   # golden 31 + injection 22, real model
-python scripts/acceptance_stage1.py --evals evals.json --live-sig-down
-python -m stoby                                       # needs TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY
-```
+## Deploy and operate
 
-The eval run costs real money (about $0.35 for 53 questions); run it once per release, not in a loop.
+Railway builds the `Dockerfile` from `main` and starts `python /entrypoint.py python -m stoby`. Rollback to the previous bot
+is a one-line change of the start command in `railway.json`. Daily spend is capped by the code. Runbook:
+[documentation/OPERATIONS.md](documentation/OPERATIONS.md).
 
-## Deploy
+## Versioning and releases
 
-Railway service `Stoby AI`, deployed automatically from `main`. The image starts
-`python /entrypoint.py python -m stoby`: the entrypoint hands the volume to the app user and drops root.
-Rollback to the previous bot: set the start command in `railway.json` back to `python -m stobox_ai`.
+Semantic versioning. The version is in [VERSION](VERSION) and `src/stoby/__init__.py`; the history is in
+[CHANGELOG.md](CHANGELOG.md); releases are annotated tags `vX.Y.Z` (latest: `v1.1.0`). TODO(owner): `pyproject.toml` still
+says `0.1.0`; align it at the next release.
 
-## Acceptance of 1.0.0 (28.09.2026)
+## Related
 
-| # | Attempt | Result |
-|---|---|---|
-| A1-1 | No fact files in the tree | Package clean; the previous bot's files go with the cleanup |
-| A1-2 | A site edit reaches the answer with no commit | Done (offline) |
-| A1-3 | Golden traps | 31/31 |
-| A1-4 | Prompt injection set | 22/22 |
-| A1-5 | SIG down means no model call | Done, offline and live |
-| A1-6 | A person tests in the group | Pending |
-| A1-7 | Cost per answer | mean $0.0092, p95 $0.0101 (ceiling $0.03 / $0.06) |
+- `stobox-v15` (private): the website whose `llms-full.txt` and RSS feed are Stoby's sources.
+- `stobox-sig` (private): the Stobox Intelligence Graph, the second source.
+- The Stobox Community group on Telegram, `t.me/stobox_community`.
+- Stobox vault page `Stoby` (private): the programme and acceptance criteria A1-1 to A1-7.
+
+## Contributing
+
+Branch from `main`, open a pull request, keep `ruff check src evals tests` and `pytest` green; CI also runs the offline eval
+smoke, the golden compliance gate and a Docker build. Write commits and pull requests in English. Behaviour changes go in
+the prompt file or the rails, never as facts in code: facts come from the sources. A release is a pull request that changes
+`VERSION`, `__version__` and `CHANGELOG.md`.
+
+## Security
+
+No secrets in the repository: only variable names. The container refuses to run as root and drops root after fixing the
+volume owner. Stoby never asks for or repeats a seed phrase and never calls the one SIG write tool. To report a
+vulnerability, contact the maintainers privately at the contact address published on stobox.io; do not open a public issue.
+
+## Licence
+
+No licence is granted; all rights reserved. `pyproject.toml` declares the package as proprietary. TODO(owner): the choice of
+a licence for this public repository is the owner's.
